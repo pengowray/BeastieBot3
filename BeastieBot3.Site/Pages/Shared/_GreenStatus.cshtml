@@ -4,7 +4,7 @@
 <section class="green-status" id="green-status" aria-labelledby="green-status-heading">
     <h2 id="green-status-heading">@SiteText.HeadingGreenStatus</h2>
     <p>@SiteText.GreenStatusIntro</p>
-    <dl class="green-status-summary">
+    <dl class="facts green-status-summary">
         @if (Model.Recovery.Category is { } category) {
             <dt>@SiteText.GreenStatusRecoveryCategory</dt>
             <dd><strong>@category</strong></dd>
@@ -41,7 +41,7 @@
             </tbody>
         </table>
     </div>
-    <dl class="green-status-people">
+    <dl class="facts green-status-people">
         @foreach (var (role, names) in new[] {
             ("assessors", Model.Assessors), ("reviewers", Model.Reviewers), ("facilitators", Model.Facilitators),
             ("contributors", Model.Contributors), ("compilers", Model.Compilers) }) {

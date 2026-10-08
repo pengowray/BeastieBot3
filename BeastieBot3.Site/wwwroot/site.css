@@ -942,6 +942,11 @@ abbr[title] {
     margin-top: 0.25rem;
 }
 
+/* IUCN Green Status: the people after the metrics table. */
+.green-status .green-status-people {
+    margin-top: 1rem;
+}
+
 /* IUCN Green Status: what each Conservation Impact Metric measures, under its name. */
 .green-status .metric-help {
     display: block;
