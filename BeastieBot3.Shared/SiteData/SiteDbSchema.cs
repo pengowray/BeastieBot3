@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 24;
+    public const int Version = 25;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -228,6 +228,51 @@ public static class SiteDbSchema {
             compilers              TEXT,
             citation_json          TEXT NOT NULL       -- IucnCitationParts: the assessors as authors, Year = the year assessed
         ) WITHOUT ROWID;
+
+        -- IUCN's summary statistics tables that `iucn summary-tables` read: Table 7 (species changing Red
+        -- List category, with the reason for each change; 2007 onwards) and Table 9 (Possibly Extinct and
+        -- Possibly Extinct in the Wild species; 2014-1 to 2020-2).
+        CREATE TABLE summary_table (
+            summary_table_id INTEGER PRIMARY KEY,
+            table_no         INTEGER NOT NULL,    -- 7 or 9
+            release          TEXT NOT NULL,       -- the Red List version the table was published with: '2024-2'; '2007' and '2008' for those years
+            url              TEXT NOT NULL,       -- where the PDF was downloaded from
+            last_updated     TEXT                 -- the table's own "Last updated" date as printed: '28 October 2024'; NULL when it has none
+        );
+
+        -- The reason Table 7 gives for a change of Red List category, on the global assessment that brought
+        -- the new category (SiteSummaryTables). When several tables list the change (each release's table
+        -- includes the earlier releases of its year), the table latest in rules/iucn-summary-tables.yml.
+        -- The Red List API and CSV export do not have the reason; IUCN's assessors record it.
+        CREATE TABLE category_change (
+            assessment_id          INTEGER PRIMARY KEY,
+            taxon_id               INTEGER NOT NULL,
+            reason                 TEXT NOT NULL,     -- 'G' genuine change, 'N' non-genuine change, 'E' the previous listing was an error
+            previous_assessment_id INTEGER,           -- the global assessment before it on the site; NULL when there is none
+            old_category           TEXT,              -- as the table prints it, without spaces: 'VU', 'CR(PE)', 'LR/nt'
+            new_category           TEXT,
+            red_list_version       TEXT,              -- the version the table says the new category was published in ('2019-3'),
+                                                      -- or the table's release when the table does not say ('2008')
+            summary_table_id       INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        CREATE INDEX category_change_taxon ON category_change(taxon_id);
+
+        -- Global CR assessments that IUCN's tables list as Possibly Extinct (PE) or Possibly Extinct in the
+        -- Wild (PEW): Table 9 lists each release's species, with the year of the first such assessment, and
+        -- Table 7 prints 'CR(PE)' as a previous or new category. The assessment's own tags are
+        -- assessment.possibly_extinct and possibly_extinct_in_the_wild; a row here may be for an assessment
+        -- that has no tag.
+        CREATE TABLE possibly_extinct_listing (
+            assessment_id    INTEGER NOT NULL,
+            tag              TEXT NOT NULL,       -- 'PE' or 'PEW'
+            taxon_id         INTEGER NOT NULL,
+            first_release    TEXT NOT NULL,       -- the first and last table releases that list it: '2014-1', '2016-3'
+            last_release     TEXT NOT NULL,
+            tables           TEXT NOT NULL,       -- the tables that list it: '7', '9' or '7 9'
+            summary_table_id INTEGER NOT NULL,    -- the first table that lists it
+            PRIMARY KEY (assessment_id, tag)
+        ) WITHOUT ROWID;
+        CREATE INDEX possibly_extinct_listing_taxon ON possibly_extinct_listing(taxon_id);
 
         -- The countries and parts of countries (areas) that the latest global assessments code, for
         -- the status update page's comparison of a list with one area. Hash-coded regions ("Europe")

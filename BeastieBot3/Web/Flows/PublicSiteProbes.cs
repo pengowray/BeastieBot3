@@ -26,6 +26,7 @@ public static class PublicSiteProbes {
     public const string Nztcs = "site-nztcs";
     public const string Salve = "site-salve";
     public const string GreenStatus = "site-green-status";
+    public const string SummaryTables = "site-summary-tables";
 
     /// The age after which the workflow asks for a new pass of `wikidata sweep-taxa`; the step's
     /// command passes the same number as --refresh-days.
@@ -38,7 +39,7 @@ public static class PublicSiteProbes {
     /// The age after which the workflow asks for the IUCN Green Status assessments again.
     public const int GreenStatusRefreshDays = 30;
 
-    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs or Salve or GreenStatus;
+    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs or Salve or GreenStatus or SummaryTables;
 
     public static FlowProbeResult? Evaluate(string probe, PublicSiteState s) => probe switch {
         Gbif => GbifStep(s),
@@ -51,6 +52,7 @@ public static class PublicSiteProbes {
         Nztcs => NztcsStep(s),
         Salve => SalveStep(s),
         GreenStatus => GreenStatusStep(s),
+        SummaryTables => SummaryTablesStep(s),
         _ => null,
     };
 
@@ -253,6 +255,30 @@ public static class PublicSiteProbes {
         return days > GreenStatusRefreshDays
             ? new FlowProbeResult("todo", $"{done.Rows:n0} assessments, downloaded {done.LastDownloadUtc:yyyy-MM-dd}, {days} days ago.")
             : new FlowProbeResult("ok", $"{done.Rows:n0} assessments, downloaded {done.LastDownloadUtc:yyyy-MM-dd}.");
+    }
+
+    // ---- `iucn summary-tables` ----
+
+    internal static FlowProbeResult SummaryTablesStep(PublicSiteState s) {
+        if (s.SummaryTablesPath is null) {
+            return new FlowProbeResult("todo", "No path set for the IUCN summary tables: add datastore_dir or IUCN_summary_tables_sqlite under [Datastore] in paths.ini.");
+        }
+        if (s.SummaryTables is not { } done) {
+            return new FlowProbeResult("todo", "Not downloaded yet.");
+        }
+        var tables = $"{done.Table7Files:n0} Table 7 files (newest {done.NewestTable7Release}), {done.Table9Files:n0} Table 9 files.";
+        if (s.IucnRelease is { } release && ReleaseIsNewer(release, done.NewestTable7Release)) {
+            return new FlowProbeResult("todo", $"No Table 7 for release {release} yet. {tables}");
+        }
+        return new FlowProbeResult("ok", tables);
+    }
+
+    // "2026-2" after "2026-1"; "2010-3" after "2009-2" and "2009".
+    private static bool ReleaseIsNewer(string release, string? than) {
+        if (than is null) return true;
+        var a = Iucn.SummaryTables.IucnSummaryTablesCommand.ReleaseKey(release.Replace('.', '-'));
+        var b = Iucn.SummaryTables.IucnSummaryTablesCommand.ReleaseKey(than);
+        return a.CompareTo(b) > 0;
     }
 
     internal static FlowProbeResult BuildStep(PublicSiteState s) {

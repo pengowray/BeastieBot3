@@ -15,7 +15,7 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.SiteBuild;
 
 [CommandInfo("site build-db", CommandKind.Mutates,
-    "Build the public species site's database (Datastore:site_sqlite) from the IUCN CSV export, the IUCN API cache, GBIF's copy of the IUCN checklist, the common names store, the Wikidata and Wikipedia caches, the Catalogue of Life placement file and release metadata, the SPRAT database, and the DOIs found by iucn resolve-dois. Taxa that are in the API cache but not in the CSV export get pages too, with their earlier assessments. The new database is written beside the old one and replaces it only when the build finishes. No assessment narrative text is stored.",
+    "Build the public species site's database (Datastore:site_sqlite) from the IUCN CSV export, the IUCN API cache, GBIF's copy of the IUCN checklist, the common names store, the Wikidata and Wikipedia caches, the Catalogue of Life placement file and release metadata, the SPRAT database, the DOIs found by iucn resolve-dois, and IUCN's summary tables of category changes and Possibly Extinct species (iucn summary-tables). Taxa that are in the API cache but not in the CSV export get pages too, with their earlier assessments. The new database is written beside the old one and replaces it only when the build finishes. No assessment narrative text is stored.",
     Rerun = RerunEffect.Rebuilds,
     RerunNote = "Builds the whole database again from the data stored locally and replaces the previous one. A running site switches to the new file within about 30 seconds, without a restart.",
     Examples = new[] {
@@ -68,6 +68,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [CommandOption("--status-lists-db <PATH>")]
         [Description("Status lists store (statuses natureserve-fetch, statuses ecos-import). Default: Datastore:status_lists_sqlite in paths.ini, else status_lists.sqlite in the datastore folder.")]
         public string? StatusListsDatabase { get; init; }
+
+        [CommandOption("--summary-tables-db <PATH>")]
+        [Description("IUCN's summary tables 7 and 9 (iucn summary-tables). Default: Datastore:IUCN_summary_tables_sqlite in paths.ini, else iucn_summary_tables.sqlite in the datastore folder.")]
+        public string? SummaryTablesDatabase { get; init; }
 
         [CommandOption("--sprat-db <PATH>")]
         [Description("SPRAT database. Default: Datastore:SPRAT_sqlite in paths.ini.")]
@@ -123,6 +127,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 ColDir = Full(settings.ColDir ?? paths.GetColDir()),
                 SpratDatabase = Full(settings.SpratDatabase ?? paths.GetSpratDatabasePath()),
                 StatusListsDatabase = Full(settings.StatusListsDatabase ?? paths.GetStatusListsPath()),
+                SummaryTables = Full(settings.SummaryTablesDatabase ?? paths.GetIucnSummaryTablesPath()),
                 GbifChecklist = Full(settings.GbifChecklist ?? GbifIucnChecklistReader.FindNewest(paths.GetGbifIucnDir())),
                 DoiCache = Full(settings.DoiCache ?? paths.GetIucnDoiCachePath()),
                 RulesList = rulesList,
@@ -237,6 +242,26 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Errata or amended versions with no earlier assessment to link", s.ReplacedNoCandidate);
         Row("Errata or amended versions with several earlier assessments that could be the one replaced", s.ReplacedSeveralCandidates);
         Row("Earlier assessments named by two newer versions (not linked)", s.ReplacedClaimedTwice);
+
+        if (s.SummaryTables is { } t) {
+            Section("IUCN summary tables (Table 7: reasons for change; Table 9: Possibly Extinct)");
+            Row("Tables read", t.Tables.Count);
+            Row("Table 7 rows", t.ChangeRows);
+            Row("Table 7 rows with no reason code or no new category (left out)", t.ChangeRowsWithoutReason);
+            Row("Table 7 rows whose name matches no taxon", t.ChangeRowsNoTaxon);
+            Row("Table 7 rows matched by an IUCN synonym", t.ChangeRowsBySynonym);
+            Row("Table 7 rows with no global assessment of the new category in the version's year or the year after", t.ChangeRowsNoAssessment);
+            Row("Table 7 rows linked to an assessment", t.ChangeRowsLinked);
+            Row("Linked to an assessment published the year after the version's year", t.ChangeRowsYearAfter);
+            Row("Linked, but the assessment before it has another category than the table's previous category", t.ChangeRowsPreviousDiffers);
+            Row("Assessments with a reason for change (category_change)", t.Changes.Count);
+            Row("Assessments whose tables give different reasons (the latest table's is kept)", t.ReasonConflicts);
+            Row("Table 9 rows", t.ListingRows);
+            Row("Table 9 rows whose name matches no taxon", t.ListingRowsNoTaxon);
+            Row("Table 9 rows with no CR assessment at that release or in the first year", t.ListingRowsNoAssessment);
+            Row("Assessments listed as Possibly Extinct (possibly_extinct_listing)", t.Listings.Count);
+            Row("Listed assessments whose own record has no Possibly Extinct tag", t.ListedWithoutTag);
+        }
 
         Section("Citations");
         Row("Citations parsed from cached API assessments", s.CitationsParsed);

@@ -127,6 +127,24 @@ public sealed class SpeciesModel : PageModel {
     /// the assessment history; null when no linked taxon has a global assessment.
     public CombinedHistory? Combined { get; private set; }
 
+    /// The reasons IUCN's Table 7 gives for the category changes of the assessments in the history
+    /// table (this taxon's, and in a combined history the linked taxa's), by assessment id.
+    public IReadOnlyDictionary<long, CategoryChangeRow> ChangeReasons { get; private set; } = new Dictionary<long, CategoryChangeRow>();
+
+    /// The assessments in the history table that IUCN's summary tables list as Possibly Extinct, by
+    /// assessment id. The history table marks only those whose own record has no such tag
+    /// (ListedOnlyInTables).
+    public IReadOnlyDictionary<long, IReadOnlyList<PossiblyExtinctListingRow>> PossiblyExtinctListings { get; private set; }
+        = new Dictionary<long, IReadOnlyList<PossiblyExtinctListingRow>>();
+
+    /// The table listing of an assessment as Possibly Extinct (or in the Wild) when the assessment
+    /// itself has neither tag; null otherwise.
+    public PossiblyExtinctListingRow? ListedOnlyInTables(AssessmentRow assessment) =>
+        assessment.PossiblyExtinct || assessment.PossiblyExtinctInTheWild
+            || !PossiblyExtinctListings.TryGetValue(assessment.AssessmentId, out var listings)
+            ? null
+            : listings.FirstOrDefault(l => l.Tag == "PE") ?? listings.FirstOrDefault();
+
     /// SPRAT profiles and EPBC Act listings: the whole taxon's first, then populations'.
     public IReadOnlyList<EpbcListingRow> EpbcListings { get; private set; } = [];
 
@@ -288,6 +306,9 @@ public sealed class SpeciesModel : PageModel {
             : null;
         Combined = CombinedHistory.Build(Taxon, LinkedTaxa,
             id => id == Taxon.TaxonId ? _assessments : _queries.GetAssessments(id), _queries.GetTaxonomicNotesFlags);
+        var historyTaxa = Combined?.Ids.Select(i => i.TaxonId).ToList() ?? [Taxon.TaxonId];
+        ChangeReasons = _queries.GetCategoryChanges(historyTaxa);
+        PossiblyExtinctListings = _queries.GetPossiblyExtinctListings(historyTaxa);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
             Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames) with {
             Template = IucnReference.FromQuery(cite),

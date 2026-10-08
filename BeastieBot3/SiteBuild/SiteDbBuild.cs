@@ -97,9 +97,11 @@ internal sealed class SiteDbBuild {
 
         // 3. Plan.
         var assessments = new SiteAssessmentPass(taxa, apiTaxa.Records, _stats);
+        Dictionary<long, List<SiteHistoryEntry>> globalHistory = null!;
         Phase("Planning assessment rows", () => {
             assessments.Plan(csvAssessments);
             csvAssessments = null!;
+            globalHistory = assessments.GlobalHistory();
             return $"{assessments.PlannedCount:N0} assessments";
         });
 
@@ -198,6 +200,18 @@ internal sealed class SiteDbBuild {
                 + $"{_stats.NztcsMatched:N0} of {_stats.NztcsAssessments:N0} NZTCS assessments matched, "
                 + $"{_stats.SalveMatched:N0} of {_stats.SalveAssessments:N0} SALVE assessments matched";
         });
+
+        // IUCN's summary tables, before the names are written, which clears the synonym lists the name
+        // index reads.
+        Optional("IUCN summary tables (iucn summary-tables)", _inputs.SummaryTables, path => {
+            var result = ReadSummaryTables(path, taxa, globalHistory, writer);
+            if (result is null) return "no tables stored";
+            _stats.SummaryTables = result;
+            return $"{result.Changes.Count:N0} assessments with a reason for their change of category "
+                + $"({result.ChangeRowsLinked:N0} of {result.ChangeRows:N0} Table 7 rows linked), "
+                + $"{result.Listings.Count:N0} Possibly Extinct listings ({result.ListedWithoutTag:N0} on assessments without the tag)";
+        });
+        globalHistory = null!;
 
         // 8. Parents, the tree of groups and list links, then taxa, names, meta.
         SetParents(taxonList, taxa, apiTaxa.SubpopulationParents);
@@ -527,6 +541,34 @@ internal sealed class SiteDbBuild {
         }
         writer.SetMeta(SiteDbSchema.MetaKeys.TaxonCount, taxonCount.ToString(CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.AssessmentCount, assessmentCount);
+    }
+
+    // ------------------------------------------------------------ IUCN summary tables
+
+    private static SiteSummaryTablesResult? ReadSummaryTables(string path, IReadOnlyDictionary<long, SiteTaxon> taxa,
+        IReadOnlyDictionary<long, List<SiteHistoryEntry>> globalHistory, SiteDbWriter writer) {
+        using var store = Iucn.SummaryTables.SummaryTableStore.OpenReadOnly(path);
+        if (store is null) return null;
+        var sources = store.GetSources();
+        if (sources.Count == 0) return null;
+        var result = SiteSummaryTables.Link(sources.Values, store.ReadCategoryChanges(), store.ReadPossiblyExtinct(),
+            new StatusListNameIndex(taxa.Values), globalHistory);
+        writer.InsertRows(
+            "INSERT INTO summary_table (summary_table_id, table_no, release, url, last_updated) VALUES (@id, @t, @r, @u, @d)",
+            ["@id", "@t", "@r", "@u", "@d"],
+            result.Tables.Select(t => new object?[] { t.Id, t.Table, t.Release, t.Url, t.LastUpdated }));
+        writer.InsertRows(
+            "INSERT INTO category_change (assessment_id, taxon_id, reason, previous_assessment_id, old_category, new_category, red_list_version, summary_table_id) "
+            + "VALUES (@a, @t, @r, @p, @o, @n, @v, @s)",
+            ["@a", "@t", "@r", "@p", "@o", "@n", "@v", "@s"],
+            result.Changes.Select(c => new object?[] { c.AssessmentId, c.TaxonId, c.Reason, c.PreviousAssessmentId, c.OldCategory,
+                c.NewCategory, c.RedListVersion, c.SummaryTableId }));
+        writer.InsertRows(
+            "INSERT INTO possibly_extinct_listing (assessment_id, tag, taxon_id, first_release, last_release, tables, summary_table_id) "
+            + "VALUES (@a, @g, @t, @f, @l, @b, @s)",
+            ["@a", "@g", "@t", "@f", "@l", "@b", "@s"],
+            result.Listings.Select(l => new object?[] { l.AssessmentId, l.Tag, l.TaxonId, l.FirstRelease, l.LastRelease, l.Tables, l.SummaryTableId }));
+        return result;
     }
 
     // ------------------------------------------------------------ phases

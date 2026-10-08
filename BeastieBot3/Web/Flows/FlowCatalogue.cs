@@ -1118,9 +1118,19 @@ public static class FlowCatalogue {
                     Note = "The download is one request to the IUCN Red List API, about 780 KB (182 assessments on 2026-10-08). Each run adds new assessments, updates the stored ones and deletes stored assessments that are not in the new download. Run this step before `site build-db`.",
                 },
                 new FlowStep {
+                    Id = "site-summary-tables",
+                    Title = "Download IUCN's tables of category changes and Possibly Extinct species",
+                    Description = "`iucn summary-tables` downloads IUCN's summary statistics Table 7 (species changing Red List category, with the reason for each change) of every release since 2007, and Table 9 (Possibly Extinct and Possibly Extinct in the Wild species) of the releases from 2014-1 to 2020-2, reads their rows and stores them in the IUCN summary tables database. `site build-db` shows each reason on the assessment that brought the new category. The list of tables is rules/iucn-summary-tables.yml.",
+                    Commands = new[] { "iucn summary-tables", "iucn summary-tables --status" },
+                    OutputSourceIds = new[] { "iucn-summary-tables" },
+                    Probe = PublicSiteProbes.SummaryTables,
+                    Group = "2 · Build the site database",
+                    Note = "The first run downloads 60 PDFs (about 25 MB) and reads them in about 10 seconds. Later runs download only tables they do not have, and look for the Table 7 of the next release under the file names IUCN has used. IUCN publishes each release's Table 7 on its summary statistics page, sometimes some days after the release.",
+                },
+                new FlowStep {
                     Id = "site-build-db",
                     Title = "Build the site database",
-                    Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement, the SPRAT (EPBC) database and the status lists store (NatureServe, ECOS, NZTCS and SALVE) and the Green Status assessments in the IUCN API cache. It writes the new database to a separate file and replaces the old one only when the build finishes.",
+                    Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement, the SPRAT (EPBC) database, the status lists store (NatureServe, ECOS, NZTCS and SALVE), the Green Status assessments in the IUCN API cache and the IUCN summary tables. It writes the new database to a separate file and replaces the old one only when the build finishes.",
                     Commands = new[] { "site build-db" },
                     // Only the required inputs: a missing input blocks the step, and the build
                     // leaves out the others (GBIF checklist, DOI cache, ...) when they are missing.

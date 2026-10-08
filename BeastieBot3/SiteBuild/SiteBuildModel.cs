@@ -22,6 +22,9 @@ internal sealed record SiteBuildInputs {
     public string? SpratDatabase { get; init; }
     /// The status lists store (`statuses natureserve-fetch`, `statuses ecos-import`).
     public string? StatusListsDatabase { get; init; }
+    /// The rows of IUCN's summary tables 7 and 9 (`iucn summary-tables`): reasons for category
+    /// changes, and species listed as Possibly Extinct.
+    public string? SummaryTables { get; init; }
     /// `iucn resolve-dois`'s cache (Datastore:IUCN_doi_cache_sqlite): DOIs found in Crossref's list
     /// of IUCN DOIs or at doi.org.
     public string? DoiCache { get; init; }
@@ -191,6 +194,8 @@ internal sealed class SiteAssessment {
 internal sealed class SiteBuildStats {
     public string? IucnRelease;
     public ExtraSpecies.ExtraSpeciesStats? ExtraSpecies;
+    /// What linking IUCN's summary tables found; null when the build did not read them.
+    public SiteSummaryTablesResult? SummaryTables;
     public readonly Dictionary<string, int> TaxaByKind = new(StringComparer.Ordinal);
     public int ParentsByName;
     public int ParentsFromApi;

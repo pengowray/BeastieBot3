@@ -101,6 +101,11 @@ public sealed record PublicSiteState {
     /// Null when none are stored (or the cache cannot be read).
     public GreenStatusState? GreenStatus { get; init; }
 
+    // --- IUCN's summary tables (`iucn summary-tables`) ---
+    public string? SummaryTablesPath { get; init; }
+    /// The stored tables; null when none are stored (or the database cannot be read).
+    public SummaryTablesState? SummaryTables { get; init; }
+
     /// When each input of `site build-db` last changed, in the order the build reads them.
     /// Inputs that do not exist are left out, as the build leaves them out.
     public IReadOnlyList<SiteInputChange> Inputs { get; init; } = Array.Empty<SiteInputChange>();
@@ -108,6 +113,10 @@ public sealed record PublicSiteState {
 
 /// <summary>How many Green Status assessments the IUCN API cache holds, and the time of the last download.</summary>
 public sealed record GreenStatusState(long Rows, DateTime LastDownloadUtc);
+
+/// <summary>How many Table 7 and Table 9 files the IUCN summary tables database holds, the newest
+/// release with a Table 7, and when a table was last read.</summary>
+public sealed record SummaryTablesState(int Table7Files, string? NewestTable7Release, int Table9Files, DateTime? LastReadUtc);
 
 /// <summary>When a status list source last finished downloading, and how many rows the store holds.</summary>
 public sealed record StatusListSourceState(DateTime FetchedAtUtc, long Rows);
@@ -131,6 +140,7 @@ public sealed record PublicSitePaths {
     public string? ColPlacement { get; init; }
     public string? SpratDatabase { get; init; }
     public string? StatusLists { get; init; }
+    public string? SummaryTables { get; init; }
     public string? SiteDatabase { get; init; }
 
     // The same defaults `site build-db` uses when it is given no options.
@@ -147,6 +157,7 @@ public sealed record PublicSitePaths {
             ColPlacement = col is null ? null : TaxonPlacementStore.SidecarPath(col),
             SpratDatabase = Full(Try(paths.GetSpratDatabasePath)),
             StatusLists = Full(Try(paths.GetStatusListsPath)),
+            SummaryTables = Full(Try(paths.GetIucnSummaryTablesPath)),
             SiteDatabase = Full(Try(paths.GetSiteDatabasePath)),
         };
     }
@@ -173,6 +184,7 @@ public static class PublicSiteStateReader {
     public const string ColPlacementInput = "Catalogue of Life placement";
     public const string SpratInput = "SPRAT (EPBC) database";
     public const string StatusListsInput = "Status lists store";
+    public const string SummaryTablesInput = "IUCN summary tables";
 
     /// The state for the workflow page, with the DOI step's count. That count comes from a
     /// background task (SiteDoiCountReader), so this overload is for the poll only; tests read
@@ -205,6 +217,8 @@ public static class PublicSiteStateReader {
         Add(ColPlacementInput, SqliteChangedAt(p.ColPlacement));
         Add(SpratInput, SqliteChangedAt(p.SpratDatabase));
         Add(StatusListsInput, SqliteChangedAt(p.StatusLists));
+        var summaryTables = ReadSummaryTables(p.SummaryTables);
+        Add(SummaryTablesInput, summaryTables?.LastReadUtc);
 
         var state = new PublicSiteState {
             IucnExists = iucn.Exists,
@@ -223,6 +237,8 @@ public static class PublicSiteStateReader {
             SiteExists = Exists(p.SiteDatabase),
             ApiCachePath = p.ApiCache,
             GreenStatus = ReadGreenStatus(p.ApiCache),
+            SummaryTablesPath = p.SummaryTables,
+            SummaryTables = summaryTables,
             Inputs = inputs,
         };
         state = ReadSweep(state, p.WikidataCache);
@@ -402,6 +418,41 @@ public static class PublicSiteStateReader {
             return StoredUtc.Parse(reader.GetString(1)) is { } last ? new GreenStatusState(reader.GetInt64(0), last) : null;
         } catch (Exception) {
             // No green_status table yet: `iucn api green-status` has never run on this cache.
+            return null;
+        }
+    }
+
+    // ---- IUCN's summary tables ----
+
+    // One row per PDF, about 60 rows. The time a table was last read (parsed_at) is the time its
+    // rows last changed: a run that finds a table unchanged leaves it as it is.
+    private static SummaryTablesState? ReadSummaryTables(string? path) {
+        if (!Exists(path)) return null;
+        try {
+            using var conn = OpenReadOnly(path!);
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT table_no, release, parsed_at FROM source_file";
+            cmd.CommandTimeout = 5;
+            using var reader = cmd.ExecuteReader();
+            int t7 = 0, t9 = 0;
+            string? newest = null;
+            DateTime? last = null;
+            while (reader.Read()) {
+                var release = reader.GetString(1);
+                if (reader.GetInt32(0) == 7) {
+                    t7++;
+                    if (newest is null || Iucn.SummaryTables.IucnSummaryTablesCommand.ReleaseKey(release)
+                            .CompareTo(Iucn.SummaryTables.IucnSummaryTablesCommand.ReleaseKey(newest)) > 0) {
+                        newest = release;
+                    }
+                } else {
+                    t9++;
+                }
+                if (StoredUtc.Parse(reader.GetString(2)) is { } at && (last is null || at > last)) last = at;
+            }
+            return t7 + t9 == 0 ? null : new SummaryTablesState(t7, newest, t9, last);
+        } catch (Exception) {
+            // No source_file table: a database `iucn summary-tables` never finished writing.
             return null;
         }
     }

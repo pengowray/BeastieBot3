@@ -209,6 +209,14 @@ internal sealed class SiteAssessmentPass {
         }
     }
 
+    /// The planned global assessments of each taxon, oldest first, for linking IUCN's summary tables
+    /// (SiteSummaryTables). Call after Plan and before WriteAll, which empties the plan.
+    public Dictionary<long, List<SiteHistoryEntry>> GlobalHistory() =>
+        SiteSummaryTables.SortHistory(_plan.Values
+            .Where(a => a.Scope == SiteBuildRules.GlobalScope)
+            .Select(a => (a.TaxonId, new SiteHistoryEntry(a.AssessmentId, a.Category, a.PossiblyExtinct, a.PossiblyExtinctInTheWild,
+                a.YearPublished, a.AssessmentDate))));
+
     /// Reads the payloads in row order, adds what they give and writes every planned row.
     public void WriteAll(SqliteConnection cache, SiteDbWriter writer, SiteDoiSources dois, CancellationToken cancellationToken) {
         // Map the planned ids to row ids over the unique index, then read the rows in row order, so

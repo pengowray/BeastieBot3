@@ -214,6 +214,18 @@ public static class DataSourceCatalogue {
             },
         },
         new DataSourceDescriptor {
+            Id = "iucn-summary-tables",
+            Name = "IUCN summary tables",
+            Kind = "sqlite",
+            Description = "The rows of IUCN's summary statistics Table 7 (species changing Red List category, with the reason for each change: genuine, non-genuine or an error in the previous listing; 2007 onwards) and Table 9 (Possibly Extinct and Possibly Extinct in the Wild species, 2014-1 to 2020-2), read from IUCN's PDFs by `iucn summary-tables`.",
+            ResolvePath = p => p.GetIucnSummaryTablesPath(),
+            Metrics = new[] {
+                new MetricSpec { Label = "tables",        Sql = "SELECT COUNT(*) FROM source_file" },
+                new MetricSpec { Label = "Table 7 rows",  Sql = "SELECT COUNT(*) FROM category_change" },
+                new MetricSpec { Label = "Table 9 rows",  Sql = "SELECT COUNT(*) FROM possibly_extinct" },
+            },
+        },
+        new DataSourceDescriptor {
             Id = "site-sqlite",
             Name = "Site database",
             Kind = "sqlite",

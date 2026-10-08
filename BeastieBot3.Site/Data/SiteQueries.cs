@@ -192,6 +192,50 @@ public sealed partial class SiteQueries {
             .ToList();
     }
 
+    /// The reasons IUCN's Table 7 gives for the category changes of these taxa's assessments, by
+    /// assessment id.
+    public IReadOnlyDictionary<long, CategoryChangeRow> GetCategoryChanges(IReadOnlyCollection<long> taxonIds) {
+        var changes = new Dictionary<long, CategoryChangeRow>();
+        if (taxonIds.Count == 0) return changes;
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT c.assessment_id, c.reason, c.old_category, c.new_category, c.red_list_version, t.release, t.url
+            FROM category_change c JOIN summary_table t ON t.summary_table_id = c.summary_table_id
+            WHERE c.taxon_id IN (SELECT value FROM json_each(@ids))
+            """;
+        command.Parameters.AddWithValue("@ids", "[" + string.Join(',', taxonIds.Distinct()) + "]");
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            changes[reader.GetInt64(0)] = new CategoryChangeRow(reader.GetInt64(0), reader.GetString(1), Text(reader, 2), Text(reader, 3),
+                Text(reader, 4), reader.GetString(5), reader.GetString(6));
+        }
+        return changes;
+    }
+
+    /// The assessments of these taxa that IUCN's summary tables list as Possibly Extinct or Possibly
+    /// Extinct in the Wild, by assessment id.
+    public IReadOnlyDictionary<long, IReadOnlyList<PossiblyExtinctListingRow>> GetPossiblyExtinctListings(IReadOnlyCollection<long> taxonIds) {
+        var listings = new Dictionary<long, List<PossiblyExtinctListingRow>>();
+        if (taxonIds.Count == 0) return new Dictionary<long, IReadOnlyList<PossiblyExtinctListingRow>>();
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT assessment_id, tag, first_release, last_release, tables
+            FROM possibly_extinct_listing
+            WHERE taxon_id IN (SELECT value FROM json_each(@ids))
+            ORDER BY assessment_id, tag
+            """;
+        command.Parameters.AddWithValue("@ids", "[" + string.Join(',', taxonIds.Distinct()) + "]");
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var id = reader.GetInt64(0);
+            if (!listings.TryGetValue(id, out var rows)) listings[id] = rows = [];
+            rows.Add(new PossiblyExtinctListingRow(id, reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4)));
+        }
+        return listings.ToDictionary(p => p.Key, p => (IReadOnlyList<PossiblyExtinctListingRow>)p.Value);
+    }
+
     /// The EPBC Act listings of these taxa, by taxon id: the listing of the whole taxon first, then
     /// those of populations. Taxa with no listing are left out.
     public IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>> GetEpbcListings(IReadOnlyCollection<long> taxonIds) {
