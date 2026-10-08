@@ -116,6 +116,32 @@ namespace BeastieBot3.Configuration;
             return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "checklists");
         }
 
+        // Conservation statuses from systems other than the IUCN Red List (`statuses natureserve-fetch`,
+        // `statuses ecos-import`). Defaults to status_lists.sqlite in the datastore folder.
+        public string? GetStatusListsPath() {
+            var configured = _reader.Get("Datastore:status_lists_sqlite");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "status_lists.sqlite");
+        }
+
+        public string ResolveStatusListsPath(string? overridePath) {
+            var configuredPath = !string.IsNullOrWhiteSpace(overridePath) ? overridePath : GetStatusListsPath();
+            if (string.IsNullOrWhiteSpace(configuredPath)) {
+                throw new InvalidOperationException("Status lists store path is not configured. Set Datastore:status_lists_sqlite or datastore_dir under [Datastore] in paths.ini, or pass --store.");
+            }
+            return Path.GetFullPath(configuredPath);
+        }
+
+        // Files downloaded for the status lists store (the ECOS listed species CSV). Defaults to a
+        // status-lists folder in the datastore folder.
+        public string? GetStatusListsDownloadDir() {
+            var configured = _reader.Get("Datasets:status_lists_dir");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "status-lists");
+        }
+
         // The public site's database (built by `site build-db`). Defaults to site.sqlite in the
         // datastore folder.
         public string? GetSiteDatabasePath() {
