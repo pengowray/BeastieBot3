@@ -13,6 +13,27 @@ using CsvHelper.Configuration;
 
 namespace BeastieBot3.StatusLists;
 
+/// One US Endangered Species Act listing from ECOS.
+internal sealed record EcosListing(
+    long EntityId,
+    long? SpeciesId,
+    string ScientificNameRaw,
+    string ScientificName,
+    string? NameNote,
+    string? CommonName,
+    string Status,
+    string? EntityDescription,
+    string? ListingDate,
+    bool? IsDps,
+    bool? IsForeign,
+    string? RangeCountry,
+    string? SpeciesGroup,
+    long? ItisTsn,
+    string? Kingdom,
+    string? Family,
+    string Url,
+    IReadOnlyList<string> Names);
+
 internal static class EcosListedSpecies {
     public const string ReportUrl = "https://ecos.fws.gov/ecp/pullreports/catalog/species/report/species/export";
 

@@ -15,6 +15,35 @@ using System.Text.Json.Nodes;
 
 namespace BeastieBot3.StatusLists;
 
+/// One NatureServe Explorer record, as `statuses natureserve-fetch` stores it.
+internal sealed record NatureServeSpecies(
+    long ElementGlobalId,
+    string UniqueId,
+    string? Elcode,
+    string ScientificName,
+    string? PrimaryCommonName,
+    string? PrimaryCommonNameLanguage,
+    string? GRank,
+    string? RoundedGRank,
+    string? ClassificationStatus,
+    string? Kingdom,
+    string? Phylum,
+    string? TaxClass,
+    string? TaxOrder,
+    string? Family,
+    string? Genus,
+    string? InformalTaxonomy,
+    bool Infraspecies,
+    string? UsesaCode,
+    string? CosewicCode,
+    string? SaraCode,
+    string? SaraCodeRaw,
+    string? UsNRank,
+    string? CaNRank,
+    string NsxUrl,
+    string? LastModified,
+    IReadOnlyList<string> Synonyms);
+
 internal sealed record NatureServePage(long TotalResults, int ResultCount, IReadOnlyList<NatureServeSpecies> Species);
 
 internal static class NatureServeSearch {
