@@ -227,4 +227,13 @@ public sealed class ListRebuildTests {
         Assert.Contains("'''Subspecies'''\n{{columns-list|colwidth=30em|\n*", result.Text);
         Assert.Contains("Pavo spbaa alpha", result.Text);
     }
+
+    [Fact]
+    public void AMissingSpeciesGoesInTheLetterSectionOfItsGenus() {
+        // Sections by letter of the epithet; Pavo spbab (101) is missing and goes under its neighbours' letter.
+        var text = "==Species==\n===A===\n" + Line(100) + "\n\n===C===\n" + Line(102) + "\n" + Line(110) + "\n" + Line(111) + "\n" + Line(120)
+            + "\n" + Line(121) + "\n\n" + Section("Anseriformes", 130, 131, 132) + Section("Columbiformes", 140, 141) + End;
+        var result = Run(text);
+        Assert.Contains("===A===\n" + Line(100) + "\n" + Line(101) + "\n\n===C===", result.Text);
+    }
 }

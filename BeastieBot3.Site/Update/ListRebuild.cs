@@ -506,8 +506,20 @@ public static partial class ListRebuild {
         private bool Holds(ListSection section, ListTaxonRow taxon) =>
             section.Group is null || _sections.PathOf(taxon.NodeId).Any(g => g.NodeId == section.Group.NodeId);
 
-        // Where ListPlacement would put a taxon whose genus has no line.
+        // Where ListPlacement would put a taxon: in the section of the line of its genus that sorts just
+        // before it (or of the first line of its genus), so that a species goes into the right
+        // section of a list in sections by letter ("===C==="); with no line of its genus, in the
+        // section of the deepest group that holds it, a section for the others, or a new section.
         private object Place(ListTaxonRow taxon, IReadOnlyList<ListMember> keptLines) {
+            if (taxon.Kind == TaxonKinds.Species) {
+                var mates = keptLines.Where(m => m.Taxon.NodeId == taxon.NodeId && m.Taxon.Kind == TaxonKinds.Species && m.Taxon.TaxonId != taxon.TaxonId
+                    && Holds(_sections.SectionOf(m.Line), taxon)).OrderBy(m => m.Line).ToList();
+                if (mates.Count > 0) {
+                    var key = SortKey(taxon.ScientificName);
+                    var before = mates.LastOrDefault(m => string.Compare(SortKey(m.Written), key, StringComparison.OrdinalIgnoreCase) <= 0) ?? mates[0];
+                    return _sections.SectionOf(before.Line);
+                }
+            }
             var path = _sections.PathOf(taxon.NodeId);
             var section = _sections.DeepestFor(path);
             if (section.ChildRank is { } rank && path.FirstOrDefault(g => g.Rank == rank && _sections.Below(g, section.Group)) is { } group) {
