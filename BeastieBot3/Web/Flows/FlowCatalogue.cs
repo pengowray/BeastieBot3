@@ -1075,7 +1075,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "status-lists" },
                     Probe = PublicSiteProbes.NatureServe,
                     Group = "2 · Build the site database",
-                    Note = "A full download is about 1,200 requests of 100 records each and takes about an hour. A stopped download carries on from the last page stored. The button does nothing when the last download finished in the last 30 days; after that, it downloads only the records NatureServe changed since the last download. --restart under Options starts a new full download.",
+                    Note = "A full download is about 1,200 requests of 100 records each and took 11 minutes in October 2026. A stopped download carries on from the last page stored. The button does nothing when the last download finished in the last 30 days; after that, it downloads only the records NatureServe changed since the last download. --restart under Options starts a new full download.",
                 },
                 new FlowStep {
                     Id = "site-ecos",

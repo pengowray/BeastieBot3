@@ -148,8 +148,8 @@ internal sealed class StatusListStore : SqliteStore {
             genus                 TEXT,
             informal_taxonomy     TEXT,              -- "Animals | Vertebrates | Amphibians"
             infraspecies          INTEGER NOT NULL,  -- 1 for a subspecies, variety or population
-            usesa_code            TEXT,              -- US Endangered Species Act status code (LE, LT, PS:LE ...)
-            cosewic_code          TEXT,              -- COSEWIC status code (E, T, SC, XT, NAR, DD ...)
+            usesa_code            TEXT,              -- US Endangered Species Act status codes as NatureServe writes them: E, T, PE, PT, C, SAT, PSAT, DL, PDL, UR, XN; several joined by ", " ("E, XN")
+            cosewic_code          TEXT,              -- COSEWIC status code: E, T, SC, X, XT, NAR, DD, Non-active/Nonactive
             sara_code             TEXT,              -- SARA status, English part ("Endangered")
             sara_code_raw         TEXT,              -- SARA status as given ("Endangered/En voie de disparition")
             us_n_rank             TEXT,              -- rounded national rank in the United States

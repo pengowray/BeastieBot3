@@ -15,7 +15,7 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.StatusLists;
 
 [CommandInfo("statuses natureserve-fetch", CommandKind.Mutates,
-    "Download the NatureServe global rank (G rank), the US and Canadian national ranks, and the US Endangered Species Act, COSEWIC and SARA statuses of every species, subspecies, variety and population on NatureServe Explorer (about 113,500 records, CC BY 4.0) into the status lists store. A full download takes about an hour, and a stopped run carries on where it left off.",
+    "Download the NatureServe global rank (G rank), the US and Canadian national ranks, and the US Endangered Species Act, COSEWIC and SARA statuses of every species, subspecies, variety and population on NatureServe Explorer (about 113,500 records, CC BY 4.0) into the status lists store. A full download (about 1,200 requests) takes about 15 minutes, and a stopped run carries on where it left off.",
     Rerun = RerunEffect.IdempotentAdd,
     RerunNote = "A run carries on from the last page stored. After a download finishes, a run does nothing unless --restart starts a new full download or --refresh-days asks for the records changed since the last download. A full download that finishes with every record deletes the stored records it did not see; a refresh deletes the records NatureServe has unpublished.",
     ReportOnlyWith = new[] { "--status" },
@@ -115,11 +115,11 @@ internal sealed class NatureServeFetchCommand : AsyncCommand<NatureServeFetchCom
                     AnsiConsole.MarkupLineInterpolated($"[grey]NatureServe has {page.TotalResults:N0} records{(since is null ? "" : " changed since then")}.[/]");
                 }
 
-                var label = partition.Prefix.Length == 0 ? "All records" : $"Names starting {partition.Prefix}";
+                var label = partition.Prefix.Length == 0 ? (since is null ? "All records" : "All changed records") : $"Names starting {partition.Prefix}";
                 if (page.TotalResults > NatureServeSearch.MaxRecordsPerQuery && partition.NextPage == 0 && partition.Prefix.Length < MaxPrefixLength) {
                     var parts = NatureServeSearch.Split(partition.Prefix);
                     store.StoreNatureServePage(partition, page.TotalResults, done: false, page.Species, DateTime.UtcNow, splitInto: parts);
-                    AnsiConsole.MarkupLineInterpolated($"[grey]{label}: {page.TotalResults:N0} records, more than the {NatureServeSearch.MaxRecordsPerQuery:N0} one search can page through. Asking for {parts[0]} to {parts[^1]} instead.[/]");
+                    AnsiConsole.MarkupLineInterpolated($"[grey]{label}: {page.TotalResults:N0} records. One search returns at most {NatureServeSearch.MaxRecordsPerQuery:N0}, so asking for names starting {parts[0]} to {parts[^1]} instead.[/]");
                     continue;
                 }
 
