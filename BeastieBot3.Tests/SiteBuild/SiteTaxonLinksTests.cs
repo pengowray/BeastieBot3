@@ -1,3 +1,4 @@
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.SiteBuild;
 using static BeastieBot3.Tests.SiteBuild.SiteBuildSourceFixture;
 
@@ -60,10 +61,10 @@ public sealed class SiteTaxonLinksTests : IDisposable {
         var links = SiteTaxonLinks.Find(taxa, stats);
 
         Assert.Equal(new[] {
-            new SiteTaxonLink(WoylieOld, Woylie, SiteLinkKind.SameName),
-            new SiteTaxonLink(GangeticaOld, Gangetica, SiteLinkKind.SameName),
-            new SiteTaxonLink(GangeticaOld, Minor, SiteLinkKind.IucnSynonym),
-            new SiteTaxonLink(Minuta, Palmerae, SiteLinkKind.IucnSynonym),
+            new SiteTaxonLink(WoylieOld, Woylie, TaxonLinkKinds.SameName),
+            new SiteTaxonLink(GangeticaOld, Gangetica, TaxonLinkKinds.SameName),
+            new SiteTaxonLink(GangeticaOld, Minor, TaxonLinkKinds.IucnSynonym),
+            new SiteTaxonLink(Minuta, Palmerae, TaxonLinkKinds.IucnSynonym),
         }, links);
         Assert.Equal(Woylie, taxa.Single(t => t.TaxonId == WoylieOld).CurrentTaxonId);
         Assert.Null(taxa.Single(t => t.TaxonId == Minuta).CurrentTaxonId);
@@ -98,7 +99,7 @@ public sealed class SiteTaxonLinksTests : IDisposable {
             Taxon(Palmerae, "Acropora palmerae", "ANIMALIA", true, "Acropora minuta", "Acropora minuta"),
             Taxon(Minuta, "Acropora minuta", "Animalia", false),
         };
-        Assert.Equal(new SiteTaxonLink(Minuta, Palmerae, SiteLinkKind.IucnSynonym), Assert.Single(SiteTaxonLinks.Find(taxa, new SiteBuildStats())));
+        Assert.Equal(new SiteTaxonLink(Minuta, Palmerae, TaxonLinkKinds.IucnSynonym), Assert.Single(SiteTaxonLinks.Find(taxa, new SiteBuildStats())));
     }
 
     [Theory]

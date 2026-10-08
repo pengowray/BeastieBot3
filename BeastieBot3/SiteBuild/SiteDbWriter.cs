@@ -219,7 +219,7 @@ internal sealed class SiteDbWriter : IDisposable {
                 count.ExecuteNonQuery();
             }
             foreach (var colName in n.ColNames) {
-                Bind(name, n.NodeId, colName, SiteTreeSource.Col, SiteNameKey.Fold(colName));
+                Bind(name, n.NodeId, colName, GroupSources.Col, SiteNameKey.Fold(colName));
                 name.ExecuteNonQuery();
             }
             foreach (var wikipediaName in n.WikipediaNames) {

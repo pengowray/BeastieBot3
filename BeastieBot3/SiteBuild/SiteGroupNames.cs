@@ -1,5 +1,6 @@
 using BeastieBot3.Col;
 using BeastieBot3.CommonNames;
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Taxonomy;
 using BeastieBot3.WikipediaLists;
 using Microsoft.Data.Sqlite;
@@ -62,7 +63,7 @@ internal static class SiteGroupNames {
 
         foreach (var node in nodes) {
             cancellationToken.ThrowIfCancellationRequested();
-            if (node.ColId is null && node.Source != SiteTreeSource.Col) {
+            if (node.ColId is null && node.Source != GroupSources.Col) {
                 nameParameter.Value = node.Name;
                 rankParameter.Value = node.Rank;
                 var matches = new List<(string Id, string? Kingdom, string? Family)>();

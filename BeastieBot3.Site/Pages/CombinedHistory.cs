@@ -1,3 +1,4 @@
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Site.Data;
 
 namespace BeastieBot3.Site.Pages;

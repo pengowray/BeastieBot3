@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.SiteBuild;
 
 // Which English Wikipedia titles `wikipedia fetch-group-titles` asks for, and in what order: each
@@ -22,14 +23,14 @@ internal static class GroupTitlePlanner {
     public static readonly IReadOnlyList<string> BandNames = ["kingdom to family", "subfamilies and tribes", "genera"];
 
     public static int BandOf(SiteTreeNode node) {
-        if (node.Rank == "genus" && node.Source != SiteTreeSource.Col) {
+        if (node.Rank == "genus" && node.Source != GroupSources.Col) {
             return BandGenus;
         }
-        if (node.Source != SiteTreeSource.Col) {
+        if (node.Source != GroupSources.Col) {
             return BandFamilyAndAbove;
         }
         for (var at = node.Parent; at is not null; at = at.Parent) {
-            if (at.Source != SiteTreeSource.Col) {
+            if (at.Source != GroupSources.Col) {
                 return at.Rank is "family" or "genus" ? BandBelowFamily : BandFamilyAndAbove;
             }
         }

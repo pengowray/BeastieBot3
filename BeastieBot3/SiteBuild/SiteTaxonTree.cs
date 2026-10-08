@@ -1,4 +1,5 @@
 using BeastieBot3.Iucn;
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Taxonomy;
 
 // The tree of groups the site's taxa are in (higher_taxon). Each taxon in the release goes under its
@@ -30,12 +31,6 @@ internal sealed class SitePlacement {
 
     public IReadOnlyList<SitePlacementNode> Between(PlacementSpan span, string key) =>
         _paths.TryGetValue((span, key), out var nodes) ? nodes : Array.Empty<SitePlacementNode>();
-}
-
-internal static class SiteTreeSource {
-    public const string Iucn = "iucn";
-    public const string IucnRule = "iucn-rule";
-    public const string Col = "col";
 }
 
 internal sealed class SiteTreeNode {
@@ -126,33 +121,33 @@ internal sealed class SiteTaxonTree {
 
         if (!roots.TryGetValue(kingdomKey, out var node)) {
             roots[kingdomKey] = node = new SiteTreeNode {
-                Rank = "kingdom", Name = TitleCase(kingdom), Source = SiteTreeSource.Iucn, ShowRank = true,
+                Rank = "kingdom", Name = TitleCase(kingdom), Source = GroupSources.Iucn, ShowRank = true,
                 Kingdom = kingdomKey, Depth = 0,
             };
         }
-        node = Child(node, "phylum", taxon.Phylum, SiteTreeSource.Iucn);
-        node = Child(node, "class", taxon.ClassName, SiteTreeSource.Iucn);
+        node = Child(node, "phylum", taxon.Phylum, GroupSources.Iucn);
+        node = Child(node, "class", taxon.ClassName, GroupSources.Iucn);
         if (Usable(order) is not null) {
             foreach (var group in placement.Between(PlacementSpan.ClassToOrder,
                          TaxonPlacementIndex.OrderKey(kingdom, taxon.ClassName, order))) {
                 node = ColChild(node, group);
             }
         }
-        node = Child(node, "order", order, orderFromRule ? SiteTreeSource.IucnRule : SiteTreeSource.Iucn);
+        node = Child(node, "order", order, orderFromRule ? GroupSources.IucnRule : GroupSources.Iucn);
         if (Usable(family) is not null) {
             foreach (var group in placement.Between(PlacementSpan.OrderToFamily,
                          TaxonPlacementIndex.FamilyKey(kingdom, taxon.ClassName, order, family))) {
                 node = ColChild(node, group);
             }
         }
-        node = Child(node, "family", family, familyFromRule ? SiteTreeSource.IucnRule : SiteTreeSource.Iucn);
+        node = Child(node, "family", family, familyFromRule ? GroupSources.IucnRule : GroupSources.Iucn);
         if (Usable(taxon.Genus) is not null) {
             foreach (var group in placement.Between(PlacementSpan.FamilyToGenus,
                          TaxonPlacementIndex.GenusKey(kingdom, family, taxon.Genus))) {
                 node = ColChild(node, group);
             }
         }
-        node = Child(node, "genus", taxon.Genus, SiteTreeSource.Iucn, keepCase: true);
+        node = Child(node, "genus", taxon.Genus, GroupSources.Iucn, keepCase: true);
         return node;
     }
 
@@ -175,7 +170,7 @@ internal sealed class SiteTaxonTree {
         var key = "col:" + rank + ":" + group.Name.ToUpperInvariant();
         if (!parent.ChildrenByKey.TryGetValue(key, out var child)) {
             parent.ChildrenByKey[key] = child = new SiteTreeNode {
-                Rank = rank, Name = group.Name.Trim(), Source = SiteTreeSource.Col, ShowRank = group.ShowRank,
+                Rank = rank, Name = group.Name.Trim(), Source = GroupSources.Col, ShowRank = group.ShowRank,
                 Kingdom = parent.Kingdom, Parent = parent, Depth = parent.Depth + 1, ColId = group.ColId,
             };
         }

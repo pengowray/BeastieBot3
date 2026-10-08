@@ -1,3 +1,5 @@
+using BeastieBot3.Shared.SiteData;
+
 // Links each taxon that is not in the release (an old IUCN id) to the taxa in the release that the
 // site's pages show beside it (taxon_link, and taxon.current_taxon_id). Two kinds of link:
 //
@@ -17,11 +19,6 @@
 // case and accents would add 6 links in release 2026-1.
 
 namespace BeastieBot3.SiteBuild;
-
-internal static class SiteLinkKind {
-    public const string SameName = "same-name";
-    public const string IucnSynonym = "iucn-synonym";
-}
 
 internal sealed record SiteTaxonLink(long TaxonId, long CurrentTaxonId, string Kind);
 
@@ -51,7 +48,7 @@ internal static class SiteTaxonLinks {
                     .ThenBy(c => c.Kind == taxon.Kind ? 0 : 1)
                     .ThenBy(c => c.TaxonId)
                     .First().TaxonId;
-                links.Add(new SiteTaxonLink(taxon.TaxonId, taxon.CurrentTaxonId.Value, SiteLinkKind.SameName));
+                links.Add(new SiteTaxonLink(taxon.TaxonId, taxon.CurrentTaxonId.Value, TaxonLinkKinds.SameName));
                 stats.NotInReleaseWithCurrentTaxon++;
             }
 
@@ -66,7 +63,7 @@ internal static class SiteTaxonLinks {
                 .Distinct()
                 .ToList();
             if (candidates.Count == 1) {
-                links.Add(new SiteTaxonLink(taxon.TaxonId, candidates[0], SiteLinkKind.IucnSynonym));
+                links.Add(new SiteTaxonLink(taxon.TaxonId, candidates[0], TaxonLinkKinds.IucnSynonym));
                 stats.NotInReleaseSynonymLinks++;
             } else if (candidates.Count > 1) {
                 stats.NotInReleaseSynonymOfSeveral++;

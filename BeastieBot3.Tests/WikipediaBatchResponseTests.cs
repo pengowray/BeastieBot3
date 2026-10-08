@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.SiteBuild;
 using BeastieBot3.Wikipedia;
 
@@ -64,11 +65,11 @@ public class WikipediaBatchResponseTests {
 
     [Fact]
     public void PlannerPutsFamiliesBeforeTribesBeforeGenera() {
-        var kingdom = new SiteTreeNode { Rank = "kingdom", Name = "Animalia", Source = SiteTreeSource.Iucn, ShowRank = true, Kingdom = "ANIMALIA" };
-        var family = new SiteTreeNode { Rank = "family", Name = "Pteropodidae", Source = SiteTreeSource.Iucn, ShowRank = true, Kingdom = "ANIMALIA", Parent = kingdom, Depth = 5 };
-        var tribe = new SiteTreeNode { Rank = "tribe", Name = "Epomophorini", Source = SiteTreeSource.Col, ShowRank = true, Kingdom = "ANIMALIA", Parent = family, Depth = 6 };
-        var genus = new SiteTreeNode { Rank = "genus", Name = "Epomophorus", Source = SiteTreeSource.Iucn, ShowRank = true, Kingdom = "ANIMALIA", Parent = tribe, Depth = 7 };
-        var suborder = new SiteTreeNode { Rank = "suborder", Name = "Yinpterochiroptera", Source = SiteTreeSource.Col, ShowRank = true, Kingdom = "ANIMALIA", Parent = kingdom, Depth = 4 };
+        var kingdom = new SiteTreeNode { Rank = "kingdom", Name = "Animalia", Source = GroupSources.Iucn, ShowRank = true, Kingdom = "ANIMALIA" };
+        var family = new SiteTreeNode { Rank = "family", Name = "Pteropodidae", Source = GroupSources.Iucn, ShowRank = true, Kingdom = "ANIMALIA", Parent = kingdom, Depth = 5 };
+        var tribe = new SiteTreeNode { Rank = "tribe", Name = "Epomophorini", Source = GroupSources.Col, ShowRank = true, Kingdom = "ANIMALIA", Parent = family, Depth = 6 };
+        var genus = new SiteTreeNode { Rank = "genus", Name = "Epomophorus", Source = GroupSources.Iucn, ShowRank = true, Kingdom = "ANIMALIA", Parent = tribe, Depth = 7 };
+        var suborder = new SiteTreeNode { Rank = "suborder", Name = "Yinpterochiroptera", Source = GroupSources.Col, ShowRank = true, Kingdom = "ANIMALIA", Parent = kingdom, Depth = 4 };
 
         var titles = GroupTitlePlanner.Plan([genus, tribe, family, suborder, kingdom], node => node == family ? "Megabat" : null);
 

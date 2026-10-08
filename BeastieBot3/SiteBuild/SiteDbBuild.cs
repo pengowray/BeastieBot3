@@ -220,8 +220,8 @@ internal sealed class SiteDbBuild {
             var placement = ReadPlacement(ct);
             tree = SiteTaxonTree.Build(taxonList, placement, _inputs.NotAssignedRules);
             _stats.TreeNodes = tree.Nodes.Count;
-            _stats.TreeColGroups = tree.Nodes.Count(n => n.Source == SiteTreeSource.Col);
-            _stats.TreeRuleGroups = tree.Nodes.Count(n => n.Source == SiteTreeSource.IucnRule);
+            _stats.TreeColGroups = tree.Nodes.Count(n => n.Source == GroupSources.Col);
+            _stats.TreeRuleGroups = tree.Nodes.Count(n => n.Source == GroupSources.IucnRule);
             _stats.TreeTaxaUnderRuleOrder = tree.TaxaUnderRuleOrder;
             _stats.TreeTaxaUnderRuleFamily = tree.TaxaUnderRuleFamily;
             _stats.TreeTaxaWithUnassignedRank = tree.TaxaWithUnassignedRank;

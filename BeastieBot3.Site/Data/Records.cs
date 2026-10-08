@@ -1,3 +1,5 @@
+using BeastieBot3.Shared.SiteData;
+
 namespace BeastieBot3.Site.Data;
 
 // Rows of the site database (BeastieBot3.Shared.SiteData.SiteDbSchema) as the pages use them.
@@ -102,13 +104,6 @@ public sealed record RelatedTaxonRow(TaxonSummary Taxon, string? Criteria, int? 
 /// A taxon linked to the page's taxon in taxon_link. Kind: TaxonLinkKinds.SameName or IucnSynonym.
 public sealed record TaxonLinkRow(TaxonRow Taxon, string Kind) {
     public bool IsSynonym => Kind == TaxonLinkKinds.IucnSynonym;
-}
-
-public static class TaxonLinkKinds {
-    /// The two taxa have the same scientific name.
-    public const string SameName = "same-name";
-    /// IUCN lists the old taxon's scientific name as a synonym of the taxon in the release.
-    public const string IucnSynonym = "iucn-synonym";
 }
 
 /// One SPRAT profile of a taxon (epbc_listing). Status: the EPBC Act category code, null when the

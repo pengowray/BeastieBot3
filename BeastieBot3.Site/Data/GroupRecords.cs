@@ -1,3 +1,5 @@
+using BeastieBot3.Shared.SiteData;
+
 namespace BeastieBot3.Site.Data;
 
 // Rows of the tree of groups (higher_taxon and the tables beside it in SiteDbSchema).
@@ -35,12 +37,6 @@ public sealed record GroupHit(GroupRow Group, string? MatchedName);
 
 /// A rank found inside a group: how deep it first appears, and whether only Catalogue of Life groups have it.
 public sealed record GroupRank(string Rank, int MinDepth, bool OnlyFromCol);
-
-public static class GroupSources {
-    public const string Iucn = "iucn";
-    public const string IucnRule = "iucn-rule";
-    public const string Col = "col";
-}
 
 /// How many taxa in a group have a category ({{IUCN status}} code) in their latest global assessment.
 public sealed record GroupCategoryCount(string Category, int Species, int Infra, int Subpopulations);

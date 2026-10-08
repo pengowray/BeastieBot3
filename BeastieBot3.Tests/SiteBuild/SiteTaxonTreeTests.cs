@@ -1,4 +1,5 @@
 using BeastieBot3.Iucn;
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.SiteBuild;
 using BeastieBot3.Taxonomy;
 
@@ -67,7 +68,7 @@ public sealed class SiteTaxonTreeTests {
 
         Assert.Equal(["Carnivora", "Feliformia", "Felidae", "Pantherinae", "Panthera"], tree.Nodes.Skip(3).Select(n => n.Name));
         var suborder = tree.Nodes.Single(n => n.Name == "Feliformia");
-        Assert.Equal(("suborder", SiteTreeSource.Col, "F1"), (suborder.Rank, suborder.Source, suborder.ColId));
+        Assert.Equal(("suborder", GroupSources.Col, "F1"), (suborder.Rank, suborder.Source, suborder.ColId));
     }
 
     [Fact]
@@ -84,7 +85,7 @@ public sealed class SiteTaxonTreeTests {
         var tree = SiteTaxonTree.Build(taxa, SitePlacement.Empty, rules);
 
         var order = tree.Nodes.Single(n => n.Rank == "order");
-        Assert.Equal(("Perciformes", SiteTreeSource.IucnRule), (order.Name, order.Source));
+        Assert.Equal(("Perciformes", GroupSources.IucnRule), (order.Name, order.Source));
         var xidae = tree.Nodes.Single(n => n.Name == "Xidae");
         Assert.Equal("class", xidae.Parent!.Rank);
         Assert.Equal(1, tree.TaxaWithUnassignedRank);
