@@ -4,7 +4,8 @@ using System.Text.Json;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-// The run shared by `statuses ecos-import`, `statuses nztcs-import` and `statuses salve-import`:
+// The run shared by `statuses ecos-import`, `statuses nztcs-import`, `statuses salve-import` and
+// `statuses cites-import`:
 //   1. take the file given with --file, or download the source into the status lists folder as
 //      <stem>-<yyyy-MM-dd>.<extension> (StatusListDownload writes it through a .part file);
 //   2. read the file into rows; a file with no rows leaves the store as it was;

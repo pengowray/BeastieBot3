@@ -5,7 +5,8 @@ using Microsoft.Data.Sqlite;
 // Conservation statuses from systems other than the IUCN Red List (Datastore:status_lists_sqlite),
 // for the public species site. This file has the schema, the source rows and the sync state; the
 // methods that read and write each source's tables are in StatusListStore.NatureServe.cs,
-// StatusListStore.Ecos.cs, StatusListStore.Nztcs.cs and StatusListStore.Salve.cs.
+// StatusListStore.Ecos.cs, StatusListStore.Nztcs.cs, StatusListStore.Salve.cs and
+// StatusListStore.Cites.cs.
 //   status_source         one row per source: title, licence, citation, when it was last fetched;
 //   status_sync_state     key/value progress of `statuses natureserve-fetch` (the pass under way);
 //   natureserve_species   one row per NatureServe Explorer species, subspecies, variety or
@@ -17,7 +18,13 @@ using Microsoft.Data.Sqlite;
 //   ecos_name             every name the ECOS scientific name gives, brackets read (EcosScientificName);
 //   nztcs_assessment      one row per current New Zealand Threat Classification System assessment;
 //   salve_assessment      one row per current SALVE assessment of a species or subspecies of Brazil's
-//                         fauna.
+//                         fauna;
+//   cites_taxon           one row per taxon of the Checklist of CITES Species (a species, subspecies,
+//                         variety or higher taxon), with Species+'s summary of its listing;
+//   cites_listing         one row per current CITES listing of a taxon, its own or inherited from a
+//                         higher taxon;
+//   cites_note            each long note of the CITES listings once (full notes, annotation texts);
+//   cites_synonym         the synonyms the Checklist gives for each taxon.
 //
 // Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text.
 
@@ -28,6 +35,7 @@ internal static class StatusSources {
     public const string Ecos = "ecos";
     public const string Nztcs = "nztcs";
     public const string Salve = "salve";
+    public const string Cites = "cites";
 }
 
 internal sealed record StatusSourceInfo(
@@ -70,7 +78,7 @@ internal sealed partial class StatusListStore : SqliteStore {
 
     internal const string Ddl = """
         CREATE TABLE IF NOT EXISTS status_source (
-            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve'
+            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'cites'
             title       TEXT NOT NULL,
             url         TEXT NOT NULL,
             licence     TEXT NOT NULL,
@@ -187,6 +195,60 @@ internal sealed partial class StatusListStore : SqliteStore {
             imported_at     TEXT NOT NULL         -- UTC "O"
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS salve_assessment_name ON salve_assessment(scientific_name);
+        CREATE TABLE IF NOT EXISTS cites_taxon (
+            taxon_concept_id INTEGER PRIMARY KEY,  -- Species+ taxon concept id, shared by the Checklist and Species+
+            full_name        TEXT NOT NULL,        -- as the Checklist writes it: "Loxodonta africana", "Achillides chikae chikae" (a subspecies
+                                                   -- has no rank word), "Euphorbia decaryi var. robinsonii", "Woodworthia "Pygmy"" (informal)
+            author_year      TEXT,                 -- "(Blumenbach, 1797)"
+            taxon_rank       TEXT NOT NULL,        -- SPECIES, SUBSPECIES, VARIETY, GENUS, SUBFAMILY, FAMILY, ORDER
+            cites_accepted   INTEGER NOT NULL,     -- 1 when Species+ marks the name CITES accepted (the Checklist shows it in bold), else 0
+            kingdom          TEXT,                 -- Animalia, Plantae
+            phylum           TEXT,
+            taxclass         TEXT,
+            taxorder         TEXT,
+            family           TEXT,
+            genus            TEXT,
+            current_listing  TEXT,                 -- Species+'s summary of the appendices of the taxon and its descendants: I, II, III, I/II,
+                                                   -- II/NC ... ("NC": some descendants or populations are in no appendix; "NC" alone: the
+                                                   -- taxon is not listed, such as a species excluded from its family's listing); NULL when empty
+            url              TEXT NOT NULL,        -- the taxon's page on Species+, with its listings
+            imported_at      TEXT NOT NULL         -- UTC "O"
+        );
+        CREATE INDEX IF NOT EXISTS cites_taxon_name ON cites_taxon(full_name);
+        CREATE TABLE IF NOT EXISTS cites_note (
+            note_id INTEGER PRIMARY KEY,
+            html    TEXT NOT NULL UNIQUE            -- a note as Species+ gives it: HTML with <i>, <p>, entities and \r\n
+        );
+        CREATE TABLE IF NOT EXISTS cites_listing (
+            taxon_concept_id       INTEGER NOT NULL REFERENCES cites_taxon(taxon_concept_id) ON DELETE CASCADE,
+            listing_change_id      INTEGER NOT NULL,  -- Species+ id of the listing; an inherited listing often has the higher taxon's id
+            appendix               TEXT NOT NULL,     -- I, II or III
+            party_iso_code         TEXT,              -- Appendix III: the Party that listed the taxon, ISO 3166 alpha-2 (EU for the European Union)
+            party_name             TEXT,              -- "Mauritius", "Bolivia (Plurinational State of)"
+            effective_on           TEXT,              -- yyyy-MM-dd, when the listing took effect
+            short_note             TEXT,              -- HTML: which populations or parts the listing covers, quotas and exclusions
+                                                      -- ("Populations of AR and BR."); the only place the scope of a split listing is given
+            full_note_id           INTEGER REFERENCES cites_note(note_id),  -- the full text of the note
+            annotation_symbol      TEXT,              -- the annotation that says which parts and derivatives are covered: #1 to #19
+            annotation_note_id     INTEGER REFERENCES cites_note(note_id),  -- the text of that annotation
+            inherited_rank         TEXT,              -- for a listing inherited from a higher taxon: its rank (FAMILY, GENUS, ORDER, SUBFAMILY, SPECIES)
+            inherited_name         TEXT,              -- and its name ("Trochilidae"); NOT NULL marks an inherited listing
+            inherited_from_id      INTEGER,           -- and its taxon_concept_id, when the download has one taxon of that name and rank
+            inherited_short_note   TEXT,              -- HTML: the higher taxon's note that applies to this taxon ("Excludes fossils.")
+            inherited_full_note_id INTEGER REFERENCES cites_note(note_id),
+            nomenclature_note      TEXT,              -- HTML: a note on the name the taxon was listed under
+            PRIMARY KEY (taxon_concept_id, listing_change_id)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS cites_listing_inherited ON cites_listing(inherited_from_id);
+        CREATE TABLE IF NOT EXISTS cites_synonym (
+            taxon_concept_id INTEGER NOT NULL REFERENCES cites_taxon(taxon_concept_id) ON DELETE CASCADE,
+            name_with_author TEXT NOT NULL,         -- as the Checklist gives it: "Ornismya abeillei Lesson & DeLattre, 1839"
+            name             TEXT NOT NULL,         -- without the author (CitesChecklist.SplitSynonym): "Ornismya abeillei"; a subgenus in
+                                                    -- brackets is kept: "Phyllomedusa (agalychnis) callidryas"
+            author           TEXT,                  -- "Lesson & DeLattre, 1839"
+            PRIMARY KEY (taxon_concept_id, name_with_author)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS cites_synonym_name ON cites_synonym(name);
         """;
 
     protected override void EnsureSchema() {
