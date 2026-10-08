@@ -97,10 +97,23 @@ public class OtherLanguageNameTests {
         Assert.Equal(expected, OtherLanguageNameRules.Check(name, Tiger).ToString());
 
     [Fact]
-    public void BinomialRule_AlsoTakesOutNamesThatBeginWithTheGenus() {
-        // The rule as set: any name that starts with the genus and a lower-case word.
+    public void BinomialRule_WithoutAWordListTakesOutAnyNameThatBeginsWithTheGenusAndALowerCaseWord() {
         var tragopan = new TaxonScientificKeys("Tragopan", "caboti", ["Tragopan caboti"]);
         Assert.Equal(OtherNameDrop.Binomial, OtherLanguageNameRules.Check("Tragopan de Cabot", tragopan));
+    }
+
+    [Theory]
+    // Real names that begin with the genus: the next word is no epithet.
+    [InlineData("Tragopan de Cabot", "None")]
+    [InlineData("Veronica delle paludi", "None")]
+    // Scientific names: the taxon's own epithet, or an epithet of another name.
+    [InlineData("Tragopan caboti guangxiensis", "Binomial")]
+    [InlineData("Tragopan temminckii", "Binomial")]
+    public void BinomialRule_WithAWordListNeedsAnEpithetAfterTheGenus(string name, string expected) {
+        var genus = name.Split(' ')[0];
+        var keys = new TaxonScientificKeys(genus, genus == "Tragopan" ? "caboti" : "scutellata", [$"{genus} x"]);
+        string[] epithets = ["caboti", "temminckii", "scutellata"];
+        Assert.Equal(expected, OtherLanguageNameRules.Check(name, keys, epithets.Contains).ToString());
     }
 
     [Fact]

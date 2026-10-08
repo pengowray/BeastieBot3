@@ -38,7 +38,7 @@ internal static class SiteOtherLanguageNames {
     /// The Catalogue of Life's vernacular names of each taxon's CoL id, in languages other than
     /// English. False when the database has no vernacularname table.
     public static bool ReadCol(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, OtherNameCounts counts,
-        CancellationToken cancellationToken) {
+        Func<string, bool>? isEpithet, CancellationToken cancellationToken) {
         var byColId = new Dictionary<string, List<SiteTaxon>>(StringComparer.Ordinal);
         foreach (var taxon in taxa.Values) {
             if (taxon.ColId is { } colId) {
@@ -71,7 +71,7 @@ internal static class SiteOtherLanguageNames {
                 if (!keys.TryGetValue(taxon.TaxonId, out var taxonKeys)) {
                     keys[taxon.TaxonId] = taxonKeys = TaxonScientificKeys.For(taxon);
                 }
-                Consider(taxon, name, code, SiteNameSource.Col, taxonKeys, counts, null);
+                Consider(taxon, name, code, SiteNameSource.Col, taxonKeys, counts, null, isEpithet);
             }
         }
         return true;
@@ -81,7 +81,7 @@ internal static class SiteOtherLanguageNames {
     /// 'wikidata') and Wikipedia sitelink titles (source 'wikipedia'). Reads every downloaded item's
     /// JSON once, in the cache's order, and parses only the items of the site's taxa.
     public static void ReadWikidata(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, OtherNameCounts wikidata,
-        OtherNameCounts wikipedia, CancellationToken cancellationToken) {
+        OtherNameCounts wikipedia, Func<string, bool>? isEpithet, CancellationToken cancellationToken) {
         var byItem = new Dictionary<long, List<SiteTaxon>>();
         foreach (var taxon in taxa.Values) {
             if (taxon.WikidataQid is { Length: > 1 } qid
@@ -111,21 +111,21 @@ internal static class SiteOtherLanguageNames {
                 // Repeats within the item (a label that is also a P1843 value) are counted once.
                 var seen = new HashSet<(string, string, string)>();
                 foreach (var (name, code) in item.Names) {
-                    Consider(taxon, OtherLanguageNameRules.TrimDirectionMarks(name), code, SiteNameSource.Wikidata, taxonKeys, wikidata, seen);
+                    Consider(taxon, OtherLanguageNameRules.TrimDirectionMarks(name), code, SiteNameSource.Wikidata, taxonKeys, wikidata, seen, isEpithet);
                 }
                 foreach (var (site, title) in item.Sitelinks) {
                     if (OtherLanguageNameRules.WikipediaLanguage(site) is not { } code) {
                         continue;
                     }
                     Consider(taxon, OtherLanguageNameRules.WithoutDisambiguation(title), code, SiteNameSource.Wikipedia, taxonKeys,
-                        wikipedia, seen);
+                        wikipedia, seen, isEpithet);
                 }
             }
         }
     }
 
     private static void Consider(SiteTaxon taxon, string name, string? code, string source, TaxonScientificKeys keys,
-        OtherNameCounts counts, HashSet<(string, string, string)>? seen) {
+        OtherNameCounts counts, HashSet<(string, string, string)>? seen, Func<string, bool>? isEpithet) {
         if (name.Length == 0) {
             return;
         }
@@ -144,7 +144,7 @@ internal static class SiteOtherLanguageNames {
             }
             return;
         }
-        var drop = OtherLanguageNameRules.Check(name, keys);
+        var drop = OtherLanguageNameRules.Check(name, keys, isEpithet);
         if (drop != OtherNameDrop.None) {
             counts.Dropped[drop] = counts.Dropped.GetValueOrDefault(drop) + 1;
             return;

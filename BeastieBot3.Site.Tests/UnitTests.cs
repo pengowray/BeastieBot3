@@ -159,7 +159,7 @@ public sealed class DisplayTests {
             Row(10, "Suri", "wikipedia"),
         ]);
         Assert.Equal(["Choique", "Suri", "Ñandú", "Nandu"], names.Select(n => n.Name));
-        Assert.Equal(["IUCN Red List", "Catalogue of Life", "Wikidata", "Wikipedia"], names[0].Sources);
+        Assert.Equal(["IUCN Red List", "Wikidata", "Catalogue of Life", "Wikipedia"], names[0].Sources);
         Assert.Equal(["IUCN Red List", "Catalogue of Life", "Wikipedia"], names[1].Sources);
         Assert.Equal(["IUCN Red List", "Wikidata"], names[2].Sources);
         Assert.Equal(["Catalogue of Life"], names[3].Sources);

@@ -81,14 +81,9 @@ public sealed record TaxonNames(
         return forms.Where(f => f.Sources == most).OrderBy(f => f.First).First().Form;
     }
 
-    /// The order of the sources of a name in a language other than English.
-    public static int OtherLanguageSourceOrder(string source) => source switch {
-        "iucn" => 0,
-        "col" => 1,
-        "wikidata" => 2,
-        "wikipedia" => 3,
-        _ => 4,
-    };
+    /// The order of the sources of a name in a language other than English: the English names' order
+    /// (SourceOrder), so both tables list the sources alike.
+    public static int OtherLanguageSourceOrder(string source) => SourceOrder(source);
 
     /// The synonyms, one row per name (folded), sources in SourceOrder, by name.
     public static IReadOnlyList<SynonymRow> SynonymRows(IEnumerable<NameRow> names) => names

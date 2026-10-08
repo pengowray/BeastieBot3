@@ -10,11 +10,12 @@ using BeastieBot3.Shared.SiteData;
 //   - the taxon's scientific name (also without IUCN's rank marker: "Panthera tigris sumatrae"),
 //     one of its synonyms from any source, or a scientific name of its Wikidata item (P225);
 //   - its genus;
-// or when it starts with the genus, as written, a space and a lower-case letter (a binomial or
-// trinomial: "Panthera tigris altaica", "Carya illinoiensis" misspelt), or with the genus's
-// initial, a full stop, a space and the species epithet ("P. tigris"). The binomial rule also
-// takes out real names that begin with the genus ("Tragopan de Cabot", "Apalis capirotado");
-// the build counts them under that rule.
+// or when it starts with the genus, as written, a space and a lower-case word that is an epithet
+// (a binomial or trinomial: "Panthera tigris altaica", "Carya illinoiensis" misspelt), or with the
+// genus's initial, a full stop, a space and the species epithet ("P. tigris"). The epithet test
+// keeps real names that begin with the genus ("Tragopan de Cabot", "Veronica delle paludi"); a word
+// counts as an epithet when it is the taxon's own or an epithet of any name in the common names
+// store (NameWordSets.IsEpithet). Without that word list, any lower-case word counts.
 // CommonNameQuality's junk test runs after these, in SiteNameSet.
 //
 // Names are tidied first: Wikidata's Asturian labels wrap the scientific name in left-to-right
@@ -88,8 +89,9 @@ internal sealed class TaxonScientificKeys {
 }
 
 internal static partial class OtherLanguageNameRules {
-    /// Why the name is not a common name of the taxon, or None when it can be one.
-    public static OtherNameDrop Check(string name, TaxonScientificKeys taxon) {
+    /// Why the name is not a common name of the taxon, or None when it can be one. isEpithet: whether a
+    /// lower-case word is an epithet of some scientific name; null takes any lower-case word as one.
+    public static OtherNameDrop Check(string name, TaxonScientificKeys taxon, Func<string, bool>? isEpithet = null) {
         var key = SiteNameKey.Fold(name);
         if (taxon.Contains(key)) {
             return OtherNameDrop.ScientificName;
@@ -103,7 +105,10 @@ internal static partial class OtherLanguageNameRules {
         var trimmed = name.Trim();
         if (trimmed.Length > genus.Length + 1 && trimmed.StartsWith(genus, StringComparison.Ordinal)
             && trimmed[genus.Length] == ' ' && char.IsLower(trimmed[genus.Length + 1])) {
-            return OtherNameDrop.Binomial;
+            var word = trimmed[(genus.Length + 1)..].Split(' ', 2)[0];
+            if (isEpithet is null || word == taxon.SpeciesEpithet || isEpithet(word)) {
+                return OtherNameDrop.Binomial;
+            }
         }
         if (taxon.SpeciesEpithet is { } epithet) {
             var abbreviated = $"{genus[0]}. {epithet}";

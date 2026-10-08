@@ -330,12 +330,12 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         var text = Html.Text(html);
         // Spellings that differ only in case are one name, shown as IUCN spells it when the
         // spellings have as many sources each; sources in a fixed order.
-        Assert.Contains("French Tigre IUCN Red List, Catalogue of Life, Wikidata, Wikipedia", text);
+        Assert.Contains("French Tigre IUCN Red List, Wikidata, Catalogue of Life, Wikipedia", text);
         // The name with most sources first.
-        Assert.Contains("German Tiger Catalogue of Life, Wikidata, Wikipedia Königstiger Wikidata", text);
+        Assert.Contains("German Tiger Wikidata, Catalogue of Life, Wikipedia Königstiger Wikidata", text);
         Assert.Matches("<th scope=\"rowgroup\" rowspan=\"2\">German</th>\\s*<td lang=\"de\">Tiger</td>", html);
-        Assert.Contains("Japanese トラ Catalogue of Life, Wikidata, Wikipedia", text);
-        Assert.Contains("Chinese 老虎 Catalogue of Life, Wikidata 虎 Wikipedia", text);
+        Assert.Contains("Japanese トラ Wikidata, Catalogue of Life, Wikipedia", text);
+        Assert.Contains("Chinese 老虎 Wikidata, Catalogue of Life 虎 Wikipedia", text);
         // Languages by name; the 11th and later are hidden until the box is ticked.
         var languages = new[] {
             "Austronesian languages", "Chinese", "Dutch", "French", "German", "Italian", "Japanese", "Korean", "Polish", "Portuguese",
