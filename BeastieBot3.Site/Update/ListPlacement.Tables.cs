@@ -7,7 +7,7 @@ namespace BeastieBot3.Site.Update;
 // Missing species put into a wikitable: a new row next to a row of a species of the same genus, in a
 // table with one header row, the same number of cells in every row and no rowspan or colspan.
 public static partial class ListPlacement {
-    private sealed partial class Placer {
+    internal sealed partial class Placer {
         // Every line of a wikitable row, mapped to its table and row; read once.
         private Dictionary<int, (WikiTable Table, int Row)>? _tableRowOfLine;
         // Each table's data rows and their keys, read once per table.

@@ -11,9 +11,9 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
     private readonly Dictionary<int, GroupRow> _groups = [];
     private readonly List<(ListTaxonRow Row, StatusTaxon Taxon)> _taxa = [];
 
-    public FakeScopeLookup Group(int id, int? parent, string rank, string name, string source = GroupSources.Iucn, string? common = null) {
+    public FakeScopeLookup Group(int id, int? parent, string rank, string name, string source = GroupSources.Iucn, string? common = null, int firstPos = 0) {
         var depth = parent is { } p ? _groups[p].Depth + 1 : 0;
-        _groups[id] = new GroupRow(id, parent, depth, rank, name, source, true, "ANIMALIA", null, common, null, null, 0, 0, 0, 0, 0);
+        _groups[id] = new GroupRow(id, parent, depth, rank, name, source, true, "ANIMALIA", null, common, common is null ? null : "rules", null, firstPos, 0, 0, 0, 0);
         return this;
     }
 

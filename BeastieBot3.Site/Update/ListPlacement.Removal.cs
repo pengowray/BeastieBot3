@@ -10,10 +10,13 @@ namespace BeastieBot3.Site.Update;
 // a taxon that stays, has list lines under it that are not taken out, or defines a reference that
 // other lines use.
 public static partial class ListPlacement {
-    private sealed partial class Placer {
+    internal sealed partial class Placer {
         // The removal of each line taken out (every line of a removed block or row), by line number.
         private readonly Dictionary<int, TextRemoval> _removalOfLine = [];
         private readonly HashSet<WikiTemplate> _removedRows = [];
+
+        /// The removal of each line taken out by Remove, by line number.
+        internal IReadOnlyDictionary<int, TextRemoval> RemovalOfLine => _removalOfLine;
 
         public (List<RemovedTaxon> Removed, List<(ListScopeMember Member, KeptReason Reason)> Kept) Remove(IReadOnlyList<ListScopeMember> taxa) {
             var removed = new List<RemovedTaxon>();
@@ -122,7 +125,7 @@ public static partial class ListPlacement {
 
         // Whether the span defines a named reference ("<ref name="IUCN">...</ref>") that the text
         // uses outside it ("<ref name="IUCN"/>").
-        private bool DefinesUsedReference(TextSpan span) {
+        internal bool DefinesUsedReference(TextSpan span) {
             var inside = _text[span.Start..span.End];
             foreach (Match definition in RefDefinition().Matches(inside)) {
                 var name = Regex.Escape(definition.Groups["name"].Value.Trim());

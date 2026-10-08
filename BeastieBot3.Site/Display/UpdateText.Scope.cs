@@ -101,6 +101,59 @@ public static partial class UpdateText {
         _ => "No species of its genus is listed, and no heading names its order, family or other group.",
     };
 
+    // Rebuilding the list (ListRebuild). Provisional wording.
+    public const string RebuildHeading = "Rebuild the list";
+    public const string RebuildButton = "Rebuild the list";
+    public const string RebuildOption = "Rebuild the list in the updated wikitext";
+    public const string RebuildHelp = "Puts every taxon of the comparison under the heading of its group, adds the missing taxa and removes the taxa now in another category. Headings, text, images and the wording of existing lines are kept.";
+    public static string RebuildRefused(RebuildRefusal refusal, int lines) => refusal switch {
+        RebuildRefusal.NotLineList => "The list was not rebuilt: this wikitext lists its taxa in tables, not on list lines.",
+        RebuildRefusal.Partial => "The list was not rebuilt: the wikitext may be a list of part of the group. Compare with the whole group first.",
+        RebuildRefusal.TooLong => $"The list was not rebuilt: it would have {Count(lines)} lines, more than the {Count(GroupList.MaxLines)} one Wikipedia page can hold.",
+        _ => string.Empty,
+    };
+    public static string RebuildSummary(RebuildResult r) {
+        var added = r.Taxa.Count(t => t.Change == RebuildChange.Added);
+        var moved = r.Taxa.Count(t => t.Change == RebuildChange.Moved);
+        return $"The rebuilt list has {Count(r.Taxa.Count)} taxa: {Count(added)} added, {Count(moved)} moved to another heading, {Count(r.Removed.Count)} removed."
+            + (r.DuplicateLines.Count > 0 ? $" {Count(r.DuplicateLines.Count)} lines of taxa listed twice were removed." : string.Empty)
+            + (r.OtherLines > 0 ? $" {Count(r.OtherLines)} lines that name no taxon of the list were kept where they were." : string.Empty);
+    }
+    public static string RebuildDropped(IReadOnlyList<string> headings) =>
+        (headings.Count == 1 ? "Removed 1 heading with no taxa left under it: " : $"Removed {Count(headings.Count)} headings with no taxa left under them: ") + string.Join(", ", headings) + ".";
+    public static string RebuildDroppedText(string heading) => $"Text that was under {heading}:";
+    public const string ColumnRebuildChange = "Change";
+    public const string RebuildOptionsLegend = "How to rebuild";
+    public const string RebuildHeadingsLabel = "Headings:";
+    public const string RebuildHeadingsAsText = "As in the wikitext";
+    public const string RebuildHeadingsByRank = "One for each group of these ranks:";
+    public const string RebuildOrderLabel = "Order of headings";
+    public const string RebuildOrderText = "As in the wikitext";
+    public const string RebuildOrderIucn = "IUCN order (alphabetical)";
+    public const string RebuildWordingLabel = "Lines already in the list";
+    public const string RebuildWordingKeep = "Keep their wording";
+    public const string RebuildWordingNew = "Write them anew";
+    public const string RebuildStyleLabel = "Style of new lines";
+    public const string RebuildStyleText = "As the lines in the wikitext";
+    public const string RebuildStyleSci = "Scientific name first";
+    public const string RebuildStyleCommon = "Common name first";
+    public const string RebuildStyleCommonOnly = "Common name only";
+    public const string RebuildSortLabel = "Order of lines";
+    public const string RebuildSortText = "As in the wikitext";
+    public const string RebuildSortSci = "By scientific name";
+    public const string RebuildSortCommon = "By common name";
+    public const string RebuildInfraLabel = "Subspecies and varieties";
+    public const string RebuildInfraText = "As in the comparison";
+    public const string RebuildInfraNone = "Leave out";
+    public const string RebuildInfraSeparate = "After the species";
+    public const string RebuildInfraUnder = "Under their species";
+    public const string RebuildApply = "Rebuild";
+    public static string RebuildChangeText(RebuiltTaxon t) => t.Change switch {
+        RebuildChange.Added => "Added",
+        RebuildChange.Moved => t.OldHeading is { } old ? $"Moved from {old}" : "Moved",
+        _ => "",
+    };
+
     // Taking out the taxa now in another category (ListPlacement.Removal.cs).
     public const string RemoveButton = "Remove these taxa";
     public const string RemoveHelp = "Removes the list lines and {{Species table/row}} rows of these taxa, and any heading left with no taxa under it. After removal, untick a taxon in the table to keep it.";

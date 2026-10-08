@@ -367,6 +367,22 @@ public static partial class ListScope {
         };
     }
 
+    /// Every taxon the comparison counts in the group, listed in the text or not: the group's taxa
+    /// (of the area or region when the comparison is of one) with a latest assessment in the list's
+    /// categories, species only unless subspecies and varieties were compared (or infra says), in tree
+    /// order. Also: the group's taxa with these ids whatever their category.
+    public static List<ListTaxonRow> ComparedTaxa(ListScopeResult result, IListScopeLookup lookup, IReadOnlySet<long>? also = null,
+        bool? infra = null) {
+        string[] kinds = infra ?? result.InfraChecked ? [TaxonKinds.Species, TaxonKinds.Subspecies, TaxonKinds.Variety] : [TaxonKinds.Species];
+        IEnumerable<ListTaxonRow> rows = result.Area is { } area
+            ? lookup.TaxaInArea(result.Scope, kinds, area).Where(t => t.Record.Includes(result.AreaMode)).Select(t => t.Row)
+            : result.Region is { } region ? lookup.TaxaInRegion(result.Scope, kinds, region)
+            : lookup.TaxaIn(result.Scope, kinds);
+        var categories = result.Categories;
+        return [.. rows.Where(t => t.Category is not null && (categories is null || IsIn(GroupList.StatusCode(t), categories))
+            || also?.Contains(t.TaxonId) == true)];
+    }
+
     // An extra species as a list row: no assessment, its CoL or Wikidata name, its article.
     private static ListTaxonRow ExtraRow(ExtraSpeciesRow e) => new(-e.ExtraId, e.ScientificName, TaxonKinds.Species, e.Kingdom, e.Genus,
         e.Epithet, null, null, null, e.CommonNameEn, e.EnwikiTitle, null, null, e.NodeId, e.SortPos, null, null, false, false, null, e.Authority);

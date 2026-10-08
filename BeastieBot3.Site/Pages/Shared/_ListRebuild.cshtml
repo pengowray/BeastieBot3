@@ -1,0 +1,108 @@
+@model BeastieBot3.Site.Update.ListScopeView
+@using BeastieBot3.Site.Update
+@* The rebuilt list (ListRebuild): what changed, and the choice to turn it off. Shown at the top of
+   the comparison, since the updated wikitext above is the rebuilt list. *@
+@{
+    var rebuild = Model.Rebuild!;
+}
+<div class="update-rebuild">
+    <h4>@UpdateText.RebuildHeading</h4>
+    <p class="update-scope-add">
+        <label><input type="checkbox" name="@UpdateModel.RebuildField" value="1" form="update-form" checked> @UpdateText.RebuildOption</label>
+    </p>
+    @{
+        var choices = Model.RebuildChoices;
+        string StyleValue() => choices.Style switch {
+            BeastieBot3.Shared.Wikitext.SpeciesListStyle.ScientificNameFirst => "sci",
+            BeastieBot3.Shared.Wikitext.SpeciesListStyle.CommonNameFirst => "common",
+            BeastieBot3.Shared.Wikitext.SpeciesListStyle.CommonNameOnly => "commononly",
+            _ => "",
+        };
+        string SortValue() => choices.Sort switch { BeastieBot3.Site.Lists.ListSort.ScientificName => "sci", BeastieBot3.Site.Lists.ListSort.CommonName => "common", _ => "" };
+        string InfraValue() => choices.Infra switch {
+            BeastieBot3.Site.Lists.InfraMode.None => "none", BeastieBot3.Site.Lists.InfraMode.Separate => "separate", BeastieBot3.Site.Lists.InfraMode.UnderSpecies => "under", _ => "",
+        };
+    }
+    @* The choices belong to the update form, so they are sent with the text. *@
+    <fieldset class="update-options update-rebuild-options">
+        <legend>@UpdateText.RebuildOptionsLegend</legend>
+        <div class="update-rebuild-headings" role="radiogroup" aria-label="@UpdateText.RebuildHeadingsLabel">
+            <span>@UpdateText.RebuildHeadingsLabel</span>
+            <label><input type="radio" name="@UpdateModel.HeadingModeField" value="text" form="update-form" checked="@(!Model.HeadingsByRank)"> @UpdateText.RebuildHeadingsAsText</label>
+            <label><input type="radio" name="@UpdateModel.HeadingModeField" value="ranks" form="update-form" checked="@Model.HeadingsByRank"> @UpdateText.RebuildHeadingsByRank</label>
+            @foreach (var (rank, picked) in Model.HeadingRankChoices) {
+                <label class="update-rank"><input type="checkbox" name="@UpdateModel.RanksField" value="@rank" form="update-form" checked="@picked"> @BeastieBot3.Site.Lists.GroupList.Capitalize(rank)</label>
+            }
+        </div>
+        <label>@UpdateText.RebuildOrderLabel
+            <select name="@UpdateModel.OrderField" form="update-form">
+                <option value="text" selected="@(!choices.IucnOrder)">@UpdateText.RebuildOrderText</option>
+                <option value="iucn" selected="@choices.IucnOrder">@UpdateText.RebuildOrderIucn</option>
+            </select>
+        </label>
+        <label>@UpdateText.RebuildWordingLabel
+            <select name="@UpdateModel.WordingField" form="update-form">
+                <option value="keep" selected="@choices.KeepWording">@UpdateText.RebuildWordingKeep</option>
+                <option value="new" selected="@(!choices.KeepWording)">@UpdateText.RebuildWordingNew</option>
+            </select>
+        </label>
+        <label>@UpdateText.RebuildStyleLabel
+            <select name="@UpdateModel.StyleField" form="update-form">
+                <option value="" selected="@(StyleValue() == "")">@UpdateText.RebuildStyleText</option>
+                <option value="sci" selected="@(StyleValue() == "sci")">@UpdateText.RebuildStyleSci</option>
+                <option value="common" selected="@(StyleValue() == "common")">@UpdateText.RebuildStyleCommon</option>
+                <option value="commononly" selected="@(StyleValue() == "commononly")">@UpdateText.RebuildStyleCommonOnly</option>
+            </select>
+        </label>
+        <label>@UpdateText.RebuildSortLabel
+            <select name="@UpdateModel.SortField" form="update-form">
+                <option value="" selected="@(SortValue() == "")">@UpdateText.RebuildSortText</option>
+                <option value="sci" selected="@(SortValue() == "sci")">@UpdateText.RebuildSortSci</option>
+                <option value="common" selected="@(SortValue() == "common")">@UpdateText.RebuildSortCommon</option>
+            </select>
+        </label>
+        <label>@UpdateText.RebuildInfraLabel
+            <select name="@UpdateModel.InfraField" form="update-form">
+                <option value="" selected="@(InfraValue() == "")">@UpdateText.RebuildInfraText</option>
+                <option value="none" selected="@(InfraValue() == "none")">@UpdateText.RebuildInfraNone</option>
+                <option value="separate" selected="@(InfraValue() == "separate")">@UpdateText.RebuildInfraSeparate</option>
+                <option value="under" selected="@(InfraValue() == "under")">@UpdateText.RebuildInfraUnder</option>
+            </select>
+        </label>
+        <p><button type="submit" form="update-form">@UpdateText.RebuildApply</button></p>
+    </fieldset>
+    @if (rebuild.Refusal != RebuildRefusal.None) {
+        <p>@UpdateText.RebuildRefused(rebuild.Refusal, rebuild.LineCount)</p>
+    } else {
+        <p>@UpdateText.RebuildSummary(rebuild)</p>
+        @if (rebuild.NewHeadings.Count > 0) {
+            <p>@UpdateText.NewHeadings(rebuild.NewHeadings)</p>
+        }
+        @if (rebuild.Dropped.Count > 0) {
+            <p>@UpdateText.RebuildDropped(rebuild.Dropped.Select(d => d.Heading).ToList())</p>
+            @foreach (var d in rebuild.Dropped.Where(d => d.Text.Length > 0)) {
+                <div class="wikitext-box">
+                    <p class="help">@UpdateText.RebuildDroppedText(d.Heading)</p>
+                    <textarea class="update-readonly" readonly rows="3" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="@UpdateText.RebuildDroppedText(d.Heading)">@("\n" + d.Text)</textarea>
+                </div>
+            }
+        }
+        var changed = rebuild.Taxa.Where(t => t.Change != RebuildChange.Kept).ToList();
+        @if (changed.Count > 0) {
+            <div class="table-scroll">
+                <table class="update-report">
+                    <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnRebuildChange</th><th scope="col">@UpdateText.ColumnHeading</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in changed) {
+                            <tr>
+                                <td>@if (t.Taxon.TaxonId > 0) {<a href="/species/@t.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(t.Taxon.ScientificName))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(t.Taxon.ScientificName))}</td>
+                                <td>@UpdateText.RebuildChangeText(t)</td>
+                                <td>@(t.Heading is { } h ? t.NewHeading ? UpdateText.NewHeadingValue(h) : h : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>

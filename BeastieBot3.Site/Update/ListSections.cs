@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using BeastieBot3.Site.Data;
+using BeastieBot3.Site.Lists;
 
 namespace BeastieBot3.Site.Update;
 
@@ -240,7 +241,7 @@ internal sealed partial class ListSections {
         var prefix = anchor.Group is { } g && string.Equals(rankWord, g.Rank, StringComparison.OrdinalIgnoreCase)
             ? anchor.Title[..(anchor.Title.IndexOf(rankWord, StringComparison.OrdinalIgnoreCase) + rankWord.Length)] + (plain.Contains(':') ? ": " : " ")
             : string.Empty;
-        var bracket = EndBracket().IsMatch(plain) && group.CommonNameEn is { } common ? $" ({common})" : string.Empty;
+        var bracket = EndBracket().IsMatch(plain) && GroupList.HasSentenceName(group) && group.CommonNameEn is { } common ? $" ({common})" : string.Empty;
         return prefix + name + bracket;
     }
 
@@ -253,10 +254,11 @@ internal sealed partial class ListSections {
     }
 
     /// The "{{gray|English name}}" line after a heading, when the anchor heading has one and the group
-    /// has an English name other than its scientific name.
+    /// has an English name for a heading: one from the rules files, which give plurals ("Cuckoo-shrikes");
+    /// a name from a Wikipedia article's title is singular ("Hummingbird").
     public string? GrayLineFor(ListSection anchor, GroupRow group) =>
         anchor.HeadingLine > 0 && anchor.HeadingLine < _lines.Count && GrayLine().Match(_lines.Text(anchor.HeadingLine + 1)) is { Success: true } gray
-        && group.CommonNameEn is { } english && !string.Equals(english, group.Name, StringComparison.OrdinalIgnoreCase)
+        && GroupList.HasSentenceName(group) && group.CommonNameEn is { } english && !string.Equals(english, group.Name, StringComparison.OrdinalIgnoreCase)
             ? "{{" + gray.Groups["name"].Value + "|" + Capitalised(english) + "}}"
             : null;
 

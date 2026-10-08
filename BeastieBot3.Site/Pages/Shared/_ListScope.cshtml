@@ -12,6 +12,9 @@
     var extraToCopy = placing ? placement!.Unplaced.Where(t => t.TaxonId < 0).ToList() : r.MissingExtra;
 }
 <section class="update-scope" aria-labelledby="scope-heading">
+    @if (Model.Rebuild is { } rebuild) {
+        @await Html.PartialAsync("_ListRebuild", Model)
+    }
     <h3 id="scope-heading">@UpdateText.ScopeHeading(r.Scope)</h3>
     <p>@UpdateText.ScopeSummary(r, Model.AreaName)</p>
     @if (r.Categories is { } categories) {
@@ -127,7 +130,7 @@
             }
         }
     }
-    @if (!r.Partial && (r.Missing?.Count > 0 || r.MissingExtra?.Count > 0)) {
+    @if (Model.Rebuild is null && !r.Partial && (r.Missing?.Count > 0 || r.MissingExtra?.Count > 0)) {
         @* Off: a button that sends the text again with the option on. On: a ticked checkbox, so
            the option stays on when the form is sent again, and can be turned off. *@
         <p class="update-scope-add">
@@ -261,13 +264,13 @@
             @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.Epbc))
         } else {
             <input type="hidden" name="@UpdateModel.RemoveShownField" value="@Model.TextKey" form="update-form">
-            <p>@UpdateText.RemoveResult(placement?.Removed.Count ?? 0, r.OtherCategory.Count)</p>
+            <p>@UpdateText.RemoveResult(Model.Rebuild?.Removed.Count ?? placement?.Removed.Count ?? 0, r.OtherCategory.Count)</p>
             @if (placement?.RemovedHeadings is { Count: > 0 } removedHeadings) {
                 <p>@UpdateText.RemovedHeadings(removedHeadings)</p>
             }
             @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.Epbc) {
                 Removing = Model.Removing,
-                Kept = placement?.Kept.ToDictionary(k => k.Member.Taxon.TaxonId, k => k.Reason) ?? [],
+                Kept = (Model.Rebuild?.Kept ?? placement?.Kept)?.ToDictionary(k => k.Member.Taxon.TaxonId, k => k.Reason) ?? [],
             })
             <p class="update-scope-add"><span class="help">@UpdateText.RemoveInstruction</span> <button type="submit" form="update-form">@UpdateText.Submit</button></p>
         }
@@ -275,6 +278,13 @@
     @if (r.Outside.Count > 0) {
         <h4>@UpdateText.OutsideHeading(r.Outside.Count, r.Scope)</h4>
         @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.Outside, Model.Epbc))
+    }
+    @if (Model.Rebuild is null && Model.Forms.ListLines && r.Missing is not null) {
+        <h4>@UpdateText.RebuildHeading</h4>
+        <p class="update-scope-add">
+            <button type="submit" form="update-form" name="@UpdateModel.RebuildField" value="1" aria-describedby="scope-rebuild-help">@UpdateText.RebuildButton</button>
+        </p>
+        <p class="help" id="scope-rebuild-help">@UpdateText.RebuildHelp</p>
     }
     @if (r.Duplicates.Count > 0) {
         <h4>@UpdateText.DuplicatesHeading(r.Duplicates.Count)</h4>

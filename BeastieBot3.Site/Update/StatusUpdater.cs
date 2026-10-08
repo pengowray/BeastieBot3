@@ -191,6 +191,9 @@ public sealed partial class StatusUpdater {
         return Apply(_lastText, [.. kept, .. insertions.Select(i => new Edit(i.Position, i.Position, i.Text)), .. cuts]);
     }
 
+    /// The part of the last Update's text in the span, with the edits that lie wholly inside it.
+    public string TextWithin(TextSpan span) => Apply(_lastText, _lastEdits, span);
+
     // ---------------------------------------------------------------- {{IUCN status}} with ids
 
     private StatusFinding StatusTemplate(WikitextScanner s, WikiTemplate template, List<Edit> edits) {
