@@ -1478,6 +1478,31 @@ th.num {
     max-width: 100%;
 }
 
+/* The rebuilt list's report and choices: one choice per line, the rank checkboxes in a row. */
+.update-rebuild {
+    margin: 0.5rem 0 1.25rem;
+}
+.update-rebuild-options {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0.6rem 0;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border);
+}
+.update-rebuild-options select {
+    margin-left: 0.4rem;
+    max-width: 100%;
+}
+.update-rebuild-options p {
+    margin: 0;
+}
+.update-rebuild-headings {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.9rem;
+}
+
 /* The species page's comparison of ranks: one column per source, one row per group. Groups that are
    not in IUCN's or the Catalogue of Life's classification are hidden until the box is ticked. */
 .ranks-table td {

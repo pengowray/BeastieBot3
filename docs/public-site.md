@@ -1817,6 +1817,44 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   A text put in inside a removed span would be lost, so that taxon stays in the copy box
   (`UnplacedReason.RemovedLine`). The updater's own edits inside a removed line are dropped
   (`TextRemoval.Owned`), and the edit summary adds "16 species removed".
+- The list rebuilt (`Update/ListRebuild.cs`; field `rebuild`, a button under the comparison, then a
+  ticked checkbox; only for a text whose taxa are mostly on list lines, refused for a list that may be
+  partial unless `anyway` is on, and above `GroupList.MaxLines` taxa). Every taxon the comparison
+  counts in the group (`ListScope.ComparedTaxa`: the group's taxa in the list's categories, of the area
+  or region when the comparison is of one, subspecies and varieties when they were compared) gets a
+  line, and the taxa now in another category are left out as with `rmall` (the same checkboxes and
+  `KeptReason` rules; a rebuild starts with all of them ticked). The sections come from
+  `ListSections`. With headings as in the wikitext (the default), a listed taxon stays in its section
+  while the section's group holds it; a missing taxon, or one IUCN has moved, goes where
+  `ListPlacement` would put it (deepest section, an "Other ..." section, the section's own lines of
+  several groups, or a new section placed as in placement). A taxon's line is the first line that
+  writes its own name (a synonym line comes second); another line writing the same name is a
+  duplicate and goes (`DuplicateLines`) unless it defines a used reference; a line writing another
+  name stays where it is. A line under another taxon's line (a subspecies under its species) goes
+  with it. Each section is read once (`Read`): text before the list, list blocks by part (a part
+  starts at a label such as `'''Subspecies'''`), the part's layout template (opening and closing as
+  written, on the first or last line or on lines of their own), and text after the list. A section
+  keeps its heading line, its text before and after the list and its template; its lines keep their
+  wording with the updater's changes (`StatusUpdater.TextWithin`). Lines that name no taxon of the
+  list stay in their section and part (`OtherLines`). A section of a group with no line left is
+  dropped and its other text listed (`Dropped`). Sections of no group (See also, References) and the
+  text before the first heading stay as they are. Lines go in the order the section keeps, found from
+  its old lines (scientific names without "×" or "†", or common names; one pair in ten may be out of
+  order); in no order, the old lines keep theirs and the others go after them, unless that whole
+  arrangement reads as sorted, in which case it is sorted, so that rebuilding the rebuilt text changes
+  nothing (checked on five Wikipedia lists). A new section's lines follow the order of the sections
+  they came from, and its layout template is that of the section its first old line came from.
+  `RebuildOptions` (form fields named as on the group pages where they mean the same: `hmode` and
+  `h`, `wording`, `style`, `sort`, `order`, `infra`): headings for chosen ranks in place of the text's
+  (in IUCN's order; a heading keeps the heading line, re-levelled, and text of the text's section of
+  its group; the other sections of groups go and their other lines go to the heading of the nearest
+  group; a heading with no section to copy is written like a section of the same rank, else as
+  `GroupList.HeadingText`); lines written anew in a chosen style (lines under them kept); a chosen
+  order of lines; sections in IUCN's order; subspecies and varieties left out, listed after the
+  species under a `'''Subspecies'''` label, or under their species. The rebuilt list is a tree of
+  `OutNode`s for both modes. In October 2026, List of endangered birds gave 33 taxa added, 17 removed
+  and 3 new headings; List of vulnerable mammals 171 added, 4 moved, 128 removed; List of Carex
+  species kept its 2,073 lines of species IUCN has not assessed in place.
 - Catalogue of Life species (form field `extra`, off by default; shown for a list of every
   category): the species of the Catalogue of Life in the group that are not in the IUCN Red List
   (`extra_species` with a CoL id, less likely IUCN duplicates; the species only on Wikidata are left

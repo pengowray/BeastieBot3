@@ -196,6 +196,9 @@
             @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories, Model.ShowEpbc ? Model.Epbc : null, Model.CategoriesFromTitle, Model.Areas) {
                 Removing = Model.Removing,
                 Rebuild = Model.Rebuild,
+                RebuildChoices = Model.RebuildChoices,
+                HeadingsByRank = Model.HeadingsByRank,
+                HeadingRankChoices = Model.HeadingRankChoices,
                 Forms = Model.Forms,
                 TextKey = UpdateModel.TextKey(Model.Input),
             })

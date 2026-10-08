@@ -73,8 +73,11 @@ public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? P
     IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc = null, bool CategoriesFromTitle = false,
     BeastieBot3.Shared.Wikitext.AreaNames? Areas = null) {
     public IReadOnlySet<long>? Removing { get; init; }
-    /// The rebuilt list, when the reader asked for one (ListRebuild).
+    /// The rebuilt list, when the reader asked for one (ListRebuild), and the rebuild's choices.
     public RebuildResult? Rebuild { get; init; }
+    public RebuildOptions RebuildChoices { get; init; } = new();
+    public bool HeadingsByRank { get; init; }
+    public IReadOnlyList<(string Rank, bool Picked)> HeadingRankChoices { get; init; } = [];
     public ListForms Forms { get; init; } = new(false, false, false, false);
     public string TextKey { get; init; } = string.Empty;
 

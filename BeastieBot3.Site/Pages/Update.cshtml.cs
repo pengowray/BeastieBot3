@@ -191,6 +191,30 @@ public sealed class UpdateModel : PageModel {
     /// The rebuilt list, when the reader asked for one.
     public RebuildResult? Rebuild { get; private set; }
 
+    // The rebuild's choices, named as on the group pages' list options where they mean the same:
+    //   hmode   text | ranks    headings as in the wikitext, or for the ranks in h
+    //   h       a rank; repeated
+    //   wording keep | new      the wording of lines already in the list
+    //   style   sci | common | commononly; empty: as the wikitext's lines
+    //   sort    sci | common; empty: the order the wikitext keeps
+    //   order   text | iucn     the order of headings
+    //   infra   none | separate | under; empty: as in the comparison
+    public const string HeadingModeField = "hmode";
+    public const string RanksField = "h";
+    public const string WordingField = "wording";
+    public const string StyleField = "style";
+    public const string SortField = "sort";
+    public const string OrderField = "order";
+    public const string InfraField = "infra";
+
+    /// The rebuild's choices as the form sent them.
+    public RebuildOptions RebuildChoices { get; private set; } = new();
+    /// The reader asked for headings by rank (the ranks may be none).
+    public bool HeadingsByRank { get; private set; }
+    /// The ranks inside the compared group that headings can be for, with whether each is picked.
+    public IReadOnlyList<(string Rank, bool Picked)> HeadingRankChoices { get; private set; } = [];
+    private IReadOnlyList<string> _pickedRanks = [];
+
     /// The taxa now in another category the reader chose to take out; null when the reader has not
     /// asked to take any out.
     public IReadOnlySet<long>? Removing { get; private set; }
@@ -294,6 +318,30 @@ public sealed class UpdateModel : PageModel {
             ? form[RemoveField].Select(v => long.TryParse(v, out var id) ? id : 0).Where(id => id > 0).ToHashSet()
             : new HashSet<long>();
         var rebuild = On(RebuildField);
+        string? Last(string field) => form[field].LastOrDefault() is { Length: > 0 } v ? v.Trim() : null;
+        HeadingsByRank = Last(HeadingModeField) == "ranks";
+        _pickedRanks = [.. form[RanksField].Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()).Distinct()];
+        RebuildChoices = new RebuildOptions {
+            KeepWording = Last(WordingField) != "new",
+            Style = Last(StyleField) switch {
+                "sci" => SpeciesListStyle.ScientificNameFirst,
+                "common" => SpeciesListStyle.CommonNameFirst,
+                "commononly" => SpeciesListStyle.CommonNameOnly,
+                _ => null,
+            },
+            Sort = Last(SortField) switch {
+                "sci" => BeastieBot3.Site.Lists.ListSort.ScientificName,
+                "common" => BeastieBot3.Site.Lists.ListSort.CommonName,
+                _ => null,
+            },
+            IucnOrder = Last(OrderField) == "iucn",
+            Infra = Last(InfraField) switch {
+                "none" => BeastieBot3.Site.Lists.InfraMode.None,
+                "separate" => BeastieBot3.Site.Lists.InfraMode.Separate,
+                "under" => BeastieBot3.Site.Lists.InfraMode.UnderSpecies,
+                _ => null,
+            },
+        };
         Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField), removing,
             removeAsked: On(RemoveAllField) || form[RemoveShownField].LastOrDefault() == TextKey(text)
                 || (rebuild && form[RemoveShownField].LastOrDefault() != TextKey(text)),
@@ -324,8 +372,14 @@ public sealed class UpdateModel : PageModel {
         };
         if (rebuild && Scope is not null) {
             // The rebuilt list has the missing taxa; the taxa now in another category are left out
-            // unless the reader unticks them.
-            Rebuild = ListRebuild.Rebuild(text, updater, Result.Members ?? [], Scope, placementOptions, scopeLookup);
+            // unless the reader unticks them. Headings by rank only for ranks inside the compared group.
+            var ranks = _queries.GetRanksWithin(Scope.Scope).Select(r => r.Rank)
+                .OrderBy(BeastieBot3.Site.Lists.GroupListQuery.RankIndex).ToList();
+            HeadingRankChoices = [.. ranks.Select(r => (r, _pickedRanks.Contains(r)))];
+            var options = RebuildChoices with {
+                HeadingRanks = HeadingsByRank ? [.. ranks.Where(_pickedRanks.Contains)] : null,
+            };
+            Rebuild = ListRebuild.Rebuild(text, updater, Result.Members ?? [], Scope, placementOptions, scopeLookup, options);
             if (Rebuild.Refusal == RebuildRefusal.None) {
                 Result = Result with {
                     Text = Rebuild.Text,
