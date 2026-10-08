@@ -243,7 +243,7 @@ public static partial class ListPlacement {
     private sealed partial class Placer {
         private readonly string _text;
         private readonly WikitextScanner _scanner;
-        private readonly Lines _lines;
+        private readonly TextLines _lines;
         private readonly IReadOnlyList<ListMember> _members;
         private readonly ListScopeResult _scope;
         private readonly ListPlacementOptions _options;
@@ -252,7 +252,7 @@ public static partial class ListPlacement {
         public Placer(string text, IReadOnlyList<ListMember> members, ListScopeResult scope, ListPlacementOptions options, IListScopeLookup lookup) {
             _text = text;
             _scanner = new WikitextScanner(text);
-            _lines = new Lines(text);
+            _lines = new TextLines(text);
             _members = members;
             _scope = scope;
             _options = options;
@@ -447,7 +447,7 @@ public static partial class ListPlacement {
         LeadingCommon().Match(line) is { Success: true } m ? m.Groups["label"].Success ? m.Groups["label"].Value : m.Groups["target"].Value : null;
 
     [GeneratedRegex(@"^[*#]+ ?")]
-    private static partial Regex Prefix();
+    internal static partial Regex Prefix();
 
     [GeneratedRegex(@"\|(?=[*#])")]
     private static partial Regex FirstMarker();
@@ -462,62 +462,14 @@ public static partial class ListPlacement {
 
     // Where the list part of a line starts: at 0 for a line starting with "*" or "#", after the "|"
     // for "{{columns-list|...|*...", or -1.
-    private static int ListStart(string line) =>
+    internal static int ListStart(string line) =>
         line.Length > 0 && line[0] is '*' or '#' ? 0 : FirstMarker().Match(line) is { Success: true } m ? m.Index + 1 : -1;
 
-    private static int Markers(string line) {
+    internal static int Markers(string line) {
         var n = 0;
         while (n < line.Length && line[n] is '*' or '#' or ':' or ';') {
             n++;
         }
         return n;
-    }
-
-    // The lines of the text, 1-based, with their ends before "\r\n" or "\n".
-    private sealed class Lines {
-        private readonly string _text;
-        private readonly List<int> _starts = [0];
-
-        public Lines(string text) {
-            _text = text;
-            for (var i = 0; i < text.Length; i++) {
-                if (text[i] == '\n') {
-                    _starts.Add(i + 1);
-                }
-            }
-        }
-
-        public int Start(int line) => _starts[Math.Clamp(line - 1, 0, _starts.Count - 1)];
-
-        public int End(int line) {
-            var next = line < _starts.Count ? _starts[line] - 1 : _text.Length;
-            return next > 0 && next <= _text.Length && next - 1 >= Start(line) && _text[next - 1] == '\r' ? next - 1 : next;
-        }
-
-        public string Text(int line) => _text[Start(line)..End(line)];
-
-        public int Count => _starts.Count;
-
-        // The last of a line and the lines after it that belong to it: lines with more bullet
-        // markers (its subspecies) or starting with ":" (a note under it). A blank line, a line with
-        // as many markers or fewer, or the end of a template ends it.
-        public int LastOfBlock(int line) {
-            var first = Text(line);
-            var start = ListStart(first);
-            var depth = Markers(start < 0 ? first : first[start..]);
-            var last = line;
-            for (var next = line + 1; next <= _starts.Count; next++) {
-                var t = Text(next);
-                if (t.Length == 0 || t.StartsWith("}}", StringComparison.Ordinal)) {
-                    break;
-                }
-                if (Markers(t) > depth || (t[0] == ':' && depth > 0)) {
-                    last = next;
-                    continue;
-                }
-                break;
-            }
-            return last;
-        }
     }
 }
