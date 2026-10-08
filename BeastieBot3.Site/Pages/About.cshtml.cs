@@ -30,6 +30,14 @@ public sealed class AboutModel : PageModel {
     public string? EcosDate { get; private set; }
     public string? NztcsDate { get; private set; }
     public string? SalveDate { get; private set; }
+    /// JNCC's spreadsheet: when it was downloaded, its date and the attribution JNCC asks for.
+    public string? JnccDate { get; private set; }
+    public string? JnccFileDate { get; private set; }
+    public string? JnccAttribution { get; private set; }
+    /// The Checklist of CITES Species: when it was downloaded, as a date and as its citation's access date (dd/MM/yyyy).
+    public string? CitesDate { get; private set; }
+    public int? CitesYear { get; private set; }
+    public string? CitesAccessed { get; private set; }
     /// The date SALVE's citation form wants: "08 de out. de 2026".
     public string? SalveAccessed { get; private set; }
     public int? SalveYear { get; private set; }
@@ -103,6 +111,14 @@ public sealed class AboutModel : PageModel {
             SalveYear = salve.Year;
             string[] months = ["jan.", "fev.", "mar.", "abr.", "maio", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez."];
             SalveAccessed = $"{salve.Day:00} de {months[salve.Month - 1]} de {salve.Year}";
+        }
+        JnccDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.JnccFetched), out var jncc) ? SiteFormat.Date(jncc) : null;
+        JnccFileDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.JnccFileDate), out var jnccFile) ? SiteFormat.Date(jnccFile) : null;
+        JnccAttribution = snapshot.Get(SiteDbSchema.MetaKeys.JnccAttribution);
+        if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.CitesFetched), out var cites)) {
+            CitesDate = SiteFormat.Date(cites);
+            CitesYear = cites.Year;
+            CitesAccessed = cites.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
         }
         if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.IucnDoiCheckedTo), out var doiChecked)) {
             DoiCheckedDate = SiteFormat.Date(doiChecked);

@@ -360,6 +360,9 @@ internal sealed class SiteBuildStats {
     public int CitesRows;
     public string? CitesFetched;
     public string? CitesCitation;
+    public string? JnccFetched;
+    public string? JnccFileDate;
+    public string? JnccAttribution;
     public int JnccMatched;
     public int JnccRows;
     public int NatureServeSubnationalRanks;

@@ -33,6 +33,7 @@ internal static partial class SiteLinkReaders {
         }
         stats.JnccDesignations = designations.Count;
         var (fetched, version, citation) = JnccSource(connection);
+        (stats.JnccFetched, stats.JnccFileDate, stats.JnccAttribution) = (fetched, version, citation);
 
         var records = designations.GroupBy(d => d.TaxonVersionKey)
             .Select(g => new JnccTaxon(g.Key, JnccName(g.First().ScientificName), g.First().Kingdom,

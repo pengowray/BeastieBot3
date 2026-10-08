@@ -576,6 +576,12 @@ public static class SiteDbSchema {
         /// the citation the Checklist asks for, with that access date.
         public const string CitesFetched = "cites_fetched";
         public const string CitesCitation = "cites_citation";
+        /// JNCC's Conservation Designations for UK Taxa: when `statuses jncc-import` downloaded it
+        /// ('yyyy-MM-dd'), the date of the spreadsheet ('yyyy-MM-dd', from its file name) and the
+        /// attribution line JNCC asks for.
+        public const string JnccFetched = "jncc_fetched";
+        public const string JnccFileDate = "jncc_file_date";
+        public const string JnccAttribution = "jncc_attribution";
         /// When `iucn api green-status` last downloaded the Green Status assessments ('yyyy-MM-dd'), for
         /// the access date of their citations.
         public const string GreenStatusFetched = "green_status_fetched";
