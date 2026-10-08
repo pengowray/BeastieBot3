@@ -210,8 +210,8 @@ internal sealed class NatureServeFetchCommand : AsyncCommand<NatureServeFetchCom
         table.AddRow("Records with national ranks (US, Canada)", withNational.ToString("N0", CultureInfo.InvariantCulture));
         table.AddRow("Records with state or province ranks", withSubnational.ToString("N0", CultureInfo.InvariantCulture));
         if (NatureServePlan.NeedsFullDownloadForFields(state, records)) {
-            table.AddRow("[yellow]National and state ranks[/]",
-                "[yellow]Records downloaded before these ranks were stored have none. Run once with --restart to download every record again (about 15 minutes).[/]");
+            table.AddRow("[yellow]National, state and province ranks[/]",
+                "[yellow]Missing for records downloaded by an earlier version of this command. To add the ranks, run statuses natureserve-fetch --restart once. It downloads every record again (about 15 minutes).[/]");
         }
         if (state.CompletedUtc is { } completed) {
             var kind = state.CompletedKind == NatureServePassKeys.Refresh ? "Refresh" : "Full download";

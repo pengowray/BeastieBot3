@@ -2,7 +2,7 @@
 
 The status lists store holds conservation statuses from systems other than the IUCN Red List, for the public species site (`site build-db` reads it into `other_status`; see `docs/public-site.md`):
 
-- NatureServe Explorer: the NatureServe global rank (G rank), the national ranks in the United States and Canada, and the US Endangered Species Act, COSEWIC and SARA statuses that NatureServe records (`statuses natureserve-fetch`).
+- NatureServe Explorer: the NatureServe global rank (G rank), the national and subnational (state, province and territory) ranks in the United States and Canada, and the US Endangered Species Act, COSEWIC and SARA statuses that NatureServe records (`statuses natureserve-fetch`).
 - ECOS, the US Fish and Wildlife Service's Environmental Conservation Online System: the list of species, subspecies and populations listed under the US Endangered Species Act (`statuses ecos-import`).
 - The New Zealand Threat Classification System database (nztcs.org.nz, Department of Conservation, CC BY 4.0): the current assessments (`statuses nztcs-import`).
 - SALVE (salve.icmbio.gov.br), ICMBio's system for the national assessments of the extinction risk of Brazil's fauna: the current assessment of each species and subspecies (`statuses salve-import`).
@@ -26,6 +26,8 @@ The three imports (`statuses ecos-import`, `nztcs-import` and `salve-import`) sh
 | `status_sync_state` | key of the NatureServe download's progress (`natureserve_pass_*`, `natureserve_completed*`) |
 | `natureserve_species` | NatureServe record (`element_global_id`): a species, subspecies, variety or population |
 | `natureserve_synonym` | synonym NatureServe lists for a record |
+| `natureserve_nation` | national rank of a record (`element_global_id`, `nation_code`: US or CA) |
+| `natureserve_subnation` | subnational rank of a record in a US state or a Canadian province or territory (`element_global_id`, `nation_code`, `subnation_code`) |
 | `natureserve_partition` | name prefix of the NatureServe download under way, with the next page to ask for. Empty between downloads. |
 | `ecos_listing` | ESA listing (`entity_id`, the ECOS Listed Species ID) |
 | `ecos_name` | name an ECOS listing's scientific name gives, the main name included |
@@ -59,7 +61,7 @@ The first full download (2026-10-08) asked about 101 prefixes (29 had no records
 | After a finished download | Nothing, unless `--refresh-days N` and the last download finished more than N days ago. |
 | `--refresh-days N` | A refresh: only the records modified since the last download started, less an hour (the search's `modifiedSince`), then the records NatureServe unpublished since then (`POST /api/data/unpublishedTaxa`), which it deletes. |
 | `--limit N` | Stops after N page requests. |
-| `--status` | Prints the progress and sends no requests. |
+| `--status` | Prints the progress and the number of records with national and with state or province ranks, and sends no requests. |
 
 When a full download finishes, it deletes the stored records it did not see, but only when it stored at least as many records as NatureServe gave as its total. When it stored fewer, it keeps the old records and says so, because a record that paging missed is not a deleted record.
 
@@ -67,9 +69,9 @@ NatureServe last modified 113,413 of the 113,530 records on 2026-10-02 or 2026-1
 
 ### What is stored
 
-Per record: `element_global_id`, `unique_id`, `elcode`, `scientific_name`, the primary common name and its language, `g_rank` (as published, for example G3G4, G2T1, G3TNRQ) and `rounded_g_rank`, `classification_status`, kingdom to genus, `informal_taxonomy`, `infraspecies`, `usesa_code`, `cosewic_code`, `sara_code` (the English part of NatureServe's bilingual SARA status, "Endangered" from "Endangered/En voie de disparition") and `sara_code_raw`, `us_n_rank` and `ca_n_rank` (the rounded national ranks of the US and Canada), `nsx_url`, `last_modified`, `fetched_at`, and the synonyms.
+Per record: `element_global_id`, `unique_id`, `elcode`, `scientific_name`, the primary common name and its language, `g_rank` (as published, for example G3G4, G2T1, G3TNRQ) and `rounded_g_rank`, `classification_status`, kingdom to genus, `informal_taxonomy`, `infraspecies`, `usesa_code`, `cosewic_code`, `sara_code` (the English part of NatureServe's bilingual SARA status, "Endangered" from "Endangered/En voie de disparition") and `sara_code_raw`, `us_n_rank` and `ca_n_rank` (the rounded national ranks of the US and Canada), `nsx_url`, `last_modified`, `fetched_at`, the synonyms, and the national and subnational ranks (see "National and subnational ranks" below).
 
-Not stored: taxonomic comments and every other narrative text, other common names, subnational (state and province) ranks, and distribution.
+Not stored: taxonomic comments and every other narrative text, other common names, and distribution. The national and subnational ranks as published (`nrank`, `srank`, not rounded), the year each was last reviewed, and the names of the nations and subnations are not stored either: the species search does not give them. They are only in each record's own API page (`GET https://explorer.natureserve.org/api/data/taxon/<unique_id>`), which would take one request per record.
 
 Values in the first full download (2026-10-08, 113,530 records: 66,070 animals, 32,888 plants, 14,572 fungi):
 
@@ -96,6 +98,48 @@ Scientific names, as NatureServe writes them:
 - other forms: "Ambystoma pop. 3", "Salmo salar (landlocked)", "Argynnis zerene myrtleae sensu lato", "Physalis x elliottii nothovar. elliottii", "Cortinarius grosmorneënsis".
 
 238 scientific names belong to two or more records, nearly all a Standard record and a Provisional (224) or Nonstandard (12) record with the same name, such as Abies lasiocarpa (144815 Standard, 137855 Provisional). Matching to IUCN names should prefer the Standard record. One name is used in two kingdoms: Pilophorus clavatus, a fungus (121859) and an animal (907882).
+
+### National and subnational ranks
+
+Each search result has `nations[]`, one object per nation with `nationCode`, `roundedNRank`, `native`, `exotic` and `subnations[]`, and each subnation object has `subnationCode`, `roundedSRank`, `native` and `exotic`. The search gives no other fields for nations and subnations (checked 2026-10-08 with Ambystoma californiense, Haliaeetus leucocephalus, Danaus plexippus and Puma concolor). The command stores these values unchanged, with `native` and `exotic` as 1 or 0, in two tables:
+
+| Table | Columns |
+| --- | --- |
+| `natureserve_nation` | `element_global_id`, `nation_code`, `rounded_n_rank`, `native`, `exotic` |
+| `natureserve_subnation` | `element_global_id`, `nation_code`, `subnation_code`, `rounded_s_rank`, `native`, `exotic` |
+
+- `native` and `exotic` are NULL when the search leaves the field out. Both are 1 for a taxon that is native in one part of the nation or subnation and exotic (introduced) in another.
+- A rank can be several ranks joined by a comma, one each for the breeding (B), nonbreeding (N) and migrant (M) populations: `N5B,N5N`; `N3B,NUM`; `S4B,S5N,S4M`; `S2N,SXB`. `NNRB` means that the breeding population is not ranked, and `NNRN` that the nonbreeding population is not ranked.
+- Other rank codes: NNR and SNR not ranked, NU and SU unrankable, NNA and SNA not applicable (usually an exotic taxon), NH and SH possibly extirpated, NX and SX presumed extirpated.
+- Only the nation codes US and CA appeared in `nations[]` in the test run below and the four species above, in either order. The subnation codes are NatureServe's own, and the tables key them with the nation code (CA under US is California). Under US: the 50 states, DC and NN (the Navajo Nation). Under CA: AB, BC, MB, NB, NS, NT, NU, ON, PE, QC, SK and YT, with Newfoundland and Labrador as two codes, NF (the island of Newfoundland) and LB (Labrador). The search gives no names, so the public site has to map the codes to names.
+- When a record is stored, its rows in both tables are deleted and written again, in the transaction that stores the record. They are deleted with the record (ON DELETE CASCADE). A record whose `nations[]` is empty has no rows.
+- A nation object or subnation object without a code is left out. When one record has two nations with the same code, or one nation has two subnations with the same code, only the first in the array is stored.
+
+Counts from a test run of 20 pages of 100 records on 2026-10-08 (1,611 records: the first 100 records of the whole search, the first 100 of the names starting A, every name starting Aa, Ab or Ac, and 100 starting Ad; a record read twice counts once):
+
+| What is counted | Count |
+| --- | --- |
+| Records with at least one `natureserve_nation` row (NNR included) | 1,591; the other 20 records have an empty `nations[]` |
+| Records with at least one `natureserve_subnation` row | 1,432 |
+| `natureserve_nation` rows by `nation_code` | US 1,187; CA 911; total 2,098 |
+| `natureserve_nation` rows by `rounded_n_rank` | NNR 983; NU 233; N5 229; N4 189; NNA 164; N3 100; N1 76; N2 73; NX 21; NH 18; rows with breeding, nonbreeding or migrant ranks 12 (`N5B,N5N` 5; `N3N` 2; `N2B,NUN,NUM` 1 ...) |
+| `natureserve_subnation` rows by `rounded_s_rank` (8,141 rows, 54 values) | SNR 3,402; SU 1,145; SNA 868; S4 731; S5 623; S3 504; S1 351; S2 283; SH 63; SX 36; rows with breeding, nonbreeding or migrant ranks 135 (`S4B` 15; `SNRB` 11; `S5B` 11; `S3B,S4N` 10 ...) |
+| `natureserve_nation` rows by `native`, `exotic` | native only 1,926; exotic only 154; both 18; no row had neither |
+| `natureserve_subnation` rows by `native`, `exotic` | native only 7,342; exotic only 793; both 6; no row had neither |
+
+The `natureserve_species` columns `us_n_rank` and `ca_n_rank` are filled as before. They come from the first US object and the first CA object in `nations[]`, so they match the record's US and CA rows in `natureserve_nation` (they did for every record in the test run).
+
+#### A full download is needed once
+
+A store whose records were downloaded by an earlier version of the command has no rows in `natureserve_nation` or `natureserve_subnation`. A refresh (`--refresh-days`) adds rows only for the records that NatureServe changed. To add rows for every record, run `statuses natureserve-fetch --restart` once (about 15 minutes). The old records are kept until the new download finishes. A run without `--restart` does not start a full download.
+
+The status table, which `--status` prints (a run also prints it when a download finishes, when it stops at `--limit`, and when there is nothing to do), then has the row "National, state and province ranks", which says to run the command once with `--restart`. The table shows that row while `NatureServePlan.NeedsFullDownloadForFields` is true:
+
+- Each pass (one full download or one refresh, which can take several runs) writes the number `NatureServePlan.FieldsVersion` (2 since the ranks were added) to the `status_sync_state` key `natureserve_pass_fields_version` when it starts.
+- When a full download finishes, the command copies that number to the key `natureserve_full_completed_fields_version`.
+- `NeedsFullDownloadForFields` is true when the store has records, `natureserve_full_completed_fields_version` is missing or less than `FieldsVersion`, and no full download that started with the current `FieldsVersion` is under way.
+
+When a later change makes the command store another field, increase `FieldsVersion`.
 
 ## ECOS: `statuses ecos-import`
 
