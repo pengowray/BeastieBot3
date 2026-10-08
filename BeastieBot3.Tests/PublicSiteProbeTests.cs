@@ -286,4 +286,14 @@ public class PublicSiteProbeTests {
         Assert.Equal("todo", r.Status);
         Assert.Contains("The IUCN Red List database changed after the last run", r.Detail);
     }
+
+    [Fact]
+    public void AnImportStepIsAmberUntilItRunsAndAgainAfter30Days() {
+        var now = new DateTime(2026, 10, 9, 0, 0, 0, DateTimeKind.Utc);
+        var site = Site() with { StatusListsPath = "/data/status_lists.sqlite", ReadAtUtc = now };
+        Assert.Equal("todo", PublicSiteProbes.ImportStep(site, null, "taxa").Status);
+        Assert.Equal("ok", PublicSiteProbes.ImportStep(site, new StatusListSourceState(now.AddDays(-2), 43310), "taxa").Status);
+        Assert.Equal("todo", PublicSiteProbes.ImportStep(site, new StatusListSourceState(now.AddDays(-40), 43310), "taxa").Status);
+        Assert.Equal("todo", PublicSiteProbes.ImportStep(site with { StatusListsPath = null }, null, "taxa").Status);
+    }
 }

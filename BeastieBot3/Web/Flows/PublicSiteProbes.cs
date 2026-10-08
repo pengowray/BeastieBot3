@@ -25,6 +25,8 @@ public static class PublicSiteProbes {
     public const string Ecos = "site-ecos";
     public const string Nztcs = "site-nztcs";
     public const string Salve = "site-salve";
+    public const string Jncc = "site-jncc";
+    public const string Cites = "site-cites";
     public const string GreenStatus = "site-green-status";
     public const string SummaryTables = "site-summary-tables";
 
@@ -39,7 +41,7 @@ public static class PublicSiteProbes {
     /// The age after which the workflow asks for the IUCN Green Status assessments again.
     public const int GreenStatusRefreshDays = 30;
 
-    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs or Salve or GreenStatus or SummaryTables;
+    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs or Salve or Jncc or Cites or GreenStatus or SummaryTables;
 
     public static FlowProbeResult? Evaluate(string probe, PublicSiteState s) => probe switch {
         Gbif => GbifStep(s),
@@ -51,6 +53,8 @@ public static class PublicSiteProbes {
         Ecos => EcosStep(s),
         Nztcs => NztcsStep(s),
         Salve => SalveStep(s),
+        Jncc => ImportStep(s, s.Jncc, "designations"),
+        Cites => ImportStep(s, s.Cites, "taxa"),
         GreenStatus => GreenStatusStep(s),
         SummaryTables => SummaryTablesStep(s),
         _ => null,
@@ -240,6 +244,21 @@ public static class PublicSiteProbes {
         return days > StatusListsRefreshDays
             ? new FlowProbeResult("todo", $"{done.Rows:n0} assessments, downloaded {done.FetchedAtUtc:yyyy-MM-dd}, {days} days ago.")
             : new FlowProbeResult("ok", $"{done.Rows:n0} assessments, downloaded {done.FetchedAtUtc:yyyy-MM-dd}.");
+    }
+
+    // A status list import that replaces its rows each run: amber when it has not run, or ran more than
+    // StatusListsRefreshDays ago. rows: what the source's row count counts.
+    internal static FlowProbeResult ImportStep(PublicSiteState s, StatusListSourceState? source, string rows) {
+        if (s.StatusListsPath is null) {
+            return new FlowProbeResult("todo", NoStatusListsPath);
+        }
+        if (source is not { } done) {
+            return new FlowProbeResult("todo", "Not downloaded yet.");
+        }
+        var days = (int)Math.Floor((s.ReadAtUtc - done.FetchedAtUtc).TotalDays);
+        return days > StatusListsRefreshDays
+            ? new FlowProbeResult("todo", $"{done.Rows:n0} {rows}, downloaded {done.FetchedAtUtc:yyyy-MM-dd}, {days} days ago.")
+            : new FlowProbeResult("ok", $"{done.Rows:n0} {rows}, downloaded {done.FetchedAtUtc:yyyy-MM-dd}.");
     }
 
     // ---- `iucn api green-status` ----

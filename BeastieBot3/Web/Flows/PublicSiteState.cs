@@ -89,6 +89,8 @@ public sealed record PublicSiteState {
     public StatusListSourceState? Ecos { get; init; }
     public StatusListSourceState? Nztcs { get; init; }
     public StatusListSourceState? Salve { get; init; }
+    public StatusListSourceState? Jncc { get; init; }
+    public StatusListSourceState? Cites { get; init; }
     /// When the NatureServe download under way started; null when none is under way.
     public DateTime? NatureServePassStartedUtc { get; init; }
     /// How many records the download under way has stored, and how many NatureServe said it has.
@@ -287,11 +289,13 @@ public static class PublicSiteStateReader {
         try {
             using var conn = OpenReadOnly(path!);
             using (var cmd = conn.CreateCommand()) {
-                cmd.CommandText = "SELECT source, fetched_at, row_count FROM status_source WHERE source IN (@natureserve, @ecos, @nztcs, @salve)";
+                cmd.CommandText = "SELECT source, fetched_at, row_count FROM status_source WHERE source IN (@natureserve, @ecos, @nztcs, @salve, @jncc, @cites)";
                 cmd.Parameters.AddWithValue("@natureserve", StatusLists.StatusSources.NatureServe);
                 cmd.Parameters.AddWithValue("@ecos", StatusLists.StatusSources.Ecos);
                 cmd.Parameters.AddWithValue("@nztcs", StatusLists.StatusSources.Nztcs);
                 cmd.Parameters.AddWithValue("@salve", StatusLists.StatusSources.Salve);
+                cmd.Parameters.AddWithValue("@jncc", StatusLists.StatusSources.Jncc);
+                cmd.Parameters.AddWithValue("@cites", StatusLists.StatusSources.Cites);
                 cmd.CommandTimeout = 5;
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read()) {
@@ -301,6 +305,8 @@ public static class PublicSiteStateReader {
                         StatusLists.StatusSources.NatureServe => state with { NatureServe = source },
                         StatusLists.StatusSources.Ecos => state with { Ecos = source },
                         StatusLists.StatusSources.Salve => state with { Salve = source },
+                        StatusLists.StatusSources.Jncc => state with { Jncc = source },
+                        StatusLists.StatusSources.Cites => state with { Cites = source },
                         _ => state with { Nztcs = source },
                     };
                 }
