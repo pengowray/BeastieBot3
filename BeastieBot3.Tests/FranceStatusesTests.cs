@@ -80,6 +80,28 @@ public sealed class FranceStatusesTests : IDisposable {
         Assert.True(breeding.IsCurrent);
     }
 
+    // The great egret in metropolitan France: wintering in the 2011 list under the synonym Casmerodius
+    // albus, breeding in the 2016 list under the accepted name, moved down from VU to NT for the region.
+    private static readonly string[] EgretRows = [
+        "2502,2504,,\"LRN\",\"Liste rouge nationale\",\"Liste rouge\",\"LC\",\"Préoccupation mineure\",\"Hivernant\",\"TERFXFR\",31343,\"Casmerodius albus\",\"(Linnaeus, 1758)\",\"<i>Casmerodius albus</i> (Linnaeus, 1758)\",\"<i>Ardea alba</i> Linnaeus, 1758\",\"Animalia\",\"Chordata\",\"Aves\",\"Pelecaniformes\",\"Ardeidae\",\"Chordés\",\"Oiseaux\",\"France métropolitaine\",\"Territoire\",\"FXX\",\"\",\"UICN Comité français, MNHN, LPO, SEOF &amp; ONCFS. 2011. <em>La Liste rouge des espèces menacées en France - Chapitre Oiseaux de France métropolitaine.</em> Paris, France. 27 pp.\",\"http://inpn.mnhn.fr/docs/LR_FCE/Liste_rouge_France_Oiseaux_de_metropole.pdf\",\"STATUTS\",\"VALUE\"",
+        "2504,2504,189420,\"LRN\",\"Liste rouge nationale\",\"Liste rouge\",\"NT\",\"Quasi menacée\",\"VU D1 (-1) - Nicheur\",\"TERFXFR\",165208,\"Ardea alba\",\"Linnaeus, 1758\",\"<i>Ardea alba</i> Linnaeus, 1758\",\"<i>Ardea alba</i> Linnaeus, 1758\",\"Animalia\",\"Chordata\",\"Aves\",\"Pelecaniformes\",\"Ardeidae\",\"Chordés\",\"Oiseaux\",\"France métropolitaine\",\"Territoire\",\"FXX\",\"\",\"UICN Comité français, MNHN, LPO, SEOF &amp; ONCFS. 2016. <em>La Liste rouge des espèces menacées en France - Chapitre Oiseaux de France métropolitaine.</em> 31 pp.\",\"https://inpn.mnhn.fr/docs-web/docs/download/165208\",\"STATUTS\",\"VALUE\"",
+    ];
+
+    [Fact]
+    public void Bird_has_breeding_and_wintering_rows_under_two_names() {
+        var rows = FranceBdc.Read(new StringReader(Header + "\n" + string.Join("\n", EgretRows) + "\n")).Rows;
+        var wintering = rows[0];
+        Assert.Equal((2502L, 2504L, "LC", "Casmerodius albus", 31343L), (wintering.CdNom, wintering.CdRef, wintering.Code, wintering.Name, wintering.CdDoc));
+        Assert.Equal(new FranceRemark("Hivernant", null, null, null, null, "Hivernant", "wintering", false), wintering.Remark);
+        var breeding = rows[1];
+        Assert.Equal((2504L, 2504L, "NT", "Ardea alba", 165208L), (breeding.CdNom, breeding.CdRef, breeding.Code, breeding.Name, breeding.CdDoc));
+        Assert.Equal(new FranceRemark("VU D1 (-1) - Nicheur", "D1", "VU", -1, null, "Nicheur", "breeding", false), breeding.Remark);
+        // The row of the accepted name wins only within one population: the 2011 wintering row of the
+        // synonym stays current beside the 2016 breeding row.
+        Assert.True(wintering.IsCurrent);
+        Assert.True(breeding.IsCurrent);
+    }
+
     [Fact]
     public void Possibly_extinct_and_overseas_rows_are_read() {
         var rows = ReadBdc().Rows;
