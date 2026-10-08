@@ -70,6 +70,11 @@ must never be reachable from outside the machine.
    Then run `wikipedia fetch-group-titles`, which downloads the English Wikipedia pages of new
    groups and the redirects to their articles (see
    [Names and links of groups](#names-and-links-of-groups-sitegroupnames)).
+   Run `iucn api green-status` before `site build-db`. It downloads all published IUCN Green Status
+   of Species assessments into the IUCN API cache in one request (about 780 KB). Rows already
+   stored keep the date and Red List version of the download that first stored them, and rows that
+   are no longer published are deleted. The rows of the first download (2026-10-08, release
+   2026-1) have `baseline = 1`, because the release each one was first published in is not known.
 5. Run `site build-db`. For release 2026-1 on 3 October 2026 it took about 100 seconds and wrote a
    database of about 463 MB. It writes `<Datastore:site_sqlite>.building` and replaces `Datastore:site_sqlite` only
    when the build finishes; a failed or cancelled build leaves the previous database in place. It

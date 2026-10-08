@@ -1120,7 +1120,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "site-build-db",
                     Title = "Build the site database",
-                    Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement, the SPRAT (EPBC) database and the status lists store (NatureServe, ECOS, NZTCS and SALVE). It writes the new database to a separate file and replaces the old one only when the build finishes.",
+                    Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement, the SPRAT (EPBC) database and the status lists store (NatureServe, ECOS, NZTCS and SALVE) and the Green Status assessments in the IUCN API cache. It writes the new database to a separate file and replaces the old one only when the build finishes.",
                     Commands = new[] { "site build-db" },
                     // Only the required inputs: a missing input blocks the step, and the build
                     // leaves out the others (GBIF checklist, DOI cache, ...) when they are missing.
