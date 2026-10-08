@@ -488,6 +488,11 @@ button:hover {
     color: var(--muted);
 }
 
+/* "no change" repeats what the category column already shows, so it is dimmer than the rest. */
+.reason-no-change {
+    opacity: 0.6;
+}
+
 .footnotes {
     margin: 0.5rem 0 0.4rem;
     padding-left: 1.6rem;
