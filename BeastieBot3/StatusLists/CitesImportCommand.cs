@@ -73,10 +73,10 @@ internal sealed class CitesImportCommand : AsyncCommand<CitesImportCommand.Setti
         var split = taxa.Count(t => t.Listings.Select(l => l.Appendix).Distinct().Count() > 1);
         var appendixIII = listings.Where(l => l.Appendix == "III").ToList();
         AnsiConsole.MarkupLineInterpolated(
-            $"[grey]{split:N0} taxa have listings in two appendices (a split listing: the notes say which populations are in each). {appendixIII.Count:N0} Appendix III listings by {appendixIII.Select(l => l.PartyIsoCode).Distinct().Count():N0} Parties. {taxa.Sum(t => t.Synonyms.Count):N0} synonyms.[/]");
+            $"[grey]{split:N0} taxa have listings in more than one appendix (split listings; each listing's note names the populations it covers). {appendixIII.Count:N0} Appendix III listings by {appendixIII.Select(l => l.PartyIsoCode).Distinct().Count():N0} Parties. {taxa.Sum(t => t.Synonyms.Count):N0} synonyms.[/]");
         var unresolved = listings.Count(l => l.InheritedName is not null && l.InheritedFromId is null);
         if (unresolved > 0) {
-            AnsiConsole.MarkupLineInterpolated($"[grey]{unresolved:N0} inherited listings name a higher taxon that is not in the file, or not once.[/]");
+            AnsiConsole.MarkupLineInterpolated($"[grey]{unresolved:N0} inherited listings name a higher taxon that is missing from the file or is in it more than once, so they are stored with no inherited_from_id.[/]");
         }
     }
 
@@ -93,7 +93,7 @@ internal sealed class CitesImportCommand : AsyncCommand<CitesImportCommand.Setti
                     .ConfigureAwait(false);
                 var (pageTotal, rows) = CitesChecklist.ReadPage(json);
                 if (total >= 0 && pageTotal != total) {
-                    throw new IOException($"The Checklist's number of taxa changed from {total:N0} to {pageTotal:N0} during the download, so pages may have moved; run it again.");
+                    throw new IOException($"The Checklist's total number of taxa changed from {total:N0} to {pageTotal:N0} during the download, so taxa may have moved to other pages. Run the command again.");
                 }
                 total = pageTotal;
                 write(rows);
@@ -108,12 +108,12 @@ internal sealed class CitesImportCommand : AsyncCommand<CitesImportCommand.Setti
                     break;
                 }
                 if (page >= 200) {
-                    throw new IOException("The Checklist gave more than 200 full pages, far more than its number of taxa; stopped.");
+                    throw new IOException("Download stopped: the Checklist gave more than 200 full pages of 1,000 taxa, more than its total number of taxa.");
                 }
                 await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
             }
             if (pageLimit is null && (read != total || ids.Count != total)) {
-                throw new IOException($"The Checklist gave {read:N0} rows with {ids.Count:N0} different taxa, not the {total:N0} it reported; run it again.");
+                throw new IOException($"The Checklist gave {read:N0} rows ({ids.Count:N0} different taxa), but its total is {total:N0} taxa. Run the command again.");
             }
         });
 }

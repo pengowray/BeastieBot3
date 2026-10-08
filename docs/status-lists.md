@@ -6,10 +6,11 @@ The status lists store holds conservation statuses from systems other than the I
 - ECOS, the US Fish and Wildlife Service's Environmental Conservation Online System: the list of species, subspecies and populations listed under the US Endangered Species Act (`statuses ecos-import`).
 - The New Zealand Threat Classification System database (nztcs.org.nz, Department of Conservation, CC BY 4.0): the current assessments (`statuses nztcs-import`).
 - SALVE (salve.icmbio.gov.br), ICMBio's system for the national assessments of the extinction risk of Brazil's fauna: the current assessment of each species and subspecies (`statuses salve-import`).
+- The Checklist of CITES Species (checklist.cites.org, compiled by UNEP-WCMC for the CITES Secretariat): the current CITES Appendix listings of every taxon in the Appendices, with the listings each taxon inherits from a higher taxon (`statuses cites-import`).
 
 Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a comment on every column.
 
-The three imports (`statuses ecos-import`, `nztcs-import` and `salve-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete). It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs` and `StatusListStore.Salve.cs`.
+The four imports (`statuses ecos-import`, `nztcs-import`, `salve-import` and `cites-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete). It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client, sends GET requests that are tried again after a 429, 408, 5xx or network error (5 s, 15 s, 30 s, 1 min, 2 min; the same waits as `NatureServeClient`), and writes and reads the downloaded files. The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs` and `StatusListStore.Cites.cs`.
 
 ## Files
 
@@ -22,7 +23,7 @@ The three imports (`statuses ecos-import`, `nztcs-import` and `salve-import`) sh
 
 | Table | One row per |
 | --- | --- |
-| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
+| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, `cites`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
 | `status_sync_state` | key of the NatureServe download's progress (`natureserve_pass_*`, `natureserve_completed*`) |
 | `natureserve_species` | NatureServe record (`element_global_id`): a species, subspecies, variety or population |
 | `natureserve_synonym` | synonym NatureServe lists for a record |
@@ -31,6 +32,10 @@ The three imports (`statuses ecos-import`, `nztcs-import` and `salve-import`) sh
 | `ecos_name` | name an ECOS listing's scientific name gives, the main name included |
 | `nztcs_assessment` | current NZTCS assessment (`assessment_id`), with the scientific name `NztcsApi.ChooseName` gives |
 | `salve_assessment` | current SALVE assessment of a species or subspecies (`ficha_id`, SALVE's sheet id) |
+| `cites_taxon` | taxon of the Checklist of CITES Species (`taxon_concept_id`, Species+'s id): a species, subspecies, variety or higher taxon, with Species+'s summary of its listing (`current_listing`) |
+| `cites_listing` | current CITES listing of a taxon (`taxon_concept_id`, `listing_change_id`): its own, or inherited from a higher taxon |
+| `cites_note` | long note of the CITES listings (a full note, the text of an annotation such as #4), stored once and referred to by id |
+| `cites_synonym` | synonym the Checklist gives for a taxon, with and without its author |
 
 ## NatureServe Explorer: `statuses natureserve-fetch`
 
@@ -168,6 +173,109 @@ and links each assessment's DOI. Precise localities can be restricted under that
 holds no places, states or biomes. SALVE's numbers do not always match the official list of
 threatened species (Portaria MMA 148/2022), as SALVE's own home page says. SALVE covers animals
 only: no bulk source for the national assessments of Brazil's plants (CNCFlora) was found.
+
+## CITES Checklist: `statuses cites-import`
+
+The Checklist of CITES Species (https://checklist.cites.org/) lists every taxon in the CITES Appendices with its current listing. UNEP-WCMC compiles it for the CITES Secretariat from the Species+ database (https://speciesplus.net/), so the two sites have the same listings and the same taxon concept ids.
+
+### Terms and citation
+
+The Checklist's terms of use (the "Terms of Use" link on checklist.cites.org) and the Species+ terms of use (https://speciesplus.net/terms-of-use) cover the data and the "Species+/CITES Checklist API", and say the same things. The owner accepted the Species+ terms for the public species site in October 2026. The terms:
+
+- allow publishing the data online when it cannot be downloaded, with the citation clearly visible, the date of download visible, and a clear link to the source (checklist.cites.org in the Checklist's terms, www.speciesplus.net in the Species+ terms);
+- ask that the most recent version is used;
+- forbid commercial use, sub-licensing and redistribution (web downloads, web services), and any application that replicates or tries to replace the essential user experience of the Checklist or Species+;
+- strongly recommend that the CITES Secretariat (info@cites.org) or UNEP (species@unep-wcmc.org) review the published material before publication, and the Species+ terms ask for two electronic copies of published material, sent to species@unep-wcmc.org.
+
+`status_source.citation` holds the Checklist's citation form, because the data comes from the Checklist's endpoint, with the date of the download:
+
+> UNEP-WCMC (Comps.) 2026. The Checklist of CITES Species Website. CITES Secretariat, Geneva, Switzerland. Compiled by UNEP-WCMC, Cambridge, UK. Available at: http://checklist.cites.org. [Accessed 08/10/2026].
+
+The Species+ form is "UNEP (2026). The Species+ Website. Nairobi, Kenya. Compiled by UNEP-WCMC, Cambridge, UK. Available at: www.speciesplus.net. [Accessed dd/mm/yyyy]." Each taxon's `cites_taxon.url` is its page on Species+ (`https://speciesplus.net/species#/taxon_concepts/<id>/legal`), which shows the same listings with their notes.
+
+### The endpoint
+
+The Checklist's web app (https://checklist.cites.org/js/app.js) reads the Species+ checklist API at `https://www.speciesplus.net/checklist/`, which answers without a token. It is not documented and could change without notice; the token-based Species+ API (https://api.speciesplus.net) is the documented one. The command asks for:
+
+```
+GET https://www.speciesplus.net/checklist/taxon_concepts?output_layout=alphabetical&level_of_listing=0
+    &show_synonyms=1&show_author=1&show_english=0&show_spanish=0&show_french=0&locale=en&page=1&per_page=1000
+```
+
+| Parameter | What it does |
+| --- | --- |
+| `page`, `per_page` | Pages from 1. 1,000 rows a page works; a page of plants takes the server about 20 seconds (the notes repeat on every orchid). |
+| `output_layout` | `alphabetical` (`taxonomic` changes only the order on the web page) |
+| `level_of_listing` | `0`: every taxon. `1` gives only the taxa at the level at which they are listed (Felidae spp., not its species). |
+| `show_synonyms`, `show_author` | With both 1, each row has `synonyms_with_authors` and `author_year`. With `show_author=0` it has `synonyms`, the names without authors, and no `author_year`. |
+| `show_english`, `show_spanish`, `show_french` | `0`: no common names. |
+| `locale` | `en`: the language of the notes and country names |
+| `scientific_name`, `country_ids[]`, `cites_region_ids[]`, `cites_appendices[]` | Filters of the web page; not used. |
+
+A page is `[{"result_cnt", "total_cnt", "animalia": [...], "plantae": [...]}]`. The rows come animals first, then plants, each in name order. The command reads pages until it has `total_cnt` rows, one request at a time, 1 second apart, and stops without keeping the file when `total_cnt` changes between pages or the pages do not give `total_cnt` different taxa. The rows are kept as one gzip-compressed JSON array, `cites-<date>.json.gz` (5.3 MB on 2026-10-08; as plain JSON it is about 140 MB, most of it notes repeated on every row). `--file` imports a kept file; it also reads the Checklist's own full JSON download (below), whose listings are in `current_listing_changes`. `--limit N` downloads only the first N pages, into `cites-firstNpages-<date>.json.gz`, and still replaces every stored CITES row, so test it with `--store`.
+
+Other endpoints the app uses, not used by the command:
+
+- `checklist/geo_entities?geo_entity_types_set=2` (countries; `1` regions): id, name and ISO code, for the `countries_ids` of the rows.
+- `checklist/timelines?taxon_concept_ids[]=...`: the history of listings of the taxa shown on the web page.
+- `checklist/downloads/download_index?format=json` (also `csv` and `pdf`): the whole Index of CITES Species in one answer. On 2026-10-08 the JSON was 153 MB and took the server about 2 minutes; its rows have the same listings, but with the countries of each taxon and without the inherited notes (`inherited_short_note`, `inherited_full_note`). `downloads/download_history` is the history of every listing.
+
+The endpoint has CITES only. The EU Wildlife Trade Regulation annexes are in Species+ and its token-based API, not in these answers.
+
+### What a row says
+
+- `current_listing` is Species+'s summary of the taxon and its descendants: `I/II` on Antigone canadensis means that some of its subspecies are in Appendix I, though the species' own listing is Appendix II. `NC` in a combination means that part of the taxon is in no appendix (`II/NC` on the genus Agapornis, because Agapornis roseicollis is excluded from the listing of the parrots); `NC` alone means that the taxon is in no appendix (Agapornis roseicollis). 54 taxa have no `current_listing` and no listing: 37 genera (most of them orchid and cactus genera, such as Odontoglossum and Neobuxbaumia) and 17 species of Dicksonia, whose listing covers only the populations of the Americas.
+- `current_additions` are the listings of the taxon itself (`cites_listing`): one per appendix, and one per Party for Appendix III (Crax rubra is listed by Colombia, Honduras and Guatemala). A taxon with listings in more than one appendix is split listed by population or by subspecies, and only the notes say which populations are in which appendix: Loxodonta africana has Appendix I, inherited from the genus Loxodonta with the genus's note "Except the populations of *Loxodonta africana* of Botswana, Namibia, South Africa and Zimbabwe ...", and its own Appendix II listing, "Populations of Botswana, Namibia, South Africa and Zimbabwe are included in Appendix II subject to annotation A11 (see full note); all other populations are included in Appendix I". The listings' `countries_ids` were empty in every row, so the store does not keep them.
+- An inherited listing has `auto_note` "FAMILY listing Trochilidae spp."; the command stores the rank and the name, and the higher taxon's id when the download has exactly one taxon of that name and rank (every one in October 2026). `inherited_short_note` is the higher taxon's note that applies ("Excludes fossils." for the corals of SCLERACTINIA spp.). The listing's own `short_note` can still say something ("Included in SCLERACTINIA spp."). Its `listing_change_id` is often the higher taxon's.
+- `short_note`, `full_note`, `hash_full_note` (the text of an annotation such as #4), `inherited_*_note` and `nomenclature_note` are HTML as Species+ gives them: `<i>` for names, `<p>` for line breaks, `\r\n`, no-break spaces and entities such as `&amp;`, and two `<img>` tags. The site has to make them safe before showing them. The long ones are stored once in `cites_note`.
+- `cites_accepted` is 0 for 2,097 taxa (2,018 of them species): names that Species+ marks as not CITES accepted, which the Checklist shows in plain type instead of bold. Some of them have listings of their own (Agrias amydon boliviensis, Appendix III, Bolivia), so the store keeps them.
+
+Not stored: common names (not asked for), the taxa's countries (`countries_ids`), `change_type_name` (always ADDITION) and `is_current` (always true) of the listings, `recently_changed`, and the history of listings.
+
+### Names
+
+`full_name` is a species binomial, a subspecies trinomial without a rank word ("Achillides chikae chikae"), a variety with "var." ("Euphorbia decaryi var. robinsonii"), or a genus, subfamily, family or order name (the Checklist adds "spp." on the page; the store does not). 15 names are informal, in quotes: "Woodworthia "Pygmy"", "Dactylocnemis "Matapia"" (New Zealand geckos). No name is a hybrid. One name ended in a no-break space, which the reader trims.
+
+Synonyms come with their authors ("Ornismya abeillei Lesson & DeLattre, 1839"); `CitesChecklist.SplitSynonym` splits off the author: the name is the genus, a subgenus in brackets (sometimes lower case, "Phyllomedusa (agalychnis) callidryas"), and the lower-case epithets ("d'albertisii"), rank words and the qualifiers "aff." and "cf." after it, and the author starts at the first other word, or at a particle such as "de" or "van" followed by a capitalised word ("Trochilus tzacatl de la Llave, 1833"), or at "sensu", "auct." or "hort.". Checked against the names the endpoint gives with `show_author=0`, all 2,272 synonyms on two pages of 1,000 taxa split the same way. In the whole download, 3 synonyms of species keep only their genus as the name, because the rest is not in the form above: "Dactylocnemis "Mokohinau" Nielsen, Bauer, ...", "Paphiopedilum 'victoria' De Vogel" and "Varanus (subgen. inc. sed.) spinulosus Böhme & Ziegler, 2007". 536 synonym names belong to more than one taxon, so a match by synonym has to check that the name gives one taxon.
+
+### Counts (2026-10-08)
+
+Taxa: 43,310 (7,885 animals, 35,425 plants): 41,075 species, 70 subspecies, 8 varieties, 2,034 genera, 112 families, 1 subfamily and 10 orders. 22 names belong to two taxa each, all of them plants in Appendix II, most with two different authors (Cyathea parva (Maxon 1944) R.Tryon 1976 and Cyathea parva Copel. 1942), so a match by name has to allow for a name that gives two taxa.
+
+`current_listing` of the 41,153 species, subspecies and varieties:
+
+| `current_listing` | Taxa |
+| --- | --- |
+| II | 39,330 |
+| I | 1,130 |
+| III | 532 |
+| NC | 44 |
+| I/II | 36 |
+| I/NC | 24 |
+| II/NC | 22 |
+| (none) | 17 |
+| III/NC | 14 |
+| I/II/NC | 2 |
+| I/III | 1 |
+| I/II/III/NC | 1 |
+
+Their own listings (`cites_listing`): Appendix II only 39,360, Appendix I only 1,148, Appendix III only 533, Appendices I and II 21, none 91. Of all 43,310 taxa, 257 have a `current_listing` with two or more parts but their own listings in one appendix (Aonyx capensis is I/II because its subspecies A. c. microdon is in Appendix I).
+
+Listings: 43,246 (Appendix I 1,257, Appendix II 41,421, Appendix III 568); 41,744 inherited from a family (33,328), genus (4,774), order (3,624), subfamily (11) or species (7, varieties of Euphorbia), and every one has `inherited_from_id`.
+
+Split listings, with listings in Appendices I and II: 22 taxa. Balaenoptera acutorostrata, Caiman latirostris, Canis lupus, Caracal caracal, Ceratotherium simum simum, Crocodylus acutus, C. moreletii, C. niloticus, C. porosus, Falco newtoni, Herpailurus yagouaroundi, Loxodonta africana, Melanosuchus niger, the genus Moschus, Moschus chrysogaster, M. fuscus, Panthera leo, Prionailurus bengalensis bengalensis, P. rubiginosus, Puma concolor, Ursus arctos and Vicugna vicugna.
+
+Appendix III: 568 listings of 557 taxa by 31 Parties (South Africa 148, Australia 144, India 33, Ukraine 32, New Zealand 32, Cuba 26, Brazil 19, Colombia 16, Honduras 16, Pakistan 12, United States 10, European Union 9, and 19 others with fewer); 10 taxa are listed by two or more Parties.
+
+Annotations: #4 on 34,023 listings, #15 291, #17 172, #5 125, #2 95, #14 32, #6 19, #9 13, #18 7, #1 5, #3 2, and #7, #8, #10, #11, #12, #13, #16 and #19 once each. `cites_note` has 141 notes (33 KB).
+
+Synonyms: 42,423 of 16,910 taxa, 41,294 different names, 1,281 with no author.
+
+A full download took 44 requests and 14 minutes on 2026-10-08 (no request had to be tried again); importing the kept file takes about 7 seconds, and the CITES tables take about 25 MB of the store.
+
+### The endpoint may change
+
+The endpoint is the one the Checklist's web app uses, not a published API, so UNEP-WCMC can change its parameters or its answers without notice. The command stops without changing the store when a page is not JSON, when the total changes during the download, or when the pages do not give the total number of different taxa; a renamed field would instead show as missing values, so check the summary after a run.
 
 ## Web UI
 

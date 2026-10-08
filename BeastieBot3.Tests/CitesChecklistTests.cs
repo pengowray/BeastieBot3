@@ -168,6 +168,12 @@ public sealed class CitesChecklistTests : IDisposable {
     [InlineData("Lycaste jamesiana auct. 1889", "Lycaste jamesiana", "auct. 1889")]
     [InlineData("Gerrhonotus auritus O’Shaughnessy, 1873", "Gerrhonotus auritus", "O’Shaughnessy, 1873")]
     [InlineData("Papilio chikae Igarashi, 1965", "Papilio chikae", "Igarashi, 1965")]
+    [InlineData("Dendrobium d'albertisii Rchb.f.", "Dendrobium d'albertisii", "Rchb.f.")]
+    [InlineData("Arara aymara d'Orbigny, 1839", "Arara aymara", "d'Orbigny, 1839")]
+    [InlineData("Acropora eminens von Marenzeller, 1906", "Acropora eminens", "von Marenzeller, 1906")]
+    [InlineData("Broughtonia nonchinensis? (Rchb.f.) Schltr. 1914", "Broughtonia nonchinensis?", "(Rchb.f.) Schltr. 1914")]
+    [InlineData("Mantella aff. baroni", "Mantella aff. baroni", null)]
+    [InlineData("Siredon spec.? var. alba Duméril, 1869", "Siredon spec.? var. alba", "Duméril, 1869")]
     [InlineData("Laelia anceps subsp. dawsonii (J.Anderson) Rolfe", "Laelia anceps subsp. dawsonii", "(J.Anderson) Rolfe")]
     [InlineData("Gerrhonotus deppii var. digueti Mocquard, 1905 (fide Smith & Taylor, 1950)", "Gerrhonotus deppii var. digueti",
         "Mocquard, 1905 (fide Smith & Taylor, 1950)")]

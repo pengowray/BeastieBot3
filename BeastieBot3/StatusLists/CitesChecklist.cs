@@ -177,11 +177,11 @@ internal static partial class CitesChecklist {
 
     /// A synonym as Species+ writes it, the name followed by its author ("Abronia aurita Köhler,
     /// 2008", "Trochilus tzacatl de la Llave, 1833"), split into the two. The name is the genus, then
-    /// a subgenus in brackets, lower-case epithets and rank words; the author starts at the first other
-    /// word, at a particle ("de", "van") followed by a capitalised word, or at "sensu", "auct.",
-    /// "hort." and the like. Checked against the names the endpoint gives with show_author=0: 2,271 of
-    /// 2,272 synonyms on two pages split the same way ("Siredon spec.? var. alba Duméril, 1869" did
-    /// not). Null for an empty string.
+    /// a subgenus in brackets, lower-case epithets ("d'albertisii", "nonchinensis?"), rank words and
+    /// the qualifiers "aff." and "cf."; the author starts at the first other word, at a particle ("de",
+    /// "van") followed by a capitalised word, or at "sensu", "auct.", "hort." and the like. Checked
+    /// against the names the endpoint gives with show_author=0: all 2,272 synonyms on two pages of
+    /// 1,000 taxa split the same way. Null for an empty string.
     public static (string Name, string? Author)? SplitSynonym(string text) {
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (words.Length == 0) {
@@ -211,8 +211,9 @@ internal static partial class CitesChecklist {
         return next > at && next < words.Length && (char.IsUpper(words[next][0]) || words[next][0] == '(');
     }
 
+    // Rank words, and the qualifiers of informal names ("Mantella aff. baroni", "Siredon spec.? var. alba").
     private static readonly HashSet<string> RankWords = new(StringComparer.Ordinal) {
-        "ssp.", "subsp.", "var.", "f.", "forma", "subvar.", "nothosp.", "nothovar.", "x", "×",
+        "ssp.", "subsp.", "var.", "f.", "forma", "subvar.", "nothosp.", "nothovar.", "x", "×", "aff.", "cf.", "sp.", "spec.", "spec.?",
     };
 
     // Lower-case words that start an author's name, not an epithet.
@@ -234,8 +235,9 @@ internal static partial class CitesChecklist {
     [GeneratedRegex(@"^(KINGDOM|PHYLUM|CLASS|ORDER|SUBORDER|FAMILY|SUBFAMILY|TRIBE|GENUS|SPECIES|SUBSPECIES|VARIETY) listing (.+?)(?: spp\.)?$")]
     private static partial Regex AutoNote();
 
-    // A lower-case epithet: "aurita", "novae-zelandiae", "grosmorneënsis".
-    [GeneratedRegex(@"^\p{Ll}[\p{Ll}-]*$")]
+    // A lower-case epithet: "aurita", "novae-zelandiae", "grosmorneënsis", "d'albertisii", and one
+    // with a question mark, "nonchinensis?". An author such as "d'Orbigny" has a capital letter.
+    [GeneratedRegex(@"^\p{Ll}[\p{Ll}'’-]*\??$")]
     private static partial Regex Epithet();
 
     // A subgenus after the genus, in brackets, which Species+ sometimes writes in lower case: "(agalychnis)".
