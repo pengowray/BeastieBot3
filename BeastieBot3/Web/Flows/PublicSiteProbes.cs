@@ -21,12 +21,18 @@ public static class PublicSiteProbes {
     public const string Build = "site-build";
     public const string WikidataSweep = "site-wikidata-sweep";
     public const string GroupTitles = "site-group-titles";
+    public const string NatureServe = "site-natureserve";
+    public const string Ecos = "site-ecos";
 
     /// The age after which the workflow asks for a new pass of `wikidata sweep-taxa`; the step's
     /// command passes the same number as --refresh-days.
     public const int SweepRefreshDays = 30;
 
-    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles;
+    /// The age after which the workflow asks for the NatureServe and ECOS statuses again; the
+    /// NatureServe step's command passes the same number as --refresh-days.
+    public const int StatusListsRefreshDays = 30;
+
+    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos;
 
     public static FlowProbeResult? Evaluate(string probe, PublicSiteState s) => probe switch {
         Gbif => GbifStep(s),
@@ -34,6 +40,8 @@ public static class PublicSiteProbes {
         Build => BuildStep(s),
         WikidataSweep => SweepStep(s),
         GroupTitles => GroupTitlesStep(s),
+        NatureServe => NatureServeStep(s),
+        Ecos => EcosStep(s),
         _ => null,
     };
 
@@ -160,6 +168,41 @@ public static class PublicSiteProbes {
         return days > SweepRefreshDays
             ? new FlowProbeResult("todo", $"The last pass finished {completed:yyyy-MM-dd}, {days} days ago.")
             : new FlowProbeResult("ok", $"The last pass finished {completed:yyyy-MM-dd}.");
+    }
+
+    // ---- `statuses natureserve-fetch` and `statuses ecos-import` ----
+
+    private const string NoStatusListsPath = "No path set for the status lists store: add datastore_dir or status_lists_sqlite under [Datastore] in paths.ini.";
+
+    internal static FlowProbeResult NatureServeStep(PublicSiteState s) {
+        if (s.StatusListsPath is null) {
+            return new FlowProbeResult("todo", NoStatusListsPath);
+        }
+        if (s.NatureServePassStartedUtc is { } started) {
+            var of = s.NatureServePassTotal is { } total ? $" of {total:n0}" : "";
+            return new FlowProbeResult("backlog",
+                $"A download started {started:yyyy-MM-dd} and has stored {s.NatureServePassStored:n0}{of} records. Run the step again to finish it.");
+        }
+        if (s.NatureServe is not { } done) {
+            return new FlowProbeResult("todo", "Not downloaded yet.");
+        }
+        var days = (int)Math.Floor((s.ReadAtUtc - done.FetchedAtUtc).TotalDays);
+        return days > StatusListsRefreshDays
+            ? new FlowProbeResult("todo", $"{done.Rows:n0} records. The last download finished {done.FetchedAtUtc:yyyy-MM-dd}, {days} days ago.")
+            : new FlowProbeResult("ok", $"{done.Rows:n0} records. The last download finished {done.FetchedAtUtc:yyyy-MM-dd}.");
+    }
+
+    internal static FlowProbeResult EcosStep(PublicSiteState s) {
+        if (s.StatusListsPath is null) {
+            return new FlowProbeResult("todo", NoStatusListsPath);
+        }
+        if (s.Ecos is not { } done) {
+            return new FlowProbeResult("todo", "Not downloaded yet.");
+        }
+        var days = (int)Math.Floor((s.ReadAtUtc - done.FetchedAtUtc).TotalDays);
+        return days > StatusListsRefreshDays
+            ? new FlowProbeResult("todo", $"{done.Rows:n0} listings, downloaded {done.FetchedAtUtc:yyyy-MM-dd}, {days} days ago.")
+            : new FlowProbeResult("ok", $"{done.Rows:n0} listings, downloaded {done.FetchedAtUtc:yyyy-MM-dd}.");
     }
 
     internal static FlowProbeResult BuildStep(PublicSiteState s) {
