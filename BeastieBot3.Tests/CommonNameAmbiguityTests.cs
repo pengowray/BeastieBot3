@@ -5,7 +5,9 @@ using Microsoft.Data.Sqlite;
 
 namespace BeastieBot3.Tests;
 
-// Pins the one ambiguity rule (AmbiguousNames, built by CommonNameStore.QueryAmbiguousNames):
+// Pins the one ambiguity rule (AmbiguousNames, built by CommonNameStore.QueryAmbiguousNames).
+// Only taxa of the same kingdom are compared, so a name that only taxa of different kingdoms have
+// is used by each of them. Within a kingdom,
 // a name that two or more taxa have is kept by the taxon with the best source priority for it
 // (AmbiguousNames.KeeperPriority: Wikipedia title, IUCN main name, taxobox, Wikidata label, other
 // IUCN names, other Wikidata names, Catalogue of Life), a taxobox name and then a Wikidata label
@@ -600,17 +602,119 @@ public class CommonNameAmbiguityTests {
     }
 
     [Fact]
-    public void NameOnTwoTaxa_InDifferentKingdoms_IsShared() {
+    public void NameOnTwoTaxa_InDifferentKingdoms_IsNotShared_AndBothUseIt() {
+        // 2026 data: "Chestnut" is IUCN's main name of the moth Conistra vaccinii and one of
+        // IUCN's other names of the tree Pochota fendleri. Taxa of different kingdoms are not
+        // compared (owner's decision, 8 October 2026), so both use it.
         using var store = OpenInMemory();
         var tree = AddTaxon(store, "pochota fendleri", "1", "PLANTAE");
         var moth = AddTaxon(store, "conistra vaccinii", "2", "ANIMALIA");
         AddName(store, tree, "Chestnut", "iucn");
-        AddName(store, moth, "Chestnut", "col");
+        AddName(store, moth, "Chestnut", "iucn", preferred: true);
 
         var verdicts = store.GetAmbiguousNames("en");
 
-        Assert.Contains("chestnut", verdicts.Names);
-        Assert.Equal(tree, verdicts.KeptBy("chestnut"));
+        Assert.Empty(verdicts.Names);
+        Assert.Equal(0, verdicts.Count);
+        Assert.False(verdicts.IsShared("chestnut"));
+        Assert.False(verdicts.IsAmbiguousFor(tree, "chestnut"));
+        Assert.False(verdicts.IsAmbiguousFor(moth, "chestnut"));
+        Assert.Equal("Chestnut", Best(store, tree));
+        Assert.Equal("Chestnut", Best(store, moth));
+    }
+
+    [Fact]
+    public void NameOnTwoTaxaOfOneKingdom_AndATaxonOfAnother_IsDecidedWithinTheKingdom() {
+        // The two parrots are compared as before (a Wikipedia title beats a Catalogue of Life
+        // name); the plant is compared with no parrot and uses the name.
+        using var store = OpenInMemory();
+        var parrot = AddTaxon(store, "northiella haematogaster", "1");
+        var otherParrot = AddTaxon(store, "northiella narethae", "2");
+        var plant = AddTaxon(store, "ageratum conyzoides", "3", "PLANTAE");
+        AddName(store, parrot, "Bluebonnet", "wikipedia_title", preferred: true);
+        AddName(store, otherParrot, "Bluebonnet", "col");
+        AddName(store, otherParrot, "Naretha bluebonnet", "iucn", preferred: true);
+        AddName(store, plant, "Bluebonnet", "col");
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Equal(new[] { new SharedName("bluebonnet", "ANIMALIA", 2) }, verdicts.Shared);
+        Assert.Equal(parrot, verdicts.KeptBy("bluebonnet"));
+        Assert.Equal(parrot, verdicts.KeptBy("bluebonnet", "Animalia"));
+        Assert.Null(verdicts.KeptBy("bluebonnet", "PLANTAE"));
+        Assert.True(verdicts.Keeps(parrot, "bluebonnet"));
+        Assert.True(verdicts.Keeps(plant, "bluebonnet"));
+        Assert.True(verdicts.IsAmbiguousFor(otherParrot, "bluebonnet"));
+        Assert.False(verdicts.IsAmbiguousFor(plant, "bluebonnet"));
+        Assert.Equal("Bluebonnet", Best(store, parrot));
+        Assert.Equal("Naretha bluebonnet", Best(store, otherParrot));
+        Assert.Equal("Bluebonnet", Best(store, plant));
+    }
+
+    [Fact]
+    public void NameSharedWithinTwoKingdoms_HasAKeeperInEach() {
+        using var store = OpenInMemory();
+        var oak = AddTaxon(store, "quercus robur", "1", "PLANTAE");
+        var holmOak = AddTaxon(store, "quercus ilex", "2", "PLANTAE");
+        var moth = AddTaxon(store, "oakmothus testus", "3");
+        var otherMoth = AddTaxon(store, "oakmothus alter", "4");
+        AddName(store, oak, "Oak", "iucn", preferred: true);
+        AddName(store, holmOak, "Oak", "col");
+        AddName(store, moth, "Oak", "col");
+        AddName(store, otherMoth, "Oak", "wikipedia_title", preferred: true);
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Equal(new[] { "oak" }, verdicts.Names);
+        Assert.Equal(2, verdicts.Count);
+        Assert.Equal(oak, verdicts.KeptBy("oak", "PLANTAE"));
+        Assert.Equal(otherMoth, verdicts.KeptBy("oak", "ANIMALIA"));
+        Assert.Throws<InvalidOperationException>(() => verdicts.KeptBy("oak"));
+        Assert.False(verdicts.IsAmbiguousFor(oak, "oak"));
+        Assert.False(verdicts.IsAmbiguousFor(otherMoth, "oak"));
+        Assert.True(verdicts.IsAmbiguousFor(holmOak, "oak"));
+        Assert.True(verdicts.IsAmbiguousFor(moth, "oak"));
+    }
+
+    [Fact]
+    public void TaxonWithNoKingdom_IsComparedWithTheTaxaOfEveryKingdom() {
+        // A taxon with no kingdom cannot be shown to be in another kingdom, so it is compared in
+        // each kingdom's group and uses the name only when it keeps it in all of them.
+        using var store = OpenInMemory();
+        var unknown = store.InsertOrUpdateTaxon("ignotus testus", "ignotus testus", "species", null,
+            isExtinct: false, isFossil: false, validityStatus: "valid", primarySource: "iucn", primarySourceId: "1");
+        var animal = AddTaxon(store, "animalus testus", "2");
+        var plant = AddTaxon(store, "plantus testus", "3", "PLANTAE");
+        AddName(store, unknown, "Mystery", "iucn", preferred: true);
+        AddName(store, animal, "Mystery", "col");
+        AddName(store, plant, "Mystery", "wikipedia_title", preferred: true);
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Equal(2, verdicts.Count);
+        Assert.Equal(unknown, verdicts.KeptBy("mystery", "ANIMALIA"));
+        Assert.Equal(plant, verdicts.KeptBy("mystery", "PLANTAE"));
+        // The plant beats it among plants, so it does not use the name.
+        Assert.True(verdicts.IsAmbiguousFor(unknown, "mystery"));
+        Assert.True(verdicts.IsAmbiguousFor(animal, "mystery"));
+        Assert.False(verdicts.IsAmbiguousFor(plant, "mystery"));
+    }
+
+    [Fact]
+    public void TaxaWithNoKingdom_AreAGroupOfTheirOwn_WhenNoTaxonWithTheNameHasAKingdom() {
+        using var store = OpenInMemory();
+        long Add(string name, string id) => store.InsertOrUpdateTaxon(name, name, "species", null,
+            isExtinct: false, isFossil: false, validityStatus: "valid", primarySource: "iucn", primarySourceId: id);
+        var a = Add("ignotus primus", "1");
+        var b = Add("ignotus secundus", "2");
+        AddName(store, a, "Mystery", "iucn", preferred: true);
+        AddName(store, b, "Mystery", "col");
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Equal(new[] { new SharedName("mystery", null, 2) }, verdicts.Shared);
+        Assert.Equal(a, verdicts.KeptBy("mystery"));
+        Assert.True(verdicts.IsAmbiguousFor(b, "mystery"));
     }
 
     [Fact]
@@ -657,14 +761,13 @@ public class CommonNameAmbiguityTests {
         AddName(store, cougar, "Cougar", "wikipedia_title");
 
         var usedByLists = store.GetAmbiguousNames("en");
-        var listedByReport = store.GetAmbiguousCommonNames();
+        var (listedByReport, reportVerdicts) = CommonNameReportCommand.AmbiguousReportScope(store, null);
 
-        Assert.Equal(new[] { "chestnut", "mountainlion" }, usedByLists.Names.OrderBy(n => n));
-        Assert.Equal(usedByLists.Names.OrderBy(n => n), listedByReport.Names.OrderBy(n => n));
-        foreach (var name in usedByLists.Names) {
-            Assert.Equal(usedByLists.KeptBy(name), listedByReport.KeptBy(name));
-        }
-        Assert.Equal(cougar, listedByReport.KeptBy("mountainlion"));
+        // "Chestnut" is on a plant and an animal only, so it is not shared.
+        Assert.Equal(new[] { "mountainlion" }, usedByLists.Names);
+        Assert.Equal(usedByLists.Shared, listedByReport);
+        Assert.Same(usedByLists, reportVerdicts);
+        Assert.Equal(cougar, reportVerdicts.KeptBy("mountainlion", "ANIMALIA"));
     }
 
     [Fact]
@@ -722,9 +825,8 @@ public class CommonNameAmbiguityTests {
     }
 
     [Fact]
-    public void AmbiguousReport_WithAKingdom_CountsOnlyThatKingdomsTaxa() {
-        // A name shared by a plant and an animal is shared for the lists, but is not shared
-        // within either kingdom, so `--kingdom` leaves it out of the report.
+    public void AmbiguousReport_WithAKingdom_ListsOnlyThatKingdomsSharedNames() {
+        // A name that only a plant and an animal have is not shared at all.
         using var store = OpenInMemory();
         var tree = AddTaxon(store, "pochota fendleri", "1", "PLANTAE");
         var moth = AddTaxon(store, "conistra vaccinii", "2", "ANIMALIA");
@@ -735,17 +837,20 @@ public class CommonNameAmbiguityTests {
         AddName(store, oak, "Oak", "iucn");
         AddName(store, holmOak, "Oak", "col");
 
-        Assert.Equal(new[] { "oak" }, store.GetAmbiguousCommonNames(kingdom: "PLANTAE").Names);
+        string[] NamesIn(string kingdom) =>
+            CommonNameReportCommand.AmbiguousReportScope(store, kingdom).Shared.Select(s => s.Name).ToArray();
+
+        Assert.Equal(new[] { "oak" }, NamesIn("PLANTAE"));
         // The --kingdom help gives "Plantae"; the store holds kingdoms in upper case.
-        Assert.Equal(new[] { "oak" }, store.GetAmbiguousCommonNames(kingdom: "Plantae").Names);
-        Assert.Empty(store.GetAmbiguousCommonNames(kingdom: "ANIMALIA").Names);
-        Assert.Equal(new[] { "chestnut", "oak" }, store.GetAmbiguousNames("en").Names.OrderBy(n => n));
+        Assert.Equal(new[] { "oak" }, NamesIn("Plantae"));
+        Assert.Empty(NamesIn("ANIMALIA"));
+        Assert.Equal(new[] { "oak" }, store.GetAmbiguousNames("en").Names);
     }
 
     [Fact]
     public void AmbiguousReport_WithAKingdom_ShowsTheVerdictTheListsUse() {
-        // An animal with "Oak" as its Wikipedia title keeps the name, so neither plant uses it, even
-        // though the plants alone would leave the IUCN holder as the keeper.
+        // An animal with "Oak" as its Wikipedia title is not compared with the plants: the plant
+        // with IUCN's name keeps it among plants, and the animal uses it too.
         using var store = OpenInMemory();
         var oak = AddTaxon(store, "quercus robur", "1", "PLANTAE");
         var holmOak = AddTaxon(store, "quercus ilex", "2", "PLANTAE");
@@ -754,11 +859,12 @@ public class CommonNameAmbiguityTests {
         AddName(store, holmOak, "Oak", "col");
         AddName(store, moth, "Oak", "wikipedia_title", preferred: true);
 
-        var (names, verdicts) = CommonNameReportCommand.AmbiguousReportScope(store, "Plantae");
+        var (shared, verdicts) = CommonNameReportCommand.AmbiguousReportScope(store, "Plantae");
 
-        Assert.Equal(new[] { "oak" }, names);
-        Assert.Equal(moth, verdicts.KeptBy("oak"));
-        Assert.Equal(oak, store.GetAmbiguousCommonNames(kingdom: "Plantae").KeptBy("oak"));
+        Assert.Equal(new[] { new SharedName("oak", "PLANTAE", 2) }, shared);
+        Assert.Equal(oak, verdicts.KeptBy("oak", "PLANTAE"));
+        Assert.True(verdicts.Keeps(moth, "oak"));
+        Assert.True(verdicts.IsAmbiguousFor(holmOak, "oak"));
     }
 
     [Fact]
@@ -773,7 +879,7 @@ public class CommonNameAmbiguityTests {
         AddName(store, b, "Big cat", "col");
         AddName(store, c, "Big cat", "col");
 
-        Assert.Equal(new[] { "bigcat", "mountainlion" }, store.GetAmbiguousCommonNames().Names);
+        Assert.Equal(new[] { "bigcat", "mountainlion" }, store.GetAmbiguousNames("en").Names);
     }
 
     [Fact]

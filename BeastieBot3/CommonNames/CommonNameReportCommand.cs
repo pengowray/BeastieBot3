@@ -151,32 +151,29 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             // No default limit.
             var (sharedNames, verdicts) = AmbiguousReportScope(store, settings.Kingdom);
             var ambiguousNames = settings.Limit is { } limit ? sharedNames.Take(limit).ToList() : sharedNames;
-            var conflictingNames = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
+            var conflictingNames = new List<(SharedName Entry, List<CommonNameRecord> Records)>();
 
             ProgressConsole.Run("[green]Loading conflicts[/]", ambiguousNames.Count, progress => {
-                    foreach (var normalizedName in ambiguousNames) {
+                    foreach (var entry in ambiguousNames) {
                         cancellationToken.ThrowIfCancellationRequested();
                         progress.Increment(1);
 
-                        // A junk name does not count as having the name, as for the verdicts.
-                        var records = store.GetCommonNamesByNormalized(normalizedName, "en")
+                        // A junk name does not count as having the name, as for the verdicts, and
+                        // only the taxa of the entry's kingdom are compared.
+                        var records = store.GetCommonNamesByNormalized(entry.Name, "en")
                             .Where(r => r.TaxonValidityStatus == "valid" && !r.TaxonIsFossil)
+                            .Where(r => AmbiguousNames.IsInGroupOf(entry, r.TaxonKingdom))
                             .Where(r => CommonNameChooser.UsableName(new CommonNameCandidate(r.RawName, r.NormalizedName, r.Source, r.IsPreferred))
-                                ?.NormalizedName == normalizedName)
+                                ?.NormalizedName == entry.Name)
                             .ToList();
 
-                        if (!string.IsNullOrWhiteSpace(settings.Kingdom)) {
-                            records = records.Where(r =>
-                                r.TaxonKingdom?.Equals(settings.Kingdom, StringComparison.OrdinalIgnoreCase) == true).ToList();
-                        }
-
                         if (records.Select(r => r.TaxonId).Distinct().Count() > 1) {
-                            conflictingNames.Add((normalizedName, records));
+                            conflictingNames.Add((entry, records));
                         }
                     }
                 });
 
-            var keptCount = conflictingNames.Count(c => verdicts.KeptBy(c.NormalizedName) is not null);
+            var keptCount = conflictingNames.Count(c => verdicts.KeptBy(c.Entry.Name, c.Entry.Kingdom) is not null);
 
             sb.AppendLine(AmbiguousReportText.Intro);
             sb.AppendLine();
@@ -185,9 +182,10 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine(AmbiguousReportText.Heading(conflictingNames.Count));
             sb.AppendLine();
 
-            foreach (var (normalizedName, records) in conflictingNames) {
+            foreach (var (entry, records) in conflictingNames) {
+                var normalizedName = entry.Name;
                 var displayName = records.FirstOrDefault()?.RawName ?? normalizedName;
-                sb.AppendLine($"### {displayName}");
+                sb.AppendLine(AmbiguousReportText.NameHeading(displayName, entry.Kingdom));
                 sb.AppendLine();
                 sb.AppendLine($"| Scientific Name | Kingdom | Sources | Preferred | {AmbiguousReportText.UsesNameColumn} |");
                 sb.AppendLine("|-----------------|---------|---------|-----------|-----|");
@@ -223,14 +221,13 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
     }
 
     /// <summary>
-    /// The names `--report ambiguous` lists and the verdicts its Uses This Name column shows. With
-    /// a kingdom, only names shared within that kingdom are listed, but the column still shows the
-    /// all-kingdom verdict the lists and the site use: an animal with a better source keeps a name
-    /// that two plants also have, so neither plant row is Yes.
+    /// The shared names `--report ambiguous` lists (one entry for each kingdom a name is shared
+    /// in; with a kingdom, only that kingdom's entries) and the verdicts its Uses This Name column
+    /// shows, which are the ones the lists and the site use.
     /// </summary>
-    internal static (IReadOnlyList<string> Names, AmbiguousNames Verdicts) AmbiguousReportScope(CommonNameStore store, string? kingdom) {
+    internal static (IReadOnlyList<SharedName> Shared, AmbiguousNames Verdicts) AmbiguousReportScope(CommonNameStore store, string? kingdom) {
         var verdicts = store.GetAmbiguousNames("en");
-        return (kingdom is null ? verdicts.Names : store.GetAmbiguousCommonNames(kingdom).Names, verdicts);
+        return (verdicts.SharedIn(kingdom), verdicts);
     }
 
     private static Task<int> GenerateCapsReportAsync(CommonNameStore store, Settings settings, PathsService paths, CancellationToken cancellationToken) {
@@ -804,12 +801,13 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine();
             sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
             sb.AppendLine();
-            sb.AppendLine("This report lists common names that are ambiguous (map to multiple species)");
+            sb.AppendLine("This report lists common names that are ambiguous (shared by two or more taxa of the same kingdom)");
             sb.AppendLine("where at least one usage is marked as IUCN preferred (main=true).");
             sb.AppendLine();
 
             // Use efficient SQL query to find ambiguous names (no default limit)
-            var sharedNames = store.GetAmbiguousCommonNames(settings.Kingdom).Names;
+            var verdicts = store.GetAmbiguousNames("en");
+            var sharedNames = verdicts.SharedIn(settings.Kingdom).Select(s => s.Name).Distinct().ToList();
             var ambiguousNames = settings.Limit is { } limit ? sharedNames.Take(limit).ToList() : sharedNames;
             var conflictingNames = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
 
@@ -818,8 +816,11 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                         cancellationToken.ThrowIfCancellationRequested();
                         progress.Increment(1);
 
+                        // Only the taxa of a kingdom in which the name is shared.
+                        var entries = verdicts.Shared.Where(s => s.Name == normalizedName).ToList();
                         var records = store.GetCommonNamesByNormalized(normalizedName, "en")
                             .Where(r => r.TaxonValidityStatus == "valid" && !r.TaxonIsFossil)
+                            .Where(r => entries.Any(s => AmbiguousNames.IsInGroupOf(s, r.TaxonKingdom)))
                             .ToList();
 
                         if (!string.IsNullOrWhiteSpace(settings.Kingdom)) {
@@ -1019,10 +1020,10 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
 /// wording of the ambiguity rule (<see cref="AmbiguousNames"/>) is in one place.
 /// </summary>
 internal static class AmbiguousReportText {
-    public const string SummaryLabel = "Ambiguous English Names (shared by 2+ taxa)";
+    public const string SummaryLabel = "Ambiguous English Names (2+ taxa of one kingdom, counted per kingdom)";
 
     public const string Intro = """
-        An ambiguous common name is an English common name that two or more taxa in the Common names store have. Names are compared ignoring case, spaces and punctuation. This report has one table for each ambiguous common name, and each row is a taxon that has the name. Uses This Name is Yes for the taxon that the name is used for in the Wikipedia lists and on the public site. The Wikipedia lists and the public site show every other taxon in the table under another of its names, or under its scientific name only, unless rules/rules-list.txt sets the name for that taxon. Rows with the same scientific name count as one taxon, because the store can have a species under an old and a current IUCN id. Both rows are Yes when the name is used for that taxon.
+        An ambiguous common name is an English common name that two or more taxa of the same kingdom in the Common names store have. A name that only taxa of different kingdoms have is not ambiguous, and the Wikipedia lists and the public site can use it for each of those taxa: "Chestnut" is the name of the moth *Conistra vaccinii* and of the tree *Pochota fendleri*. Names are compared ignoring case, spaces and punctuation. This report has one table for each ambiguous common name in each kingdom, and each row is a taxon of that kingdom that has the name. When two or more plants and two or more animals have a name, the name has two tables, one for Plantae and one for Animalia. Uses This Name is Yes for the taxon that the name is used for in the Wikipedia lists and on the public site. The Wikipedia lists and the public site show every other taxon in the table under another of its names, or under its scientific name only, unless rules/rules-list.txt sets the name for that taxon. Rows with the same scientific name count as one taxon, because the store can have a species under an old and a current IUCN id. Both rows are Yes when the name is used for that taxon.
 
         The name is used for the taxon that has it from the highest-priority source:
 
@@ -1046,6 +1047,13 @@ internal static class AmbiguousReportText {
 
     public static string Heading(int shared) => $"## Ambiguous Common Names ({shared:N0})";
 
+    /// <summary>The heading of one table: the name and the kingdom it is shared in ("Plantae").</summary>
+    public static string NameHeading(string displayName, string? kingdom) =>
+        $"### {displayName} ({KingdomLabel(kingdom)})";
+
+    private static string KingdomLabel(string? kingdom) =>
+        string.IsNullOrWhiteSpace(kingdom) ? "no kingdom" : char.ToUpperInvariant(kingdom.Trim()[0]) + kingdom.Trim()[1..].ToLowerInvariant();
+
     public static string Counts(int shared, int kept) =>
-        $"{shared:N0} ambiguous common names: {kept:N0} used for one taxon each, {shared - kept:N0} used for no taxon (equal-priority ties).";
+        $"{shared:N0} ambiguous common names, counted per kingdom: {kept:N0} used for one taxon of that kingdom each, {shared - kept:N0} used for no taxon of that kingdom (equal-priority ties).";
 }
