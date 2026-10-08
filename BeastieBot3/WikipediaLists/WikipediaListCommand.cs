@@ -324,7 +324,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
     /// name is skipped.
     /// </summary>
     internal static string? AmbiguousNamesLine(int skipped) => skipped > 0
-        ? $"The Common names store has {skipped:N0} ambiguous common names, each shared by two or more taxa. The lists show each of these names for at most one taxon: the taxon that has the name from the highest-priority source. To see which taxon each name is shown for, run common-names report --report ambiguous."
+        ? $"The Common names store has {skipped:N0} ambiguous common names, each shared by two or more taxa of the same kingdom. The lists show each of these names for at most one taxon of that kingdom: the taxon that has the name from the highest-priority source. To see which taxon each name is shown for, run common-names report --report ambiguous."
         : null;
 
     private const string IucnOnlyNamesNote = "Section headings use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus), and species names keep the IUCN spelling even where it has an error.";

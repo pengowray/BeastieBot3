@@ -7,7 +7,7 @@ The `common-names` command group provides tools for aggregating, disambiguating,
 Common names for species are notoriously ambiguous. The same name can refer to different species ("snapper" can refer to dozens of fish species), and the same species may have many common names across different sources. This system:
 
 1. **Aggregates** common names from multiple authoritative sources
-2. **Finds ambiguous names**, common names shared by two or more taxa, and works out which
+2. **Finds ambiguous names**, common names shared by two or more taxa of the same kingdom, and works out which
    taxon, if any, each one is used for (see [Ambiguous common names](#ambiguous-common-names))
 3. **Applies capitalization rules** based on a curated rules file
 4. **Generates reports** for Wikipedia editors to help with disambiguation
@@ -215,8 +215,20 @@ Displays a table showing:
 
 ### Ambiguous common names
 
-An ambiguous common name is an English common name that two or more taxa in the Common names
-store have. Only valid, non-fossil taxa are counted, from any kingdom, including taxa that share a
+An ambiguous common name is an English common name that two or more taxa of the same kingdom in
+the Common names store have. Taxa of different kingdoms are not compared: a name that only taxa
+of different kingdoms have is not ambiguous, and each of those taxa can use it. "Chestnut" is the
+IUCN main name of the moth *Conistra vaccinii* and one of the IUCN names of the tree *Pochota
+fendleri*, and both are listed as "Chestnut". When two plants and one animal have a name, the
+steps below decide between the two plants, and the animal can use the name. A name that is
+ambiguous within two kingdoms counts as two ambiguous names, one for each kingdom, and each has
+its own taxon that may use it. A taxon with no kingdom cannot be shown to be in another kingdom,
+so it is compared with the taxa of every kingdom that have the name, and it may use the name only
+when the steps below pick it in each of them (the store of October 2026 has no taxon without a
+kingdom). This is the owner's decision of 8 October 2026; until then taxa of all kingdoms were
+compared.
+
+Only valid, non-fossil taxa are counted, including taxa that share a
 scientific synonym, and names are compared ignoring case, spaces and punctuation. Store taxa with
 the same scientific name and kingdom count as one taxon. The store can hold a species under both
 an old IUCN id and its current id (*Arthroleptella bicolor* is 58057 and 121376651), and both are
@@ -228,8 +240,9 @@ has, and a repairable name counts under its repaired form.
 (`CommonNameStore.QueryAmbiguousNames`, `AmbiguousNames`), and work out the names from the store
 each time they run, so there is nothing to rebuild after aggregating.
 
-Each ambiguous name is used for at most one taxon, and skipped for all the other taxa that have
-it (a name set for a taxon in `rules/rules-list.txt` is used even so; see below). `AmbiguousNames`
+Each ambiguous name is used for at most one taxon of its kingdom, and skipped for all the other
+taxa of that kingdom that have it (a name set for a taxon in `rules/rules-list.txt` is used even
+so; see below). The steps below compare only the taxa of one kingdom. `AmbiguousNames`
 decides which taxon may use it. Step 0 applies to a name that only a species and its own
 subspecies, varieties and subpopulations have. Steps 1 to 4 apply to every other ambiguous name.
 
@@ -274,6 +287,16 @@ its nominate subspecies had the same name as its IUCN main name, step 1 gave the
 subspecies, because step 1 ranks an IUCN main name above a taxobox name. About 30 species lost a
 name to their own subspecies this way, and 13 of them had no English name left (the
 *Chrysoritis* opals).
+
+Comparing only taxa of the same kingdom (8 October 2026) changed little on the store of
+3 October 2026: 64 names stopped being ambiguous (10,371 names before, 10,307 after, 7 of them
+ambiguous within two kingdoms, so 10,314 counted per kingdom), 8 taxa gained an English name (all
+plants, such as *Xanthorrhoea preissii*, "Balga") and 19 taxa were given a different one (12
+plants, 7 animals), such as *Aesculus hippocastanum* ("Horse Chestnut" instead of "buckeye"),
+*Calluna vulgaris* ("Ling" instead of "Red-Heath") and the moth *Cucullia absinthii* ("Wormwood"
+instead of "Wormwood [moth]"). No taxon lost its English name. Some of the names now used are
+errors in a source that the other kingdom's taxon used to hide: *Dracaena steudneri*, a plant, is
+now listed as "bush nightfighter", a Wikidata name of a butterfly.
 
 A taxon that may use a name is not always listed under it: the chooser (below) tries the taxon's
 own names in its own order and takes the first one that is not skipped for the taxon.
@@ -345,11 +368,12 @@ name is ambiguous.
 the `init`, `aggregate` and `report --report summary` summaries show the same count. To see the
 names, run `common-names report --report ambiguous`, which writes
 `common-name-ambiguous-<timestamp>.md` to the reports folder. The report has one table for each
-ambiguous name, and its "Uses This Name" column is Yes for the taxon the name is used for (on
-two rows when an old and a current IUCN id have the same scientific name). On the store of
-3 October 2026, before step 0 was added, it listed 10,371 names: 7,078 used for one taxon each
-and 3,293 used for no taxon (equal-priority ties). With `--kingdom`, the report counts only the taxa in that kingdom,
-so it leaves out names shared by taxa in different kingdoms. In the web UI the report is the optional
+ambiguous name in each kingdom (headed "Chestnut (Plantae)"), and its "Uses This Name" column is
+Yes for the taxon the name is used for (on two rows when an old and a current IUCN id have the
+same scientific name). Taxa of other kingdoms that have the name are not in the table. On the
+store of 3 October 2026, before step 0 was added, it listed 10,371 names: 7,078 used for one taxon
+each and 3,293 used for no taxon (equal-priority ties). With `--kingdom`, the report lists only
+the tables of that kingdom. In the web UI the report is the optional
 "List ambiguous common names" step of the "Wikipedia reports pipeline" workflow.
 
 With `--use-legacy-names`, `generate-lists` reads names from the Wikidata and IUCN API caches

@@ -657,25 +657,22 @@ internal sealed class CommonNameStore : SqliteStore {
     }
 
     /// <summary>
-    /// Reads every <paramref name="language"/> common name of the valid, non-fossil taxa, in any
-    /// kingdom, and applies the one ambiguity rule to them (<see cref="AmbiguousNames"/>). List
+    /// Reads every <paramref name="language"/> common name of the valid, non-fossil taxa, in every
+    /// kingdom, and applies the one ambiguity rule to them (<see cref="AmbiguousNames"/>), which
+    /// compares only taxa of the same kingdom. List
     /// generation and `site build-db` skip a name that is ambiguous for the taxon
     /// (<see cref="CommonNameChooser.ChooseBest"/>), and `common-names report --report ambiguous` lists the shared
-    /// names with the taxon that keeps each one (<see cref="GetAmbiguousCommonNames"/>), so all
+    /// names with the taxon that keeps each one (<see cref="GetAmbiguousNames"/>), so all
     /// three read this method and cannot drift apart. <see cref="AmbiguousNames"/> ranks the
-    /// sources (<see cref="AmbiguousNames.KeeperPriority"/>), so the names are grouped there rather
-    /// than in SQL.
-    /// With <paramref name="kingdom"/>, only that kingdom's taxa are counted, so a name shared by
-    /// a plant and an animal is not shared within either kingdom. The kingdom is upper-cased
-    /// before binding, because taxa store it as IUCN writes it ("PLANTAE") and the report's
-    /// --kingdom help suggests "Plantae".
+    /// sources (<see cref="AmbiguousNames.KeeperPriority"/>) and groups the taxa by kingdom, so the
+    /// names are grouped there rather than in SQL.
     /// Junk names (<see cref="CommonNameQuality"/>) are left out, and a repairable name counts
     /// under its repaired name's key (<see cref="CommonNameChooser.UsableName"/>), the key the
     /// chooser compares it by.
     /// The rule also reads which taxa are matched to each Wikipedia page (the `wikipedia`
     /// cross-references), so that a title does not decide between the taxa one article covers.
     /// </summary>
-    private AmbiguousNames QueryAmbiguousNames(string language, string? kingdom = null) {
+    private AmbiguousNames QueryAmbiguousNames(string language) {
         var taxaByPage = new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
         using (var pages = _connection.CreateCommand()) {
             pages.CommandText = "SELECT source_identifier, taxon_id FROM taxon_cross_references WHERE source = 'wikipedia';";
@@ -690,21 +687,16 @@ internal sealed class CommonNameStore : SqliteStore {
         }
 
         using var command = _connection.CreateCommand();
-        var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
-        command.CommandText = $@"
+        command.CommandText = @"
             SELECT c.normalized_name, c.taxon_id, t.canonical_name, c.source, c.is_preferred, c.raw_name, t.kingdom,
                    c.source_identifier
             FROM common_names c
             JOIN taxa t ON c.taxon_id = t.id
             WHERE c.language = @lang
               AND t.validity_status = 'valid'
-              AND t.is_fossil = 0
-              {kingdomFilter};
+              AND t.is_fossil = 0;
         ";
         command.Parameters.AddWithValue("@lang", language);
-        if (kingdom != null) {
-            command.Parameters.AddWithValue("@kingdom", kingdom.Trim().ToUpperInvariant());
-        }
 
         var holdings = new List<NameHolding>();
         using var reader = command.ExecuteReader();
@@ -1391,15 +1383,6 @@ internal sealed class CommonNameStore : SqliteStore {
         }
         return results;
     }
-
-    /// <summary>
-    /// The ambiguity rule over English names, for the report: <see cref="AmbiguousNames.Names"/>
-    /// lists the shared names, most-shared first, and <see cref="AmbiguousNames.KeptBy"/> names
-    /// the taxon that may use each one. Without <paramref name="kingdom"/> these are the verdicts
-    /// list generation uses (<see cref="QueryAmbiguousNames"/>).
-    /// </summary>
-    public AmbiguousNames GetAmbiguousCommonNames(string? kingdom = null) =>
-        QueryAmbiguousNames("en", kingdom);
 
     #endregion
 }
