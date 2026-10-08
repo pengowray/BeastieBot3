@@ -209,7 +209,10 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   Act (Advisory Lists)", "WA WC Act"), some of them since replaced, so the page names the state and
   says the statuses may differ from the states' current lists.
 - `other_status` rows from the status lists store (`docs/status-lists.md`), read by
-  `SiteLinkReaders.ReadStatusLists`. A NatureServe record goes to the taxon with its scientific
+  `SiteLinkReaders.ReadStatusLists`. NatureServe, NZTCS and SALVE rows are matched by
+  `StatusListMatcher.OnePerTaxon` (pinned by `StatusListMatcherTests`): every row by its own name
+  first, then the unmatched rows by the source's synonyms and by IUCN's synonyms, one row per
+  taxon, earlier rows first. A NatureServe record goes to the taxon with its scientific
   name in the same kingdom (`StatusListNameIndex` ignores "ssp.", "subsp." and "var.", so
   NatureServe's bare trinomials find IUCN's subspecies; a subpopulation is never found), else the
   one taxon that one of NatureServe's synonyms names, else the one taxon whose IUCN synonyms
