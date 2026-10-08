@@ -324,8 +324,10 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
 - Every taxon's scientific name is in the `name` and `name_key` tables, and the `name_fts` index is
   rebuilt after the bulk insert. The finished file is in rollback-journal mode, not WAL, so a
   read-only process can open it.
-- Language codes are ISO 639-1 where one exists, otherwise IUCN's ISO 639-2 code; `und`, `zxx`,
-  `mis`, `mul` and the local-use range (`qaa` to `qtz`) become NULL.
+- Language codes are ISO 639-1 where one exists, otherwise the ISO 639-3 code (IUCN's names keep
+  IUCN's ISO 639-2 or 639-5 code, such as `phi`); for IUCN's names, `und`, `zxx`, `mis`, `mul` and
+  the local-use range (`qaa` to `qtz`) become NULL. The other sources' codes are described under
+  "Common names in other languages" below.
 - `common_name_en`, the English name shown on each page, is chosen exactly as the Wikipedia lists
   choose it, by `CommonNameChooser`: a `rules-list.txt` override, otherwise the best of the store's
   names for the taxon (by source priority, skipping junk names and names another taxon keeps under
@@ -349,6 +351,80 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   `common-names aggregate` stores a taxobox name only when it differs from the article title. A
   site older than this change shows the source `wikipedia-taxobox` as it is written, so deploy the
   site before or with a database built by the new `site build-db`.
+- Common names in other languages (since October 2026) come from IUCN (the API's taxon records,
+  kept as they are), and from three sources that `SiteOtherLanguageNames` reads after every synonym
+  list is in, because its rules compare names with the synonyms:
+  - the Catalogue of Life: the `vernacularname` rows of the taxon's `col_id`, source `col`;
+  - Wikidata: the labels, aliases and taxon common name (P1843) statements, other than deprecated
+    ones, of the taxon's item (`taxon.wikidata_qid`), source `wikidata`. One scan of
+    `wikidata_entities` reads the JSON of every downloaded item and parses only the taxa's items;
+  - Wikipedia: the titles of the item's sitelinks to a Wikipedia (`<code>wiki`; not Commons,
+    Wikispecies, Meta and the other `...wiki` sites, `OtherLanguageNameRules.WikipediaLanguage`),
+    with a bracketed disambiguation at the end removed ("Tigre (animal)" is "Tigre"), source
+    `wikipedia`.
+
+  English names from these three are not read here: English names come only from the common
+  names store, as before.
+  - Language codes (`SiteLanguageCodes.Normalise`): ISO 639-1 where one exists, else ISO 639-3.
+    Wikimedia's codes are mapped: `zh-hans`, `zh-hant`, `zh-tw` and the other `zh-` codes to `zh`,
+    `zh-yue` to `yue`, `zh-min-nan` to `nan`, `zh-classical` to `lzh`, `pt-br` to `pt`, `sr-ec`
+    and `sr-el` to `sr`, `be-tarask` and `be-x-old` to `be`, `als` (Alemannic Wikipedia) to `gsw`,
+    `sh` to `hbs`, `bh` to `bho`, `bat-smg` to `sgs`, `fiu-vro` to `vro`, `roa-rup` to `rup`,
+    `cbk-zam` to `cbk`, and any other code with a hyphen to the part before it. `simple`, `mul`,
+    `nrm`, `roa-tara`, `map-bms` and `eml` are left out. The Catalogue of Life's codes `dnj`,
+    `thy`, `mlf` and `fqs` are its source 2036's (and a few others') Danish, Thai, Malayalam and
+    Persian names, as their scripts and words show, and are stored as `da`, `th`, `ml` and `fa`;
+    individual languages that Wikipedia and Wikidata label with their macrolanguage are stored as
+    it (`cmn` as `zh`, `zlm` and `zsm` as `ms`, `swh` as `sw`, `arb` as `ar`, `pes` as `fa` and a
+    few more). Kotava (`avk`) is left out: Kotava Wikipedia titles its species articles with one
+    word for the group and the scientific name in brackets ("Vesnol (Myotis horsfieldii)"), so
+    without the brackets 960 bats would share "Vesnol". A code is kept only when
+    `LanguageNameTable` (in `BeastieBot3.Shared`) has an English name for it, so every language the
+    species page lists has a name; `isv` (Interslavic) and `rrm` (Moriori, newer than the ISO
+    tables used) are left out.
+  - `LanguageNameTable` has every ISO 639-3 and 639-5 code (8,026), keyed as stored, with CLDR's
+    English name where CLDR keeps the code as it is, else ISO's reference name; when two codes
+    would get one name, the CLDR-named one takes ISO's ("tw" is "Twi", not CLDR's "Akan").
+    `node BeastieBot3.Shared/SiteData/generate-language-names.mjs` writes it
+    (`LanguageNameTable.Data.cs`) from the iso-codes package's JSON (`/usr/share/iso-codes/json`)
+    and Node's `Intl.DisplayNames`. The site's `LanguageNames.Name` reads the same table and asks
+    the server's ICU only about a code it does not have.
+  - `OtherLanguageNameRules.Check` leaves out a name that, compared by `SiteNameKey.Fold`, is the
+    taxon's scientific name (also without IUCN's rank marker), a synonym from any source or a
+    scientific name (P225) of the item, or the genus; and a name that starts with the genus as
+    written, a space and a lower-case letter, or with the genus's initial, a full stop, a space and
+    the species epithet ("P. tigris"). Direction marks (U+200E and the other bidirectional
+    controls) are trimmed from the ends first: Wikidata's Asturian labels wrap the scientific name
+    in them. The binomial rule also takes out real names that begin with the genus, such as the
+    French "Tragopan de Cabot" and the Italian "Aquila minore di Cassin". Bots titled hundreds of
+    thousands of articles in the Cebuano, Waray, Swedish, Dutch and Vietnamese Wikipedias with the
+    scientific name, and most languages' Wikidata label of a taxon item is its scientific name; the
+    rules take out nearly all of these. Of the 916 Cebuano and Waray Wikipedia titles left in the
+    build of 9 October 2026, about 380 have the shape of a binomial: synonyms the build does not
+    know and misspelt names ("Karpatiosorbus barthae", "Cyperus alleizettei").
+  - The build of 9 October 2026 (release 2026-1, CoL 26.7 XR) read 1,077,531 CoL names, 7,141,312
+    Wikidata names and 1,476,957 sitelink titles for the site's taxa, and wrote 868,549 `col`,
+    864,240 `wikidata` and 443,013 `wikipedia` rows beside IUCN's 101,117: 1,382,883 names after
+    merging, in 888 languages, for 113,785 taxa. The rules left out as scientific names 635 CoL
+    names, 5,700,562 Wikidata names (nearly all labels) and 931,481 titles; the binomial rule
+    alone 4,009 CoL names, 24,706 Wikidata names and 3,060 titles, of which about 2,400 CoL names
+    and 3,000 Wikidata names and titles contain a preposition or a letter outside ASCII and so are
+    probably real names. The name tables, `name_key` and `name_fts` grew from 206 MB to 489 MB, and
+    the file from 1,040 MB (schema 25) to 1,346 MB. Reading the Wikidata JSON takes about 2 minutes.
+  - `SiteNameSet` keeps one row per name, language and source. It compares common names in
+    languages other than English by `SiteNameKey.CaseFold` (Unicode compatibility normalisation,
+    lower case, spaces), so names that differ in an accent or a mark are two names ("Ñandú" and
+    "Nandu", or the Japanese "ガエル" and "カエル"); English names are still compared by `Fold`.
+    IUCN's names in other languages go through the same set.
+  - The species page's "Common names in other languages" is a table (Language, Name, Source) built
+    by `TaxonNames.OtherLanguageNames`: one row per name with case and Unicode normalisation
+    ignored (`CaseFold`), in the spelling most of its sources give (IUCN's on a tie), with its
+    sources in the order IUCN Red List, Catalogue of Life, Wikidata, Wikipedia; a language's names
+    with most sources first, then by name; languages by their English name, "Language not given"
+    last. Each language is one `tbody` whose first row has the language in a `th` with `rowspan`;
+    the languages after the first 10 are hidden until the reader ticks "Show all languages".
+  - These names are in `name_key` and `name_fts`, so a search in another language finds the
+    taxon, but not in `name_word` (spelling suggestions use the English names only).
 - When the build reads the DOI cache, it sets the meta key `iucn_doi_checked_to` to the newest
   `checked_at` date in the cache's `doi_check` table.
 - `assessment.wikidata_item_qid` is the assessment's Wikidata item and
@@ -1491,7 +1567,8 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   link.
 - Search, `/name/{name}` and `/api/suggest` rank taxa in the release before taxa that are not,
   within each group of matches (exact name, name that starts with the text, any other match).
-  Next comes the kind of name matched: a scientific name, then a common name, then a synonym. Among
+  Next comes the kind of name matched: a scientific name, then an English common name, then a
+  common name in another language, then a synonym. Among
   exact matches on a common name, a taxon whose English name (`common_name_en`) is the text comes
   before a taxon that has the text only as another common name, so "Dodo" lists *Raphus cucullatus*
   before *Euphorbia drupifera* (a common name "dodo"), and "Axolotl" lists *Ambystoma mexicanum*
