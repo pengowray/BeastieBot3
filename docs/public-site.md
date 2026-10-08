@@ -1929,17 +1929,23 @@ or PEW, 37 have no tag in their own record; `possibly_extinct_listing` keeps the
 marks only those 37. Table 7 prints "CR(PE)" for some tagged assessments and plain "CR" for others
 (in the 2023-1 table, 3 against 27), so a plain "CR" in Table 7 says nothing about the tag.
 
-On the species page (`Pages/HistoryTableNotes.cs`, `_ReasonCell`, `_ListedTagMarker`,
+On the species page (`Pages/HistoryTableNotes.cs`, `_ReasonCell`, `_FootnoteRef`,
 `_HistoryTableNotes`; strings in `Display/SiteText.SummaryTables.cs`), the Assessment history and
 Combined assessment history tables get a "Reason for change" column after Category when at least
-one row has a reason: "Genuine change (G)", "Non-genuine change (N)" or "Previous listing was an
-error (E)", with IUCN's definition and the table's version as a tooltip. A note under the table
-links the Table 7 PDF of each version the page's reasons came from and says what a blank cell
-means; a second sentence about the genuine-only 2008 table is added only when a row published in
-2008 has no reason and another category than the assessment before it. An assessment that the
-tables list as PE or PEW and whose record does not have that tag gets "[PE]" or "[PEW]" after its
-badge, linked to a footnote under the table that names the tables and versions. The About page
-lists the tables as a source (meta keys `table7_first_version` and so on) and explains both.
+one row has a reason. A row with a reason shows IUCN's name for the code ("Genuine status change
+(G)", "Non-genuine status change (N)", "Previous listing was an error (E)") and a numbered footnote
+that links the Table 7 PDF it is from (one footnote per table). The other rows say why there is
+none, in light italic: "—" for an assessment published before 2007 (a line under the table
+explains the dash), "first assessment" for the oldest row, "no change" when the category is the
+same as the row below it (LR/nt counts as NT and LR/lc as LC), "no reason given" with the 2008
+table's footnote for a change published in 2008 (that table lists genuine changes only), and "not
+found" for any other change. On release 2026-1, over the pages with the column, that is 22,202
+dashes, 16,224 reasons, 10,198 "no change", 4,352 "first assessment", 459 "no reason given" and
+125 "not found". An assessment that the tables list as PE or PEW and that is flagged as neither
+(IUCN's word: Table 9 says assessments are "flagged as 'Possibly Extinct' (PE)") shows the badge
+CR (PE) or CR (PEW) with a footnote that names the tables and versions; an assessment flagged with
+the other tag keeps its own badge and gets the footnote. The About page lists the tables as a
+source (meta keys `table7_first_version` and so on) and explains both.
 
 ## Known gaps
 

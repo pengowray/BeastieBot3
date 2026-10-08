@@ -1,4 +1,26 @@
 @model ReasonCellModel
-@* The "Reason for change" cell: IUCN Table 7's reason code for the change of category this
-   assessment brought, with IUCN's definition and the table's version as a tooltip. *@
-@if (Model.Change is { } change) {<span title="@SiteText.ReasonTooltip(change.Reason, change.TableRelease)">@SiteText.ReasonLabel(change.Reason)</span>}
+@* A "Reason for change" cell: IUCN Table 7's reason code with a footnote naming the table, or, in
+   light italic, why there is none. *@
+@if (Model.Cell is { } cell) {
+    switch (cell.Kind) {
+        case ReasonCellKind.Reason:
+            @SiteText.ReasonLabel(cell.Code!)
+            break;
+        case ReasonCellKind.BeforeTables:
+            <span class="reason-none">@SiteText.ReasonBeforeTables</span>
+            break;
+        case ReasonCellKind.FirstAssessment:
+            <span class="reason-none">@SiteText.ReasonFirstAssessment</span>
+            break;
+        case ReasonCellKind.NoChange:
+            <span class="reason-none">@SiteText.ReasonNoChange</span>
+            break;
+        case ReasonCellKind.NoneGiven:
+            <span class="reason-none">@SiteText.ReasonNoneGiven</span>
+            break;
+        default:
+            <span class="reason-none">@SiteText.ReasonNotFound</span>
+            break;
+    }
+    if (cell.Footnote is { } number) {<partial name="_FootnoteRef" model="number" />}
+}

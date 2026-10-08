@@ -213,6 +213,17 @@ public sealed partial class SiteQueries {
         return changes;
     }
 
+    /// The PDF of IUCN's summary table of this number and Red List version ("2008"); null when the
+    /// database has none.
+    public string? GetSummaryTableUrl(int table, string release) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT url FROM summary_table WHERE table_no = @t AND release = @r ORDER BY summary_table_id DESC LIMIT 1";
+        command.Parameters.AddWithValue("@t", table);
+        command.Parameters.AddWithValue("@r", release);
+        return command.ExecuteScalar() as string;
+    }
+
     /// The assessments of these taxa that IUCN's summary tables list as Possibly Extinct or Possibly
     /// Extinct in the Wild, by assessment id.
     public IReadOnlyDictionary<long, IReadOnlyList<PossiblyExtinctListingRow>> GetPossiblyExtinctListings(IReadOnlyCollection<long> taxonIds) {

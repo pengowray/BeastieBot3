@@ -16,7 +16,8 @@ public sealed record SearchFormModel(string? Query, string Variant, bool HideLab
 
 /// A category badge: the code on the IUCN colour, with the full label beside it unless the caller
 /// shows the label elsewhere.
-public sealed record BadgeModel(CategoryDisplay Category, bool Large = false, bool ShowLabel = true) {
+/// Footnote: the number of a footnote under the history table to refer to after the label, or null.
+public sealed record BadgeModel(CategoryDisplay Category, bool Large = false, bool ShowLabel = true, int? Footnote = null) {
     public static BadgeModel? For(TaxonSummary taxon, bool large = false) =>
         taxon.Category is null
             ? null
@@ -33,13 +34,9 @@ public sealed record BadgeModel(CategoryDisplay Category, bool Large = false, bo
     };
 }
 
-/// The "Reason for change" cell of a history table row (_ReasonCell); Change is null when IUCN's
-/// Table 7 gives the row no reason.
-public sealed record ReasonCellModel(CategoryChangeRow? Change);
-
-/// The [PE] or [PEW] marker after a history table row's category (_ListedTagMarker); Listing is null
-/// when the row has none. Kind: the taxon's kind ("species"), for the marker's accessible name.
-public sealed record ListedTagMarkerModel(long AssessmentId, PossiblyExtinctListingRow? Listing, string Kind);
+/// The "Reason for change" cell of a history table row (_ReasonCell); null when the table has no
+/// such column.
+public sealed record ReasonCellModel(ReasonCell? Cell);
 
 /// A help text behind a small "i" button (_InfoTip). Id: the id of the text, unique on the page.
 /// Label: the button's accessible name, naming what the text explains.

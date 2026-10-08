@@ -1,13 +1,13 @@
 @model HistoryTableNotes
-@* Under a history table: where its "Reason for change" entries come from, with links to the Table 7
-   PDFs, what a blank cell means, and the footnotes of its [PE] and [PEW] markers. *@
-@if (Model.ShowReasonColumn) {
-    var tables = Model.ReasonTables;
-    <p class="note reason-note">@SiteText.ReasonNoteBefore@SiteText.ReasonNoteVersions(tables.Count)@for (var i = 0; i < tables.Count; i++) {
-            var (release, url) = tables[i];
-            <text>@SiteText.VersionSeparator(i, tables.Count)<a href="@url" aria-label="@SiteText.ReasonNoteLinkLabel(release)">@release</a></text>
-        }@SiteText.ReasonNoteAfter @SiteText.ReasonNoteBlank@if (Model.HasBlank2008Row) {<text> @SiteText.ReasonNote2008</text>}</p>
+@* Under a history table: its numbered footnotes (the Table 7 each reason is from, with its PDF, and
+   the Possibly Extinct listings that are only in IUCN's tables), then what the dash means. *@
+@if (Model.Footnotes.Count > 0) {
+    <ol class="footnotes">
+        @foreach (var note in Model.Footnotes) {
+            <li id="@HistoryTableNotes.FootnoteId(note.Number)" value="@note.Number">@if (note.TableRelease is { } release) {<text>@SiteText.TableFootnoteBefore<a href="@note.TableUrl">@SiteText.TableFootnoteLink(release)</a>@SiteText.TableFootnoteAfter@if (note.Genuine2008) {@SiteText.TableFootnote2008}</text>} else {@note.Text}</li>
+        }
+    </ol>
 }
-@foreach (var note in Model.Footnotes) {
-    <p class="note listed-tag-note" id="@HistoryTableNotes.FootnoteId(note.AssessmentId)">@note.Text</p>
+@if (Model.HasBeforeTables) {
+    <p class="note footnote-legend">@SiteText.ReasonBeforeTablesLegend</p>
 }

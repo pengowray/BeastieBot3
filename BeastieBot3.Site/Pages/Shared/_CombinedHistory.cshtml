@@ -80,9 +80,9 @@
                             @if (combined.ShowNames) {
                                 <td><span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(row.Id.Taxon.ScientificName, row.Id.Taxon.SubpopulationName))</span></td>
                             }
-                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /><partial name="_ListedTagMarker" model="@(new ListedTagMarkerModel(a.AssessmentId, Model.ListedOnlyInTables(a), Model.Taxon!.Kind))" /></td>
+                            <td><partial name="_Badge" model="@historyNotes.BadgeFor(a)" /></td>
                             @if (historyNotes.ShowReasonColumn) {
-                                <td><partial name="_ReasonCell" model="@(new ReasonCellModel(Model.ChangeReasons.GetValueOrDefault(a.AssessmentId)))" /></td>
+                                <td><partial name="_ReasonCell" model="@(new ReasonCellModel(historyNotes.CellFor(a.AssessmentId)))" /></td>
                             }
                             <td>@a.Criteria</td>
                             <td class="narrow-hide">@SiteFormat.Date(a.AssessmentDate)</td>

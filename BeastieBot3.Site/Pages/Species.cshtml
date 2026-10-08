@@ -391,9 +391,9 @@
                         var versionNote = Model.VersionNote(a);
                         <tr class="@(isShown ? "shown" : null)">
                             <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</th>
-                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /><partial name="_ListedTagMarker" model="@(new ListedTagMarkerModel(a.AssessmentId, Model.ListedOnlyInTables(a), taxon.Kind))" /></td>
+                            <td><partial name="_Badge" model="@historyNotes.BadgeFor(a)" /></td>
                             @if (historyNotes.ShowReasonColumn) {
-                                <td><partial name="_ReasonCell" model="@(new ReasonCellModel(Model.ChangeReasons.GetValueOrDefault(a.AssessmentId)))" /></td>
+                                <td><partial name="_ReasonCell" model="@(new ReasonCellModel(historyNotes.CellFor(a.AssessmentId)))" /></td>
                             }
                             <td>@a.Criteria</td>
                             <td class="narrow-hide">@SiteFormat.Date(a.AssessmentDate)</td>

@@ -1,4 +1,0 @@
-@model ListedTagMarkerModel
-@* After the category badge: [PE] or [PEW] when IUCN's summary tables list the assessment as Possibly
-   Extinct (in the Wild) and the assessment itself has no such tag, linked to its footnote under the table. *@
-@if (Model.Listing is { } listing) {<sup class="listed-tag"><a href="#@HistoryTableNotes.FootnoteId(Model.AssessmentId)" aria-label="@SiteText.ListedTagMarkerLabel(listing.Tag, Model.Kind)">@SiteText.ListedTagMarker(listing.Tag)</a></sup>}

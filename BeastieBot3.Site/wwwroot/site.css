@@ -475,11 +475,33 @@ button:hover {
     color: var(--muted);
 }
 
-/* [PE] after a category badge: IUCN's summary tables list the assessment as Possibly Extinct,
-   the assessment itself has no such tag. A footnote link, apart from the badge's own "(PE)". */
-.listed-tag {
-    margin-left: 0.25em;
+/* History tables: numbered references to the footnotes under the table, the "Reason for change"
+   cells that give no reason, and the footnotes themselves. */
+.fn-ref {
+    margin-left: 0.15em;
     font-size: 0.75rem;
+    line-height: 0;
+}
+
+.reason-none {
+    font-style: italic;
+    color: var(--muted);
+}
+
+.footnotes {
+    margin: 0.5rem 0 0.4rem;
+    padding-left: 1.6rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.footnotes li + li {
+    margin-top: 0.2rem;
+}
+
+.footnote-legend {
+    font-size: 0.85rem;
+    color: var(--muted);
 }
 
 /* "Errata version, published 2016" and similar, under the year in the assessment tables. */

@@ -24,7 +24,7 @@ public static class FixtureDb {
     public const long Baiji = 12119;
     public const long BaijiLatest = 50358152;
     public const long Baiji1986Ex = 12119001;
-    /// A CR assessment with no Possibly Extinct tag that IUCN's Table 9 lists as Possibly Extinct.
+    /// A CR assessment not flagged as Possibly Extinct that IUCN's Table 9 lists as Possibly Extinct.
     public const long Baiji2008Cr = 12119002;
 
     public const long Tiger = 15955;
@@ -319,7 +319,7 @@ public static class FixtureDb {
         w.Assessment(Baiji2008Cr, Baiji, "Global", false, "CR", criteria: "A2cd; C2a(ii); D", criteriaVersion: "3.1", year: 2008,
             date: "2008-06-30");
         // IUCN's summary tables: Table 7 reasons for the polar bear's 2008 change of category, and Table 9
-        // listings of the baiji, one on an assessment with no Possibly Extinct tag of its own.
+        // listings of the baiji, one on an assessment not flagged as Possibly Extinct itself.
         w.Run("""
             INSERT INTO summary_table (summary_table_id, table_no, release, url, last_updated) VALUES
                 (1, 7, '2008', 'https://nc.iucnredlist.org/redlist/content/attachment_files/2008RL_Stats_Table_7.pdf', NULL),

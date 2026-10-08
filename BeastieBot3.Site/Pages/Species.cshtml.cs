@@ -145,10 +145,14 @@ public sealed class SpeciesModel : PageModel {
             ? listings.FirstOrDefault(l => l.Tag == "PE" ? !assessment.PossiblyExtinct : !assessment.PossiblyExtinctInTheWild)
             : null;
 
-    /// What goes under a history table about IUCN's summary tables, for these rows (own: the row is
-    /// this page's taxon's).
+    /// The PDF of the 2008 Table 7, which lists genuine changes only, for the footnote of a 2008 change
+    /// with no reason; null when the page has no reasons or the database has no such table.
+    public string? Table7Of2008 { get; private set; }
+
+    /// The parts of a history table that come from IUCN's summary tables, for its rows in the order
+    /// shown (own: the row is this page's taxon's).
     public HistoryTableNotes TableNotes(IEnumerable<(AssessmentRow Row, bool Own)> rows) =>
-        HistoryTableNotes.Build(rows.ToList(), ChangeReasons, ListedOnlyInTables, Taxon!.Kind);
+        HistoryTableNotes.Build(rows.ToList(), ChangeReasons, ListedOnlyInTables, Taxon!.Kind, Table7Of2008);
 
     /// SPRAT profiles and EPBC Act listings: the whole taxon's first, then populations'.
     public IReadOnlyList<EpbcListingRow> EpbcListings { get; private set; } = [];
@@ -313,6 +317,7 @@ public sealed class SpeciesModel : PageModel {
             id => id == Taxon.TaxonId ? _assessments : _queries.GetAssessments(id), _queries.GetTaxonomicNotesFlags);
         var historyTaxa = Combined?.Ids.Select(i => i.TaxonId).ToList() ?? [Taxon.TaxonId];
         ChangeReasons = _queries.GetCategoryChanges(historyTaxa);
+        Table7Of2008 = ChangeReasons.Count == 0 ? null : _queries.GetSummaryTableUrl(7, "2008");
         PossiblyExtinctListings = _queries.GetPossiblyExtinctListings(historyTaxa);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
             Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames) with {
