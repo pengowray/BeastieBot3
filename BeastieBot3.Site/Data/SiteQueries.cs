@@ -774,9 +774,6 @@ public sealed partial class SiteQueries {
     // The number of columns in GroupColumns, where the columns after them start.
     private const int GroupColumnCount = 18;
 
-    public GroupRow? GetGroup(int nodeId) =>
-        ReadGroups($"SELECT {GroupColumns} FROM higher_taxon h WHERE h.node_id = @id", ("@id", nodeId)).FirstOrDefault();
-
     /// The group and every group above it, kingdom first.
     public IReadOnlyList<GroupRow> GetGroupPath(int nodeId) =>
         ReadGroups($"""

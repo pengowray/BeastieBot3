@@ -75,9 +75,6 @@ internal sealed partial class ListSections {
 
     public ListSection Root { get; }
 
-    /// Whether the text has any headings.
-    public bool HasHeadings => Root.Children.Count > 0;
-
     public IReadOnlyList<GroupRow> PathOf(int node) => _paths.TryGetValue(node, out var p) ? p : _paths[node] = _lookup.PathOf(node);
 
     /// Whether group is below the group above (any group is below null).

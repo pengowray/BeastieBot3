@@ -6,10 +6,8 @@ namespace BeastieBot3.Site.Display;
 /// The Wikidata properties and items this site shows (in QuickStatements commands, the Wikidata
 /// status and item checks, and the links to other databases), with their English labels, so a
 /// search for "P31" or "Q32059" can say what it is. The labels are Wikidata's English labels as of
-/// LabelsCheckedOn; the status values and database properties come from the lists the site uses.
+/// 2026-10-08; the status values and database properties come from the lists the site uses.
 public static class WikidataTerms {
-    public const string LabelsCheckedOn = "2026-10-08";
-
     private static readonly Dictionary<string, string> Labels = Build();
 
     /// The English label of a property ("P31") or item ("Q32059") this site uses; null otherwise.

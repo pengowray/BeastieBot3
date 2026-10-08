@@ -59,9 +59,6 @@ public sealed class SearchModel : PageModel {
     public IReadOnlyList<ExtraSearchHit> ExtraItems { get; private set; } = [];
     public long ExtraTotal { get; private set; }
 
-    /// True when the results are taxa found by an IUCN id in the text, not by a name.
-    public bool FoundById { get; private set; }
-
     /// q: the search text. all=1 lists the results even when the text names exactly one taxon (the
     /// "See all search results" link on a taxon page uses it, so it does not redirect straight back).
     public IActionResult OnGet() {
@@ -170,7 +167,6 @@ public sealed class SearchModel : PageModel {
         if (!all && ids.WikidataItem is not null && hits.Count(h => h.Taxon.InRelease) == 1) {
             return Redirect(SpeciesUrl(hits.Single(h => h.Taxon.InRelease)));
         }
-        FoundById = true;
         Items = hits.Select(TaxonListItem.FromIdHit).ToList();
         TotalTaxa = Items.Count;
         return Page();

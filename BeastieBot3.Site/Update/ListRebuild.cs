@@ -499,10 +499,6 @@ public static partial class ListRebuild {
         private Dictionary<int, long> _lineOfOwner = [];
         private OutNode _root = new();
 
-        // A taxon whose line is the line of another taxon of the list, or under it (Holder), or under
-        // a line that names no taxon of the list (Holder null).
-        private sealed record Under(long? Holder);
-
         private bool Holds(ListSection section, ListTaxonRow taxon) =>
             section.Group is null || _sections.PathOf(taxon.NodeId).Any(g => g.NodeId == section.Group.NodeId);
 

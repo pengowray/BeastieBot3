@@ -128,15 +128,7 @@ public static partial class SiteText {
     public const string SpratFullName = "Species Profile and Threats Database, Australian Government";
     public const string EpbcFullName = "Environment Protection and Biodiversity Conservation Act 1999";
 
-    /// "Listed as Endangered under Australia's " + abbr("EPBC Act") + ".", then, for a listing of a
-    /// population, EpbcPopulationOnly; for a listing under another name, EpbcListedNameBefore +
-    /// italic name + ".".
-    public static string EpbcBefore(string status) => $"Listed as {status} under Australia's ";
     public const string EpbcAbbr = "EPBC Act";
-    public const string EpbcAfter = ".";
-    /// population: the population as SPRAT names it ("combined populations of Qld, NSW and the ACT").
-    public static string EpbcPopulationOnly(string population) => $"This listing applies only to the {population}.";
-    public const string EpbcListedNameBefore = "The listing uses the name ";
 
     // Taxon page: data note. Before + link("About page") + after.
 

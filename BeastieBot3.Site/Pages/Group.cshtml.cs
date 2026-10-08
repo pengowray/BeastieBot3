@@ -201,10 +201,6 @@ public sealed class GroupModel : PageModel {
         counts.Where(c => codes.Contains(c.Category)).Sum(c => c.Species);
 
     public int CountOf(IReadOnlySet<string> codes) => Sum(Counts, codes);
-
-    /// "/taxa/family/felidae", with "?kingdom=plantae" or "?parent=Moraceae" when another group has
-    /// the same rank and name.
-    public static string GroupUrl(GroupRow group) => SiteUrls.Group(group);
 }
 
 /// Category codes ({{IUCN status}} codes) counted together on group pages.

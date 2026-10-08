@@ -37,8 +37,6 @@ public static class ExternalDatabases {
         new("P3606", "BOLD Systems", "https://bench.boldsystems.org/index.php/TaxBrowser_TaxonPage?taxid=$1"),
     ];
 
-    public static Database? ByProperty(string property) => All.FirstOrDefault(d => d.Property == property);
-
     /// The links to the other databases for a taxon's stored ids (property, value), in the order of
     /// All, one per database: the first id of each property, and no link for a property whose
     /// replacement has an id.

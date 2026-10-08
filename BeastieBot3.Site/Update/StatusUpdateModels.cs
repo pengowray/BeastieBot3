@@ -259,10 +259,7 @@ public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding
 /// text gave it before any change, or null when it had none. Source: where the text lists it.
 /// HasStatusTemplate: a list line that has {{IUCN status}}, or gets one.
 public sealed record ListMember(StatusTaxon Taxon, int Line, string Written, string? WrittenCode,
-    ListMemberSource Source = ListMemberSource.Other, bool HasStatusTemplate = false) {
-    /// On a list line ("*" or "#").
-    public bool OnListLine => Source == ListMemberSource.ListLine;
-}
+    ListMemberSource Source = ListMemberSource.Other, bool HasStatusTemplate = false);
 
 public enum ListMemberSource {
     /// An {{IUCN status}} with ids in prose.

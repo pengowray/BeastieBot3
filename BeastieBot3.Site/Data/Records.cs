@@ -154,9 +154,7 @@ public sealed record SearchHit(
 /// WikidataQid: set when the hit was found by a Wikidata item ("Q33609"): the taxon's item, or, with
 /// AssessmentId, the assessment's item.
 public sealed record IdHit(TaxonSummary Taxon, long? AssessmentId, string? Scope, int? YearPublished, bool IsDefault,
-    string? WikidataQid = null) {
-    public bool IsAssessment => AssessmentId is not null;
-}
+    string? WikidataQid = null);
 
 public sealed record SearchResult(IReadOnlyList<SearchHit> Hits, long TotalTaxa) {
     public static readonly SearchResult Empty = new([], 0);

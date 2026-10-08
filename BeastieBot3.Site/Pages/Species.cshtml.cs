@@ -551,15 +551,4 @@ public sealed class SpeciesModel : PageModel {
                 && SiteNameKey.Fold(Taxon.CommonNameEn) == SiteNameKey.Fold(text);
         }
     }
-
-    /// True when the EPBC Act lists the whole taxon under a name other than its IUCN name
-    /// (the southern cassowary is listed as Casuarius casuarius johnsonii).
-    public bool ListedUnderOtherName(EpbcListingRow listing) =>
-        !listing.IsPopulation && Taxon is not null
-        && SiteNameKey.Fold(ScientificNameMarkupWords(listing.ListedName)) != SiteNameKey.Fold(ScientificNameMarkupWords(Taxon.ScientificName));
-
-    // The name without IUCN's rank markers, so "Panthera pardus ssp. orientalis" equals SPRAT's
-    // "Panthera pardus orientalis".
-    private static string ScientificNameMarkupWords(string name) =>
-        string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w is not ("ssp." or "subsp." or "var.")));
 }

@@ -117,7 +117,4 @@ public static class IucnCategories {
     /// Whether taxobox status wikitext is given for this assessment (global assessments only).
     public static bool HasTaxoboxCode(AssessmentRow assessment) =>
         assessment.IsGlobal && !IsEarlierVersionCode(assessment) && HasTaxoboxCode(assessment.Category);
-
-    /// EPBC Act categories as the Act names them.
-    public static string? EpbcLabel(string? code) => BeastieBot3.Shared.SiteData.OtherStatusSystems.EpbcLabel(code);
 }
