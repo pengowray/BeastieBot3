@@ -81,34 +81,13 @@ internal static partial class SiteLinkReaders {
         }
         stats.NatureServeRecords = records.Count;
 
-        var matched = new Dictionary<long, NatureServeRecord>();
-        var unmatched = new List<NatureServeRecord>();
-        foreach (var record in records) {
-            var kingdom = StatusListNameIndex.Kingdom(record.Kingdom);
-            if (index.Find(kingdom, record.ScientificName) is { } taxon) {
-                if (matched.TryAdd(taxon.TaxonId, record)) {
-                    stats.NatureServeByName++;
-                }
-            } else {
-                unmatched.Add(record);
-            }
-        }
-        foreach (var record in unmatched) {
-            var kingdom = StatusListNameIndex.Kingdom(record.Kingdom);
-            var taxon = synonyms.TryGetValue(record.ElementGlobalId, out var names)
-                ? names.Select(n => index.Find(kingdom, n)).FirstOrDefault(t => t is not null && !matched.ContainsKey(t.TaxonId))
-                : null;
-            if (taxon is not null) {
-                matched[taxon.TaxonId] = record;
-                stats.NatureServeBySynonym++;
-            } else if (index.FindByIucnSynonym(kingdom, record.ScientificName) is { } bySynonym && !matched.ContainsKey(bySynonym.TaxonId)) {
-                matched[bySynonym.TaxonId] = record;
-                stats.NatureServeByIucnSynonym++;
-            }
-        }
+        var matches = StatusListMatcher.OnePerTaxon(records, index, r => StatusListNameIndex.Kingdom(r.Kingdom),
+            r => r.ScientificName, r => synonyms.GetValueOrDefault(r.ElementGlobalId));
+        stats.NatureServeByName = matches.Count(m => m.Kind == StatusListMatchKind.Name);
+        stats.NatureServeBySynonym = matches.Count(m => m.Kind == StatusListMatchKind.OtherName);
+        stats.NatureServeByIucnSynonym = matches.Count(m => m.Kind == StatusListMatchKind.IucnSynonym);
 
-        foreach (var (taxonId, record) in matched) {
-            var taxon = index.Taxon(taxonId);
+        foreach (var (taxon, record, _) in matches) {
             var sourceId = record.ElementGlobalId.ToString(CultureInfo.InvariantCulture);
             var listedName = SiteBuildRules.OtherListedName(record.ScientificName, taxon.ScientificName);
             if (OtherStatusSystems.NatureServeRankMeaning(record.RoundedGRank) is not null) {
@@ -194,27 +173,13 @@ internal static partial class SiteLinkReaders {
             }
         }
         stats.NztcsAssessments = rows.Count;
-        var matched = new Dictionary<long, (long Id, string Name, string Status, string? Report)>();
-        var unmatched = new List<(long Id, string Name, string Status, string? Report)>();
-        foreach (var row in rows) {
-            if (index.Find(null, row.Name) is { } taxon) {
-                matched.TryAdd(taxon.TaxonId, row);
-            } else {
-                unmatched.Add(row);
-            }
-        }
-        foreach (var row in unmatched) {
-            if (index.FindByIucnSynonym(null, row.Name) is { } taxon) {
-                matched.TryAdd(taxon.TaxonId, row);
-            }
-        }
-        foreach (var (taxonId, row) in matched) {
-            var taxon = index.Taxon(taxonId);
+        var matches = StatusListMatcher.OnePerTaxon(rows, index, _ => null, r => r.Name);
+        foreach (var (taxon, row, _) in matches) {
             taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Nztcs, row.Status, null,
                 SiteBuildRules.OtherListedName(row.Name, taxon.ScientificName), null, OtherStatusSources.Nztcs,
                 row.Id.ToString(CultureInfo.InvariantCulture), StatusLists.NztcsApi.AssessmentUrl(row.Id), null, row.Report));
         }
-        stats.NztcsMatched = matched.Count;
+        stats.NztcsMatched = matches.Count;
     }
 
     // SALVE: each current assessment goes to the animal taxon with its name, else the one animal
@@ -239,27 +204,13 @@ internal static partial class SiteLinkReaders {
             }
         }
         stats.SalveAssessments = rows.Count;
-        var matched = new Dictionary<long, (string Id, string Name, string Code, string Status, string? AssessedOn, string? Doi)>();
-        var unmatched = new List<(string Id, string Name, string Code, string Status, string? AssessedOn, string? Doi)>();
-        foreach (var row in rows) {
-            if (index.Find("ANIMALIA", row.Name) is { } taxon) {
-                matched.TryAdd(taxon.TaxonId, row);
-            } else {
-                unmatched.Add(row);
-            }
-        }
-        foreach (var row in unmatched) {
-            if (index.FindByIucnSynonym("ANIMALIA", row.Name) is { } taxon) {
-                matched.TryAdd(taxon.TaxonId, row);
-            }
-        }
-        foreach (var (taxonId, row) in matched) {
-            var taxon = index.Taxon(taxonId);
+        var matches = StatusListMatcher.OnePerTaxon(rows, index, _ => "ANIMALIA", r => r.Name);
+        foreach (var (taxon, row, _) in matches) {
             taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Salve, row.Status, row.Code,
                 SiteBuildRules.OtherListedName(row.Name, taxon.ScientificName), null, OtherStatusSources.Salve, row.Id,
                 StatusLists.SalveApi.AssessmentUrl(row.Id, row.Doi), row.AssessedOn));
         }
-        stats.SalveMatched = matched.Count;
+        stats.SalveMatched = matches.Count;
     }
 
     // status_source.fetched_at as yyyy-MM-dd; null when the source has no row.

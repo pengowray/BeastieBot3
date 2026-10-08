@@ -9,7 +9,6 @@ namespace BeastieBot3.SiteBuild;
 internal sealed class StatusListNameIndex {
     private readonly Dictionary<(string Kingdom, string Name), SiteTaxon?> _byName = new();
     private readonly Dictionary<(string Kingdom, string Name), SiteTaxon?> _byIucnSynonym = new();
-    private readonly Dictionary<long, SiteTaxon> _taxa = new();
 
     public StatusListNameIndex(IEnumerable<SiteTaxon> taxa) {
         // Taxa in the release first: a later taxon with the same key only makes the key ambiguous
@@ -17,7 +16,6 @@ internal sealed class StatusListNameIndex {
         var released = new HashSet<(string, string)>();
         var releasedSynonyms = new HashSet<(string, string)>();
         foreach (var taxon in taxa.Where(t => t.Kind != SiteTaxonKind.Subpopulation).OrderBy(t => t.InRelease ? 0 : 1).ThenBy(t => t.TaxonId)) {
-            _taxa[taxon.TaxonId] = taxon;
             var kingdom = taxon.Kingdom?.Trim().ToUpperInvariant() ?? string.Empty;
             Add(_byName, released, (kingdom, Key(taxon.ScientificName)), taxon);
             foreach (var synonym in taxon.IucnSynonyms) {
@@ -37,8 +35,6 @@ internal sealed class StatusListNameIndex {
             map[key] = null;
         }
     }
-
-    public SiteTaxon Taxon(long taxonId) => _taxa[taxonId];
 
     /// The taxon with this scientific name in this kingdom (IUCN's spelling: "ANIMALIA"); with no
     /// kingdom, the one taxon with the name in any kingdom.
