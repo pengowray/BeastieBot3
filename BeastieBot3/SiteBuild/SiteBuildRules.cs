@@ -234,6 +234,60 @@ internal static class SiteBuildRules {
         _ => null,
     };
 
+    /// The name a listing in another list uses, for other_status.listed_name: null when it is the
+    /// taxon's own name, with or without a population or a sense in brackets after it. Rank markers
+    /// ("ssp.", "subsp.", "var.") are ignored, so SPRAT's "Panthera pardus orientalis" is the name of
+    /// IUCN's "Panthera pardus ssp. orientalis".
+    public static string? OtherListedName(string? listedName, string taxonName) {
+        if (NullIfBlank(listedName) is not { } listed) {
+            return null;
+        }
+        var kind = ClassifySpratName(WithoutRankMarkers(listed), WithoutRankMarkers(taxonName)).Kind;
+        return kind is SpratNameKind.Taxon or SpratNameKind.Population ? null : listed;
+    }
+
+    /// A SPRAT date ("25-NOV-2003") as yyyy-MM-dd; null when blank or not a date.
+    public static string? SpratDate(string? text) =>
+        DateTime.TryParseExact(text?.Trim(), "dd-MMM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : null;
+
+    /// A status from an Australian state or territory list as SPRAT gives it, tidied: spacing
+    /// trimmed, known categories in one form of capitals ("Critically endangered" is "Critically
+    /// Endangered"), and a value repeated after a comma given once ("Endangered, Endangered").
+    /// Brackets after a category are kept as they are ("Vulnerable (Extinct in NT)"). Null when blank.
+    public static string? ListStatusText(string? raw) {
+        if (string.IsNullOrWhiteSpace(raw)) {
+            return null;
+        }
+        var parts = new List<string>();
+        foreach (var part in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
+            var collapsed = string.Join(' ', part.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+            var bracket = collapsed.IndexOf(" (", StringComparison.Ordinal);
+            var category = bracket < 0 ? collapsed : collapsed[..bracket];
+            var rest = bracket < 0 ? string.Empty : collapsed[bracket..];
+            var tidied = (ListStatusCategories.TryGetValue(category, out var known) ? known : category) + rest;
+            if (!parts.Contains(tidied, StringComparer.OrdinalIgnoreCase)) {
+                parts.Add(tidied);
+            }
+        }
+        return parts.Count == 0 ? null : string.Join(", ", parts);
+    }
+
+    private static readonly Dictionary<string, string> ListStatusCategories = new(StringComparer.OrdinalIgnoreCase) {
+        ["Extinct"] = "Extinct",
+        ["Presumed Extinct"] = "Presumed Extinct",
+        ["Extinct in the Wild"] = "Extinct in the Wild",
+        ["Critically Endangered"] = "Critically Endangered",
+        ["Endangered"] = "Endangered",
+        ["Vulnerable"] = "Vulnerable",
+        ["Near Threatened"] = "Near Threatened",
+        ["Rare"] = "Rare",
+        ["Threatened"] = "Threatened",
+        ["Conservation Dependent"] = "Conservation Dependent",
+        ["Regionally Conservation Dependent"] = "Regionally Conservation Dependent",
+    };
+
     /// What a SPRAT scientific name says about the taxon whose name it starts with: the whole
     /// taxon ("Phascolarctos cinereus"), one population of it ("Phascolarctos cinereus (combined
     /// populations of Qld, NSW and the ACT)", "Rhinonicteris aurantia (Pilbara form)"), or neither.

@@ -140,6 +140,32 @@ public sealed partial class SiteQueries {
         return rows;
     }
 
+    /// The taxon's statuses in lists other than the IUCN Red List, in the order of
+    /// OtherStatusSystems.All; within a list, the listing of the whole taxon first, then those of
+    /// populations by name.
+    public IReadOnlyList<OtherStatusRow> GetOtherStatuses(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT system, status, listed_name, population, source, source_id, listed_on
+            FROM other_status
+            WHERE taxon_id = @id
+            """;
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        var rows = new List<OtherStatusRow>();
+        while (reader.Read()) {
+            rows.Add(new OtherStatusRow(reader.GetString(0), reader.GetString(1), Text(reader, 2), Text(reader, 3), reader.GetString(4),
+                reader.GetString(5), Text(reader, 6)));
+        }
+        return rows
+            .OrderBy(r => BeastieBot3.Shared.SiteData.OtherStatusSystems.Order(r.System))
+            .ThenBy(r => r.Population is null ? 0 : 1)
+            .ThenBy(r => r.Population, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.SourceId, StringComparer.Ordinal)
+            .ToList();
+    }
+
     /// The EPBC Act listings of these taxa, by taxon id: the listing of the whole taxon first, then
     /// those of populations. Taxa with no listing are left out.
     public IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>> GetEpbcListings(IReadOnlyCollection<long> taxonIds) {

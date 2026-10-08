@@ -107,6 +107,30 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
             "combined populations of Qld, NSW and the ACT" }, rows[1]);
     }
 
+    // other_status: the EPBC Act listing and the state and territory statuses of each profile the
+    // taxon got, with the population of a population's profile. A listed name that is the taxon's own
+    // name, with or without the population, is left out.
+    [Fact]
+    public void Build_StoresTheEpbcAndStateStatusesOfEachProfile() {
+        using var db = OpenReadOnly(Build());
+        var koala = Rows(db, $"""
+            SELECT system, status, listed_name, population, source, source_id, listed_on
+            FROM other_status WHERE taxon_id = {Koala} ORDER BY source_id, system
+            """);
+        var leopard = Rows(db, $"SELECT system, status, listed_name, listed_on FROM other_status WHERE taxon_id = {Leopard} ORDER BY system");
+
+        Assert.Equal(new[] {
+            new object?[] { "au-nsw", "Endangered", null, null, "sprat", "197", null },
+            new object?[] { "au-qld", "Endangered", null, null, "sprat", "197", null },
+            new object?[] { "au-act", "Endangered", null, "combined populations of Qld, NSW and the ACT", "sprat", "85104", null },
+            new object?[] { "au-epbc", "Endangered", null, "combined populations of Qld, NSW and the ACT", "sprat", "85104", "2022-02-12" },
+        }, koala);
+        Assert.Equal(new[] {
+            new object?[] { "au-epbc", "Vulnerable", "Panthera pardus melas", "2000-07-16" },
+            new object?[] { "au-nsw", "Vulnerable", "Panthera pardus melas", null },
+        }, leopard);
+    }
+
     // A listed name that differs from SPRAT's scientific name is stored; a voucher in brackets is
     // not a population; a sense in brackets is the whole taxon.
     [Fact]
@@ -339,14 +363,18 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
             CREATE TABLE import_metadata (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT NOT NULL, redlist_version TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT);
             INSERT INTO import_metadata (filename, redlist_version, started_at) VALUES ('25062026-070407-report.csv', 'x', 'x');
             CREATE TABLE sprat_species (import_id INTEGER NOT NULL, sprat_taxon_id TEXT, scientific_name TEXT, epbc_status TEXT,
-                EPBC_Threatened_Species_Listed_Name TEXT, IUCN_Red_List_Listed_Names TEXT);
+                EPBC_Threatened_Species_Listed_Name TEXT, IUCN_Red_List_Listed_Names TEXT, EPBC_Threatened_Species_Date_Effective TEXT,
+                act_status TEXT, Listed_Name TEXT, nsw_status TEXT, Listed_Name_2 TEXT, qld_status TEXT, Listed_Name_4 TEXT);
             INSERT INTO sprat_species VALUES
-                (1, '197', 'Phascolarctos cinereus', NULL, NULL, 'Phascolarctos cinereus'),
+                (1, '197', 'Phascolarctos cinereus', NULL, NULL, 'Phascolarctos cinereus', NULL,
+                    NULL, NULL, 'Endangered', 'Phascolarctos cinereus', 'endangered ', NULL),
                 (1, '85104', 'Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)', 'Endangered',
-                    'Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)', NULL),
-                (1, '90001', 'Panthera pardus', 'Vulnerable', 'Panthera pardus melas', 'Panthera pardus'),
-                (1, '90002', 'Panthera pardus (A.B.Smith 123)', 'Endangered', NULL, NULL),
-                (1, '90003', 'Bettongia penicillata (sensu lato)', 'Endangered', NULL, NULL);
+                    'Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)', NULL, '12-FEB-2022',
+                    'Endangered', 'Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)', NULL, NULL, NULL, NULL),
+                (1, '90001', 'Panthera pardus', 'Vulnerable', 'Panthera pardus melas', 'Panthera pardus', '16-JUL-2000',
+                    NULL, NULL, 'Vulnerable, vulnerable', NULL, NULL, NULL),
+                (1, '90002', 'Panthera pardus (A.B.Smith 123)', 'Endangered', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+                (1, '90003', 'Bettongia penicillata (sensu lato)', 'Endangered', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
             """);
     }
 

@@ -96,4 +96,21 @@ public static class Html {
 
     /// Position of the first match, or -1.
     public static int IndexOf(string html, string text) => html.IndexOf(text, StringComparison.Ordinal);
+
+    /// The html of the section with this id, from its opening tag to its closing tag; empty when missing.
+    public static string Section(string html, string id) {
+        var start = Regex.Match(html, $"<section[^>]*\\bid=\"{Regex.Escape(id)}\"");
+        if (!start.Success) {
+            return string.Empty;
+        }
+        var to = html.IndexOf("</section>", start.Index, StringComparison.Ordinal);
+        return to < 0 ? html[start.Index..] : html[start.Index..(to + "</section>".Length)];
+    }
+
+    /// The text of each cell (th or td) of each table row in the html, row by row.
+    public static List<string[]> TableRows(string html) =>
+        Regex.Matches(html, "<tr\\b[^>]*>(.*?)</tr>", RegexOptions.Singleline)
+            .Select(row => Regex.Matches(row.Groups[1].Value, "<(th|td)\\b[^>]*>(.*?)</\\1>", RegexOptions.Singleline)
+                .Select(cell => Text(cell.Groups[2].Value)).ToArray())
+            .ToList();
 }

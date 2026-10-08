@@ -931,7 +931,7 @@ abbr[title] {
 
 /* site-data additions */
 
-/* SPRAT profiles in the links section: one item per profile, the EPBC Act listing under its link. */
+/* SPRAT profiles in the links section: one item per profile. */
 .sprat-profiles {
     list-style: none;
     padding: 0;
@@ -939,11 +939,12 @@ abbr[title] {
 }
 
 .sprat-profiles li + li {
-    margin-top: 0.5rem;
+    margin-top: 0.25rem;
 }
 
-.epbc-listing {
-    display: block;
+/* Other conservation statuses: a cell whose source gives no value. */
+.other-statuses .no-value {
+    color: var(--muted);
 }
 
 /* A taxon not in the release: the taxon in the release with the same name. */

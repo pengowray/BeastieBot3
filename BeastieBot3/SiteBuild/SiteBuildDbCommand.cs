@@ -313,6 +313,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("SPRAT profiles of a population of a taxon", s.SpratPopulationProfiles);
         Row("Of those, listed under the EPBC Act", s.EpbcPopulationListings);
         Row("SPRAT names with a voucher or other text in brackets after a taxon's name (not linked)", s.SpratBracketsNotPopulation);
+        Row("Australian state and territory statuses from those SPRAT profiles", s.StateStatuses);
 
         Section("Groups (higher taxa)");
         Row("Groups", s.TreeNodes);

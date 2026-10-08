@@ -119,14 +119,5 @@ public static class IucnCategories {
         assessment.IsGlobal && !IsEarlierVersionCode(assessment) && HasTaxoboxCode(assessment.Category);
 
     /// EPBC Act categories as the Act names them.
-    public static string? EpbcLabel(string? code) => code?.Trim().ToUpperInvariant() switch {
-        null or "" => null,
-        "EX" => "Extinct",
-        "EW" => "Extinct in the wild",
-        "CR" => "Critically Endangered",
-        "EN" => "Endangered",
-        "VU" => "Vulnerable",
-        "CD" => "Conservation Dependent",
-        var other => other,
-    };
+    public static string? EpbcLabel(string? code) => BeastieBot3.Shared.SiteData.OtherStatusSystems.EpbcLabel(code);
 }

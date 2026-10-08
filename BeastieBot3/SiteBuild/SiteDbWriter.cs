@@ -28,6 +28,7 @@ internal sealed class SiteDbWriter : IDisposable {
     private readonly SqliteCommand _name;
     private readonly SqliteCommand _replacedBy;
     private readonly SqliteCommand _epbcListing;
+    private readonly SqliteCommand _otherStatus;
     private readonly SqliteCommand _taxonLink;
     private long _nextNameId = 1;
     private bool _finished;
@@ -87,6 +88,11 @@ internal sealed class SiteDbWriter : IDisposable {
             VALUES (@taxon_id, @sprat_taxon_id, @listed_name, @status, @applies_to, @population)
             """,
             "@taxon_id", "@sprat_taxon_id", "@listed_name", "@status", "@applies_to", "@population");
+        _otherStatus = Prepare("""
+            INSERT INTO other_status (taxon_id, system, status, listed_name, population, source, source_id, listed_on)
+            VALUES (@taxon_id, @system, @status, @listed_name, @population, @source, @source_id, @listed_on)
+            """,
+            "@taxon_id", "@system", "@status", "@listed_name", "@population", "@source", "@source_id", "@listed_on");
         _taxonLink = Prepare("INSERT INTO taxon_link (taxon_id, current_taxon_id, link_kind) VALUES (@taxon_id, @current_taxon_id, @link_kind)",
             "@taxon_id", "@current_taxon_id", "@link_kind");
     }
@@ -128,6 +134,12 @@ internal sealed class SiteDbWriter : IDisposable {
     public void AddEpbcListing(long taxonId, EpbcListing listing) {
         Bind(_epbcListing, taxonId, listing.SpratTaxonId, listing.ListedName, listing.Status, listing.AppliesTo, listing.Population);
         _epbcListing.ExecuteNonQuery();
+    }
+
+    public void AddOtherStatus(long taxonId, OtherStatus status) {
+        Bind(_otherStatus, taxonId, status.System, status.Status, status.ListedName, status.Population, status.Source,
+            status.SourceId, status.ListedOn);
+        _otherStatus.ExecuteNonQuery();
     }
 
     public void AddAssessment(SiteAssessment a) {
@@ -327,6 +339,7 @@ internal sealed class SiteDbWriter : IDisposable {
         _name.Dispose();
         _replacedBy.Dispose();
         _epbcListing.Dispose();
+        _otherStatus.Dispose();
         _taxonLink.Dispose();
         if (!_finished && _transaction is not null) {
             try {

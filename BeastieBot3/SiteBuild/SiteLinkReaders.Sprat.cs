@@ -1,15 +1,33 @@
 using System.Globalization;
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Sprat;
 using BeastieBot3.Infrastructure;
 
-// SPRAT for `site build-db`: the EPBC Act listings of each taxon and its populations.
+// SPRAT for `site build-db`: the EPBC Act listings of each taxon and its populations, and their
+// Australian state and territory statuses.
 
 namespace BeastieBot3.SiteBuild;
 
 internal static partial class SiteLinkReaders {
     // ------------------------------------------------------------ SPRAT
 
-    /// Fills each taxon's EpbcListings; returns the report file the SPRAT database was imported from.
+    /// The SPRAT columns of each state and territory list: the status, and the name the list uses.
+    /// The listed-name columns have no header of their own in the report ("Listed Name" after each
+    /// status), so the importer numbers them in report order.
+    internal static readonly IReadOnlyList<(string System, string StatusColumn, string ListedNameColumn)> SpratStateColumns = [
+        (OtherStatusSystems.AustralianCapitalTerritory, SpratColumns.ActStatus, "Listed_Name"),
+        (OtherStatusSystems.NewSouthWales, SpratColumns.NswStatus, "Listed_Name_2"),
+        (OtherStatusSystems.NorthernTerritory, SpratColumns.NtStatus, "Listed_Name_3"),
+        (OtherStatusSystems.Queensland, SpratColumns.QldStatus, "Listed_Name_4"),
+        (OtherStatusSystems.SouthAustralia, SpratColumns.SaStatus, "Listed_Name_5"),
+        (OtherStatusSystems.Tasmania, SpratColumns.TasStatus, "Listed_Name_6"),
+        (OtherStatusSystems.Victoria, SpratColumns.VicStatus, "Listed_Name_7"),
+        (OtherStatusSystems.WesternAustralia, SpratColumns.WaStatus, "Listed_Name_8"),
+    ];
+
+    /// Fills each taxon's EpbcListings and OtherStatuses (the EPBC Act listing and the state and
+    /// territory statuses of each SPRAT profile it gets); returns the report file the SPRAT database
+    /// was imported from.
     /// A name shared by several taxa goes to the taxon in the release with the lowest id, else the
     /// lowest id of the others. A database with no sprat_species table, or one without the SPRAT id,
     /// scientific name or EPBC status column, gives no listings and a warning. A missing IUCN listed
@@ -46,12 +64,16 @@ internal static partial class SiteLinkReaders {
         // The profile for the whole taxon: an exact scientific name match beats a sense in brackets,
         // which beats a listed-name match; then a profile with an EPBC listing; then the lowest SPRAT id.
         var best = new Dictionary<long, (int Rank, EpbcListing Listing)>();
+        var profileStatuses = new Dictionary<long, SpratStatuses>();
         var populations = new Dictionary<long, List<EpbcListing>>();
         using (var command = connection.CreateCommand()) {
+            var stateColumns = string.Concat(SpratStateColumns.Select(c =>
+                $", {columns.Select(c.StatusColumn)}, {columns.Select(c.ListedNameColumn)}"));
             command.CommandText = $"""
                 SELECT {columns.Select(SpratColumns.SpratTaxonId)}, {columns.Select(SpratColumns.ScientificName)},
                        {columns.Select(SpratColumns.EpbcStatus)}, {columns.Select(SpratColumns.IucnListedName)},
-                       {columns.Select(SpratColumns.EpbcListedName)}
+                       {columns.Select(SpratColumns.EpbcListedName)}, {columns.Select(SpratColumns.EpbcDateEffective)}
+                       {stateColumns}
                 FROM {SpratTableColumns.Quote(SpratColumns.Table)}
                 """;
             using var reader = command.ExecuteReader();
@@ -63,6 +85,7 @@ internal static partial class SiteLinkReaders {
                 var epbc = SiteBuildRules.EpbcCode(reader.IsDBNull(2) ? null : reader.GetString(2));
                 var scientificName = SiteBuildRules.NullIfBlank(reader.IsDBNull(1) ? null : reader.GetString(1));
                 var listedName = SiteBuildRules.NullIfBlank(reader.IsDBNull(4) ? null : reader.GetString(4)) ?? scientificName;
+                profileStatuses[spratId] = ReadSpratStatuses(reader, epbc);
 
                 // A population of a taxon: the taxon's name with the population in brackets.
                 SiteTaxon? populationOf = null;
@@ -120,6 +143,7 @@ internal static partial class SiteLinkReaders {
         }
         foreach (var (taxonId, (_, listing)) in best) {
             taxa[taxonId].EpbcListings.Add(listing);
+            AddOtherStatuses(taxa[taxonId], listing);
             stats.SpratMatched++;
             if (listing.Status is not null) {
                 stats.EpbcStatuses++;
@@ -132,10 +156,30 @@ internal static partial class SiteLinkReaders {
                     continue;
                 }
                 taxon.EpbcListings.Add(listing);
+                AddOtherStatuses(taxon, listing);
                 stats.SpratPopulationProfiles++;
                 if (listing.Status is not null) {
                     stats.EpbcPopulationListings++;
                 }
+            }
+        }
+
+        // The EPBC Act listing and the state and territory statuses of each profile a taxon got.
+        void AddOtherStatuses(SiteTaxon taxon, EpbcListing listing) {
+            if (!profileStatuses.TryGetValue(listing.SpratTaxonId, out var statuses)) {
+                return;
+            }
+            var sourceId = listing.SpratTaxonId.ToString(CultureInfo.InvariantCulture);
+            if (OtherStatusSystems.EpbcLabel(listing.Status) is { } epbcLabel) {
+                taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Epbc, epbcLabel,
+                    SiteBuildRules.OtherListedName(listing.ListedName, taxon.ScientificName),
+                    listing.Population, OtherStatusSources.Sprat, sourceId, statuses.EpbcListedOn));
+            }
+            foreach (var (system, status, stateListedName) in statuses.States) {
+                taxon.OtherStatuses.Add(new OtherStatus(system, status,
+                    SiteBuildRules.OtherListedName(stateListedName ?? listing.ListedName, taxon.ScientificName),
+                    listing.Population, OtherStatusSources.Sprat, sourceId, null));
+                stats.StateStatuses++;
             }
         }
 
@@ -146,5 +190,24 @@ internal static partial class SiteLinkReaders {
         using var file = connection.CreateCommand();
         file.CommandText = "SELECT filename FROM import_metadata ORDER BY id DESC LIMIT 1";
         return file.ExecuteScalar() is string fileName ? Path.GetFileName(fileName.Trim()) : null;
+    }
+
+    /// The date the EPBC listing took effect and the state and territory statuses of one SPRAT row.
+    private sealed record SpratStatuses(string? EpbcListedOn, List<(string System, string Status, string? ListedName)> States);
+
+    // Columns 5 on of the query in ReadSprat: the EPBC date, then a status and a listed name for
+    // each list in SpratStateColumns.
+    private static SpratStatuses ReadSpratStatuses(Microsoft.Data.Sqlite.SqliteDataReader reader, string? epbc) {
+        var listedOn = epbc is null ? null : SiteBuildRules.SpratDate(reader.IsDBNull(5) ? null : reader.GetString(5));
+        var states = new List<(string, string, string?)>();
+        for (var i = 0; i < SpratStateColumns.Count; i++) {
+            var status = SiteBuildRules.ListStatusText(reader.IsDBNull(6 + 2 * i) ? null : reader.GetString(6 + 2 * i));
+            if (status is null) {
+                continue;
+            }
+            var stateName = SiteBuildRules.NullIfBlank(reader.IsDBNull(7 + 2 * i) ? null : reader.GetString(7 + 2 * i));
+            states.Add((SpratStateColumns[i].System, status, stateName));
+        }
+        return new SpratStatuses(listedOn, states);
     }
 }

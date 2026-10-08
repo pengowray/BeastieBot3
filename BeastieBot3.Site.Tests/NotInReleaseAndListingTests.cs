@@ -127,26 +127,50 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
     [Fact]
     public async Task KoalaShowsBothSpratProfiles_AndThePopulationTheListingAppliesTo() {
         var html = (await _client.GetStringAsync($"/species/{FixtureDb.Koala}")).Replace("&#x27;", "'");
-        var text = Html.Text(html);
 
         Assert.Contains("<abbr title=\"Species Profile and Threats Database, Australian Government\">SPRAT profiles</abbr>", html);
         Assert.Contains($"<a href=\"https://www.environment.gov.au/cgi-bin/sprat/public/publicspecies.pl?taxon_id={FixtureDb.KoalaSprat}\"><i>Phascolarctos cinereus</i></a>", html);
         Assert.Contains($"<a href=\"https://www.environment.gov.au/cgi-bin/sprat/public/publicspecies.pl?taxon_id={FixtureDb.KoalaPopulationSprat}\"><i>Phascolarctos cinereus</i> (combined populations of Qld, NSW and the ACT)</a>", html);
-        Assert.Contains("Listed as Endangered under Australia's <abbr title=\"Environment Protection and Biodiversity Conservation Act 1999\">EPBC Act</abbr>.", html);
-        Assert.Contains("Listed as Endangered under Australia's EPBC Act. This listing applies only to the combined populations of Qld, NSW and the ACT.", text);
-        // The listing follows the population's profile, not the species'.
-        Assert.True(Html.IndexOf(html, $"taxon_id={FixtureDb.KoalaPopulationSprat}") < Html.IndexOf(html, "Listed as Endangered"));
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "Listed as "));
+    }
+
+    // Other conservation statuses: one table per country, the EPBC Act first, then the states in
+    // alphabetical order; the population a listing applies to, else the whole species.
+    [Fact]
+    public async Task KoalaShowsItsEpbcAndStateStatuses() {
+        var html = (await _client.GetStringAsync($"/species/{FixtureDb.Koala}")).Replace("&#x27;", "'");
+        var section = Html.Section(html, "other-statuses");
+        var rows = Html.TableRows(section);
+
+        Assert.Contains("<h2 id=\"other-statuses-heading\">Other conservation statuses</h2>", section);
+        Assert.Contains("<h3>Australia</h3>", section);
+        Assert.Equal(new[] { "List", "Status", "Applies to", "In effect from", "Source" }, rows[0]);
+        Assert.Equal(new[] { "EPBC Act", "Endangered", "combined populations of Qld, NSW and the ACT", "12 February 2022", "SPRAT profile" }, rows[1]);
+        Assert.Equal(new[] { "Australian Capital Territory", "Endangered", "combined populations of Qld, NSW and the ACT", "not given", "SPRAT profile" }, rows[2]);
+        Assert.Equal(new[] { "New South Wales", "Endangered", "whole species", "not given", "SPRAT profile" }, rows[3]);
+        Assert.Equal(new[] { "Queensland", "Endangered", "whole species", "not given", "SPRAT profile" }, rows[4]);
+        Assert.Contains("<abbr title=\"Environment Protection and Biodiversity Conservation Act 1999\">EPBC Act</abbr>", section);
+        Assert.Contains($"publicspecies.pl?taxon_id={FixtureDb.KoalaPopulationSprat}\">SPRAT profile</a>", section);
+        Assert.Contains("All Australian statuses are from SPRAT", Html.Text(section));
+        // The section comes after the IUCN sections and before the names.
+        Assert.True(Html.IndexOf(html, "id=\"other-statuses\"") < Html.IndexOf(html, "id=\"names-heading\""));
     }
 
     [Fact]
     public async Task ListingUnderAnotherNameSaysTheName() {
         var html = (await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}")).Replace("&#x27;", "'");
-        var text = Html.Text(html);
+        var section = Html.Section(html, "other-statuses");
+        var rows = Html.TableRows(section);
 
         Assert.Contains("<abbr title=\"Species Profile and Threats Database, Australian Government\">SPRAT profile</abbr>", html);
-        Assert.Contains("Listed as Endangered under Australia's EPBC Act. The listing uses the name Casuarius casuarius johnsonii.", text);
-        Assert.Contains("<span class=\"sci-name\"><i>Casuarius casuarius johnsonii</i></span>", html);
+        Assert.Equal(new[] { "List", "Status", "Name in list", "In effect from", "Source" }, rows[0]);
+        Assert.Equal(new[] { "EPBC Act", "Endangered", "Casuarius casuarius johnsonii", "16 July 1999", "SPRAT profile" }, rows[1]);
+        Assert.Contains("<span class=\"sci-name\"><i>Casuarius casuarius johnsonii</i></span>", section);
+    }
+
+    [Fact]
+    public async Task TaxonWithNoOtherStatusHasNoSection() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Lion}");
+        Assert.DoesNotContain("other-statuses", html);
     }
 
     // ------------------------------------------------------------ DOI found at doi.org

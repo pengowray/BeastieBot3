@@ -16,7 +16,8 @@ using Spectre.Console;
 //      list of IUCN DOIs or at doi.org. Also the Wikidata items for assessments.
 //   5. IUCN API assessment payloads: citation parts; the assessment rows are written here.
 //   6. Common names store: English names, the best English name, CoL synonyms.
-//   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT.
+//   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT
+//      (with the EPBC Act and state and territory statuses of its profiles).
 //   8. Parents, then the taxon, name and taxon link rows, then meta.
 //   9. Name keys, indexes, full-text index, ANALYZE, VACUUM.
 //
@@ -184,7 +185,8 @@ internal sealed class SiteDbBuild {
         Optional("SPRAT database", _inputs.SpratDatabase, path => {
             _stats.SpratReport = SiteLinkReaders.ReadSprat(path, taxa, _stats, ct);
             return $"{_stats.SpratMatched:N0} taxa matched by name, {_stats.EpbcStatuses:N0} with an EPBC status, "
-                + $"{_stats.SpratPopulationProfiles:N0} population profiles ({_stats.EpbcPopulationListings:N0} listed)";
+                + $"{_stats.SpratPopulationProfiles:N0} population profiles ({_stats.EpbcPopulationListings:N0} listed), "
+                + $"{_stats.StateStatuses:N0} state and territory statuses";
         });
 
         // 8. Parents, the tree of groups and list links, then taxa, names, meta.
@@ -231,6 +233,9 @@ internal sealed class SiteDbBuild {
                 writer.AddTaxon(taxon);
                 foreach (var listing in taxon.EpbcListings) {
                     writer.AddEpbcListing(taxon.TaxonId, listing);
+                }
+                foreach (var status in taxon.OtherStatuses) {
+                    writer.AddOtherStatus(taxon.TaxonId, status);
                 }
                 WriteNames(writer, taxon);
             }

@@ -439,6 +439,11 @@ public static class FixtureDb {
         w.EpbcListing(Koala, KoalaSprat, "Phascolarctos cinereus", null, "taxon", null);
         w.EpbcListing(Koala, KoalaPopulationSprat, "Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)", "EN", "population",
             "combined populations of Qld, NSW and the ACT");
+        // As SPRAT gives them: the states list the whole species, the EPBC Act and the ACT the population.
+        w.OtherStatus(Koala, "au-epbc", "Endangered", null, "combined populations of Qld, NSW and the ACT", "sprat", KoalaPopulationSprat.ToString(), "2022-02-12");
+        w.OtherStatus(Koala, "au-nsw", "Endangered", null, null, "sprat", KoalaSprat.ToString(), null);
+        w.OtherStatus(Koala, "au-qld", "Endangered", null, null, "sprat", KoalaSprat.ToString(), null);
+        w.OtherStatus(Koala, "au-act", "Endangered", null, "combined populations of Qld, NSW and the ACT", "sprat", KoalaPopulationSprat.ToString(), null);
         w.Assessment(KoalaLatest, Koala, "Global", true, "VU", criteria: "A2bc", criteriaVersion: "3.1", year: 2016, date: "2014-07-08",
             trend: "Decreasing", wikidataItem: KoalaLatestItem, wikidataItemProperties: "P31 P1476 P1433 P921 P953 P577 P356 P2093 Len");
         w.Name(Koala, "Phascolarctos cinereus", "scientific", null, "iucn");
@@ -457,6 +462,8 @@ public static class FixtureDb {
                 doi: "10.2305/IUCN.UK.2016-3.RLTS.T22678108A155429591.en", doiSource: DoiSource.Gbif, text: null),
             wikidataItem: CassowaryLatestItem, wikidataItemProperties: "P31 P1476 P1433 P953 P356 P2093 Len");
         w.EpbcListing(Cassowary, CassowarySprat, "Casuarius casuarius johnsonii", "EN", "taxon", null);
+        w.OtherStatus(Cassowary, "au-epbc", "Endangered", "Casuarius casuarius johnsonii", null, "sprat", CassowarySprat.ToString(), "1999-07-16");
+        w.OtherStatus(Cassowary, "au-qld", "Endangered", "Casuarius casuarius johnsonii", null, "sprat", CassowarySprat.ToString(), null);
         w.Name(Cassowary, "Casuarius casuarius", "scientific", null, "iucn");
 
         // Leopard and the Amur leopard, which is not in the release.
@@ -811,6 +818,14 @@ public static class FixtureDb {
                 VALUES (@a, @b, @c, @d, @e, @f)
                 """,
                 taxonId, spratId, listedName, status, appliesTo, population);
+
+        public void OtherStatus(long taxonId, string system, string status, string? listedName, string? population, string source,
+            string sourceId, string? listedOn) =>
+            Run("""
+                INSERT INTO other_status(taxon_id, system, status, listed_name, population, source, source_id, listed_on)
+                VALUES (@a, @b, @c, @d, @e, @f, @g, @h)
+                """,
+                taxonId, system, status, listedName, population, source, sourceId, listedOn);
 
         public void Assessment(long id, long taxonId, string scope, bool latest, string category, bool possiblyExtinct = false,
             string? criteria = null, string? criteriaVersion = null, int? year = null, string? date = null, string? trend = null,

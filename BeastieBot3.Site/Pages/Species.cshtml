@@ -436,6 +436,48 @@
     </section>
 }
 
+@if (Model.OtherStatuses.Count > 0) {
+    var showAppliesTo = Model.OtherStatuses.Any(r => r.Population is not null);
+    var showListedName = Model.OtherStatuses.Any(r => r.ListedName is not null);
+    var showListedOn = Model.OtherStatuses.Any(r => r.ListedOn is not null);
+    <section class="other-statuses" id="other-statuses" aria-labelledby="other-statuses-heading">
+        <h2 id="other-statuses-heading">@SiteText.HeadingOtherStatuses</h2>
+        <p>@SiteText.OtherStatusesIntro</p>
+        @foreach (var country in Model.OtherStatuses.GroupBy(r => BeastieBot3.Shared.SiteData.OtherStatusSystems.Find(r.System)?.Country ?? "")) {
+            <h3>@SiteText.OtherStatusCountry(country.Key)</h3>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">@SiteText.ColOtherList</th>
+                            <th scope="col">@SiteText.ColOtherStatus</th>
+                            @if (showAppliesTo) {<th scope="col">@SiteText.ColOtherAppliesTo</th>}
+                            @if (showListedName) {<th scope="col" title="@SiteText.ColOtherListedNameTitle">@SiteText.ColOtherListedName</th>}
+                            @if (showListedOn) {<th scope="col">@SiteText.ColOtherListedOn</th>}
+                            <th scope="col">@SiteText.ColOtherSource</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in country) {
+                            <tr>
+                                <th scope="row">@if (row.System == BeastieBot3.Shared.SiteData.OtherStatusSystems.Epbc) {<abbr title="@SiteText.EpbcFullName">@SiteText.EpbcAbbr</abbr>} else {@SiteText.OtherStatusList(row.System)}</th>
+                                <td>@row.Status</td>
+                                @if (showAppliesTo) {<td>@(row.Population ?? SiteText.OtherStatusWholeTaxon(taxon.Kind))</td>}
+                                @if (showListedName) {<td>@if (row.ListedName is { } listedName) {<span class="sci-name">@Html.Raw(SpeciesModel.ListedNameHtml(listedName))</span>}</td>}
+                                @if (showListedOn) {<td>@if (row.ListedOn is { } listedOn) {@SiteFormat.Date(listedOn)} else {<span class="no-value">@SiteText.OtherStatusNoDate</span>}</td>}
+                                <td>@if (row.Source == BeastieBot3.Shared.SiteData.OtherStatusSources.Sprat && long.TryParse(row.SourceId, out var spratId)) {<a href="@SiteFormat.SpratUrl(spratId)">@SiteText.OtherStatusSourceLink(row.Source)</a>} else {@SiteText.OtherStatusSourceLink(row.Source)}</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (Model.OtherStatuses.Any(r => r.Source == BeastieBot3.Shared.SiteData.OtherStatusSources.Sprat)) {
+            <p class="help">@SiteText.OtherStatusSpratNote(Model.SpratReportDate)</p>
+        }
+    </section>
+}
+
 <section class="related" id="related" aria-labelledby="related-heading">
 @if (Model.IsSpecies) {
     var kinds = Model.RelatedTaxa.Select(r => r.Taxon.Kind).ToHashSet();
@@ -610,18 +652,7 @@
                         if (listing.IsPopulation && listing.Population is { } population) {
                             nameHtml += " (" + SiteHtml.Encode(population) + ")";
                         }
-                        var listedUnderOtherName = Model.ListedUnderOtherName(listing);
-                        <li>
-                            <a href="@SiteFormat.SpratUrl(listing.SpratTaxonId)">@Html.Raw(nameHtml)</a>
-                            @if (IucnCategories.EpbcLabel(listing.Status) is { } epbc) {
-                                <span class="epbc-listing">@SiteText.EpbcBefore(epbc)<abbr title="@SiteText.EpbcFullName">@SiteText.EpbcAbbr</abbr>@SiteText.EpbcAfter
-                                @if (listing.IsPopulation && listing.Population is { } listedPopulation) {
-                                    @SiteText.EpbcPopulationOnly(listedPopulation)
-                                } else if (listedUnderOtherName) {
-                                    @SiteText.EpbcListedNameBefore<span class="sci-name">@Html.Raw(SpeciesModel.ListedNameHtml(listing.ListedName))</span>@SiteText.EpbcAfter
-                                }</span>
-                            }
-                        </li>
+                        <li><a href="@SiteFormat.SpratUrl(listing.SpratTaxonId)">@Html.Raw(nameHtml)</a></li>
                     }
                 </ul>
             </dd>

@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 22;
+    public const int Version = 23;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -160,6 +160,23 @@ public static class SiteDbSchema {
             population     TEXT,                              -- applies_to = 'population': the text in brackets after the taxon's name
             PRIMARY KEY (taxon_id, sprat_taxon_id)
         ) WITHOUT ROWID;
+
+        -- The taxon's statuses in lists other than the IUCN Red List: Australia's EPBC Act and the
+        -- Australian state and territory lists, as SPRAT records them. One row per listing. The EPBC
+        -- Act listings are in epbc_listing too, which the status update page reads.
+        CREATE TABLE other_status (
+            taxon_id    INTEGER NOT NULL,
+            system      TEXT NOT NULL,                        -- OtherStatusSystems key: 'au-epbc', 'au-act', 'au-nsw', 'au-nt', 'au-qld',
+                                                              -- 'au-sa', 'au-tas', 'au-vic', 'au-wa'
+            status      TEXT NOT NULL,                        -- as the list writes it, with spacing, capitals and repeated values tidied:
+                                                              -- 'Endangered', 'Rare', 'Vulnerable (Extinct in NT)'
+            listed_name TEXT,                                 -- the scientific name the listing uses, when the source gives one
+            population  TEXT,                                 -- the population the listing covers; NULL for the whole taxon
+            source      TEXT NOT NULL,                        -- OtherStatusSources: 'sprat'
+            source_id   TEXT NOT NULL,                        -- the record's id in the source: the SPRAT taxon id
+            listed_on   TEXT                                  -- the date the listing took effect (yyyy-mm-dd), when the source gives it
+        );
+        CREATE INDEX other_status_taxon ON other_status(taxon_id);
 
         -- The countries and parts of countries (areas) that the latest global assessments code, for
         -- the status update page's comparison of a list with one area. Hash-coded regions ("Europe")

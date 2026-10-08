@@ -106,6 +106,9 @@ internal sealed class SiteTaxon {
     /// SPRAT profiles and EPBC Act listings (epbc_listing rows).
     public List<EpbcListing> EpbcListings { get; } = new();
 
+    /// Statuses in lists other than the IUCN Red List (other_status rows).
+    public List<OtherStatus> OtherStatuses { get; } = new();
+
     /// The API's taxon record lists the species of an infraspecific taxon (species_taxa); used for
     /// the parent when the CSV has no species of that name.
     public long? ApiSpeciesId { get; set; }
@@ -135,6 +138,12 @@ internal static class EpbcAppliesTo {
 /// listed. Population: for a profile named after the taxon with a population in brackets, the text
 /// in the brackets ("combined populations of Qld, NSW and the ACT").
 internal sealed record EpbcListing(long SpratTaxonId, string ListedName, string? Status, string AppliesTo, string? Population);
+
+/// One status of a taxon in a list other than the IUCN Red List (other_status). System: an
+/// OtherStatusSystems key. Population: the population the listing covers, null for the whole taxon.
+/// ListedOn: yyyy-MM-dd.
+internal sealed record OtherStatus(string System, string Status, string? ListedName, string? Population, string Source,
+    string SourceId, string? ListedOn);
 
 /// One assessment row to write. The CSV gives the latest assessments; the API headers add the
 /// earlier ones, whose trend and criteria version come from the payload.
@@ -319,6 +328,8 @@ internal sealed class SiteBuildStats {
     /// SPRAT rows named after a taxon with something in brackets that is not a population: a
     /// voucher or a sense ("sensu lato").
     public int SpratBracketsNotPopulation;
+    /// Australian state and territory statuses written to other_status (from the SPRAT profiles above).
+    public int StateStatuses;
 
     /// Taxa only in the API cache (not in the CSV export), by kind; and their API headers flagged
     /// latest, which are stored as earlier assessments.

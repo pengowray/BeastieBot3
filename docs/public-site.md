@@ -195,6 +195,20 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   (N.Gibson TOI345)"); a sense in brackets, such as "sensu lato", means the whole taxon. When a
   taxon in the release and an old id have the same name, the profile goes to the taxon in the
   release.
+- `other_status` (schema 23) has one row per status of a taxon in a list other than the IUCN Red
+  List. For now every row comes from SPRAT: the EPBC Act listing (system `au-epbc`, also in
+  `epbc_listing`, with the date the listing took effect from `EPBC_Threatened_Species_Date_Effective`)
+  and the eight state and territory columns (`au-act` to `au-wa`, `SiteLinkReaders.SpratStateColumns`)
+  of each profile in `epbc_listing`. `population` is the population of a population's profile.
+  `listed_name` is set only when the listing's name is not the taxon's own name
+  (`SiteBuildRules.OtherListedName`). State statuses are tidied by `SiteBuildRules.ListStatusText`
+  (spacing, capitals of known categories, a value repeated after a comma). The species page shows
+  them in the "Other conservation statuses" section, one table per country, in the order of
+  `OtherStatusSystems.All` (in `BeastieBot3.Shared`), with the date of the SPRAT report. The SPRAT
+  report's state columns are headed with the acts SPRAT names ("NSW TSC Act and FM Act", "Vic. FFG
+  Act (Advisory Lists)", "WA WC Act"), some of them since replaced, so the page names the state and
+  says the statuses may differ from the states' current lists. A later source (NatureServe, the US
+  Fish and Wildlife Service's ECOS) adds rows with its own `source` and `system` keys.
 - The latest assessments come from the CSV export, which holds exactly one Red List release. Earlier
   assessments come from the list of assessments in each taxon's cached API response (the
   `assessments` array of the taxa JSON, read by `IucnTaxaHeaders`). Take the `latest` flag from that

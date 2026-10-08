@@ -321,4 +321,36 @@ public class SiteBuildRulesTests {
         Assert.True(names.Add("Sea bear", "common", "en", SiteNameSource.WikipediaTaxobox));
         Assert.Equal(new[] { "wikipedia", "wikipedia-taxobox" }, names.Names.Select(n => n.Source));
     }
+
+    [Theory]
+    [InlineData("Endangered", "Endangered")]
+    [InlineData("Critically Endangered ", "Critically Endangered")]
+    [InlineData("Critically endangered", "Critically Endangered")]
+    [InlineData("Extinct in the wild", "Extinct in the Wild")]
+    [InlineData("Endangered, Endangered", "Endangered")]
+    [InlineData("Vulnerable, Rare", "Vulnerable, Rare")]
+    [InlineData("Vulnerable (Extinct in NT)", "Vulnerable (Extinct in NT)")]
+    [InlineData("endangered (extinct in Victoria)", "Endangered (extinct in Victoria)")]
+    [InlineData("Other protected fauna", "Other protected fauna")]
+    [InlineData("  ", null)]
+    [InlineData(null, null)]
+    public void ListStatusText_TidiesSpratStateStatuses(string? raw, string? expected) =>
+        Assert.Equal(expected, SiteBuildRules.ListStatusText(raw));
+
+    [Theory]
+    [InlineData("25-NOV-2003", "2003-11-25")]
+    [InlineData("05-May-2016", "2016-05-05")]
+    [InlineData("2016", null)]
+    [InlineData("", null)]
+    public void SpratDate_ReadsSpratsDates(string? text, string? expected) =>
+        Assert.Equal(expected, SiteBuildRules.SpratDate(text));
+
+    [Theory]
+    [InlineData("Phascolarctos cinereus", "Phascolarctos cinereus", null)]
+    [InlineData("Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)", "Phascolarctos cinereus", null)]
+    [InlineData("Panthera pardus orientalis", "Panthera pardus ssp. orientalis", null)]
+    [InlineData("Casuarius casuarius johnsonii", "Casuarius casuarius", "Casuarius casuarius johnsonii")]
+    [InlineData(" ", "Casuarius casuarius", null)]
+    public void OtherListedName_IsNullForTheTaxonsOwnName(string? listed, string taxon, string? expected) =>
+        Assert.Equal(expected, SiteBuildRules.OtherListedName(listed, taxon));
 }

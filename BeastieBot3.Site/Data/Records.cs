@@ -106,6 +106,12 @@ public sealed record EpbcListingRow(long SpratTaxonId, string ListedName, string
     public bool IsPopulation => AppliesTo == "population";
 }
 
+/// One status of a taxon in a list other than the IUCN Red List (other_status). System: an
+/// OtherStatusSystems key. ListedName: the name the listing uses, only when it is not the taxon's
+/// own name. Population: null for a listing of the whole taxon. ListedOn: yyyy-MM-dd.
+public sealed record OtherStatusRow(string System, string Status, string? ListedName, string? Population, string Source,
+    string SourceId, string? ListedOn);
+
 /// One search result: the taxon and the name that matched best.
 /// IsStrongExactMatch: an exact match on the taxon's scientific name, a synonym, its English name
 /// for display (common_name_en) or the title of its English Wikipedia article. An exact match on any
