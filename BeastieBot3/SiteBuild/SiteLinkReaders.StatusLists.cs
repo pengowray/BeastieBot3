@@ -196,7 +196,7 @@ internal sealed class StatusListNameIndex {
         // when it is in the release too.
         var released = new HashSet<(string, string)>();
         var releasedSynonyms = new HashSet<(string, string)>();
-        foreach (var taxon in taxa.Where(t => t.Kind != "subpopulation").OrderBy(t => t.InRelease ? 0 : 1).ThenBy(t => t.TaxonId)) {
+        foreach (var taxon in taxa.Where(t => t.Kind != SiteTaxonKind.Subpopulation).OrderBy(t => t.InRelease ? 0 : 1).ThenBy(t => t.TaxonId)) {
             _taxa[taxon.TaxonId] = taxon;
             var kingdom = taxon.Kingdom?.Trim().ToUpperInvariant() ?? string.Empty;
             Add(_byName, released, (kingdom, Key(taxon.ScientificName)), taxon);

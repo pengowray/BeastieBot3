@@ -15,6 +15,9 @@ public static partial class SiteText {
     public const string ColOtherListedName = "Name in list";
     public const string ColOtherListedNameTitle = "Shown when the list uses a different scientific name from this page.";
     public const string ColOtherListedOn = "In effect from";
+    /// In place of ColOtherListedOn in a table with ECOS rows: ECOS gives the date of the first listing.
+    public const string ColOtherFirstListed = "First listed";
+    public const string ColOtherFirstListedTitle = "ECOS gives the date the species or population was first listed. The status may have changed since then.";
     public const string ColOtherSource = "Source";
 
     /// In the "In effect from" column, for a listing whose source gives no date.

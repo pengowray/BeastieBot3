@@ -182,13 +182,15 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
             new[] { "List", "Status", "Source" },
             new[] { "COSEWIC", "Special Concern", "NatureServe Explorer" },
             new[] { "Species at Risk Act", "Special Concern", "NatureServe Explorer" },
-            new[] { "List", "Status", "In effect from", "Source" },
+            new[] { "List", "Status", "First listed", "Source" },
             new[] { "Endangered Species Act", "Threatened", "15 May 2008", "ECOS profile" },
             new[] { "List", "Status", "Source" },
             new[] { "NatureServe", "G3G4 Vulnerable (rounded rank G3)", "NatureServe Explorer" },
         }, rows);
         Assert.Contains("<abbr title=\"Committee on the Status of Endangered Wildlife in Canada, an independent committee that assesses species\">COSEWIC</abbr>", section);
         Assert.Contains("<a href=\"https://ecos.fws.gov/ecp/species/4958\">ECOS profile</a>", section);
+        // ECOS's date is the first listing, which a later change of status leaves as it is.
+        Assert.Contains("<th scope=\"col\" title=\"ECOS gives the date the species or population was first listed. The status may have changed since then.\">First listed</th>", section);
         Assert.Contains("United States statuses are from ECOS, the US Fish and Wildlife Service's Environmental Conservation Online System, downloaded on 7 October 2026.", text);
         Assert.Contains("Canadian statuses and NatureServe global ranks are from NatureServe Explorer (© NatureServe, CC BY 4.0), downloaded on 8 October 2026. "
             + "NatureServe's copy of the Canadian statuses may differ from Canada's Species at Risk Public Registry.", text);

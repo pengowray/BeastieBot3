@@ -219,7 +219,9 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   `ca-cosewic` (the code as COSEWIC's words, `OtherStatusSystems.CosewicLabel`) and `ca-sara` (the
   English part). Each ECOS listing goes to the taxon of its scientific name, of another name its
   brackets give, or of an IUCN synonym, as `us-esa` with the listing date; its entity description
-  is the population unless it is "Wherever found". In the build of 8 October 2026: 14,058 taxa
+  is the population unless it is "Wherever found". ECOS's listing date is the date the taxon or
+  population was first listed, not the date of its current status (the humpback chub, Threatened
+  since 2021, has 11 March 1967), so a table with ECOS dates heads the column "First listed". In the build of 8 October 2026: 14,058 taxa
   matched to NatureServe records (10,928 global ranks, 440 COSEWIC, 270 SARA) and 1,611 of the
   2,478 ECOS listings matched. The COSEWIC and SARA statuses are NatureServe's copy, because
   Canada's Species at Risk Public Registry has no bulk download; the page says so. The rank's cell

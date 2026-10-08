@@ -179,7 +179,9 @@ public static class SiteDbSchema {
             source_id   TEXT NOT NULL,                        -- the record's id in the source: SPRAT taxon id, ECOS Listed Species ID,
                                                               -- NatureServe element global id
             url         TEXT,                                 -- the record's page at the source
-            listed_on   TEXT                                  -- the date the listing took effect (yyyy-mm-dd), when the source gives it
+            listed_on   TEXT                                  -- yyyy-mm-dd, when the source gives it: for SPRAT, the date the EPBC listing
+                                                              -- took effect; for ECOS, the date the taxon or population was first listed,
+                                                              -- which a later change of status leaves as it is
         );
         CREATE INDEX other_status_taxon ON other_status(taxon_id);
 
