@@ -24,6 +24,8 @@ public static class FixtureDb {
     public const long Baiji = 12119;
     public const long BaijiLatest = 50358152;
     public const long Baiji1986Ex = 12119001;
+    /// A CR assessment with no Possibly Extinct tag that IUCN's Table 9 lists as Possibly Extinct.
+    public const long Baiji2008Cr = 12119002;
 
     public const long Tiger = 15955;
     public const long TigerLatest = 214862019;
@@ -314,6 +316,28 @@ public static class FixtureDb {
                 [Person("Smith", "B.D."), Person("Wang", "D."), Person("Braulik", "G.T."), Person("Reeves", "R.")],
                 doi: "10.2305/IUCN.UK.2017-3.RLTS.T12119A50358152.en", doiSource: DoiSource.Wikidata, text: null));
         w.Assessment(Baiji1986Ex, Baiji, "Global", false, "Ex", year: 1986);
+        w.Assessment(Baiji2008Cr, Baiji, "Global", false, "CR", criteria: "A2cd; C2a(ii); D", criteriaVersion: "3.1", year: 2008,
+            date: "2008-06-30");
+        // IUCN's summary tables: Table 7 reasons for the polar bear's 2008 change of category, and Table 9
+        // listings of the baiji, one on an assessment with no Possibly Extinct tag of its own.
+        w.Run("""
+            INSERT INTO summary_table (summary_table_id, table_no, release, url, last_updated) VALUES
+                (1, 7, '2008', 'https://nc.iucnredlist.org/redlist/content/attachment_files/2008RL_Stats_Table_7.pdf', NULL),
+                (2, 9, '2014-1', 'https://cmsdocs.s3.amazonaws.com/summarystats/2014_1_Summary_Stats_Page_Documents/2014_1_RL_Stats_Table9.pdf', '12 June 2014')
+            """);
+        w.Run("""
+            INSERT INTO category_change (assessment_id, taxon_id, reason, previous_assessment_id, old_category, new_category, red_list_version, summary_table_id)
+            VALUES (@a, @b, 'G', @c, 'LR/cd', 'VU', '2008', 1)
+            """, PolarBear2008, PolarBear, PolarBear1996);
+        w.Run("""
+            INSERT INTO possibly_extinct_listing (assessment_id, tag, taxon_id, first_release, last_release, tables, summary_table_id) VALUES
+                (@a, 'PE', @c, '2014-1', '2016-3', '9', 2),
+                (@b, 'PE', @c, '2018-1', '2020-2', '9', 2)
+            """, Baiji2008Cr, BaijiLatest, Baiji);
+        w.Meta(SiteDbSchema.MetaKeys.Table7FirstVersion, "2008");
+        w.Meta(SiteDbSchema.MetaKeys.Table7LastVersion, "2008");
+        w.Meta(SiteDbSchema.MetaKeys.Table9FirstVersion, "2014-1");
+        w.Meta(SiteDbSchema.MetaKeys.Table9LastVersion, "2014-1");
         w.Name(Baiji, "Lipotes vexillifer", "scientific", null, "iucn");
         w.Name(Baiji, "Baiji", "common", "en", "iucn", preferred: true);
 

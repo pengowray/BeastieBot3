@@ -75,6 +75,10 @@ must never be reachable from outside the machine.
    stored keep the date and Red List version of the download that first stored them, and rows that
    are no longer published are deleted. The rows of the first download (2026-10-08, release
    2026-1) have `baseline = 1`, because the release each one was first published in is not known.
+   Run `iucn summary-tables` once IUCN has published the new release's summary statistics. It
+   downloads the release's Table 7 when IUCN has put it under one of the file names it has used
+   before; otherwise add its URL to `rules/iucn-summary-tables.yml` (see
+   [Reasons for category changes](#reasons-for-category-changes-iucn-summary-tables)).
 5. Run `site build-db`. For release 2026-1 on 3 October 2026 it took about 100 seconds and wrote a
    database of about 463 MB. It writes `<Datastore:site_sqlite>.building` and replaces `Datastore:site_sqlite` only
    when the build finishes; a failed or cancelled build leaves the previous database in place. It
@@ -1841,6 +1845,60 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   Policy (`script-src 'self'`) requires; it only sets attributes.
 - `--control-border` gives text box borders at least 3:1 contrast, and the category badge colours
   pass 4.5:1 in both themes. `ThemeControlTests` pins the theme.
+
+## Reasons for category changes (`iucn summary-tables`)
+
+IUCN records why a taxon's Red List category changed, but neither the Red List API (checked on
+2026 payloads: no field for it) nor the CSV export has it. Assessors code it in SIS as genuine
+(recent, or since the first assessment) or non-genuine (new information, knowledge of the criteria,
+incorrect data used previously, taxonomy, criteria revision, other), or no change (BGCI's
+2026 reassessment guidelines list the options). IUCN publishes only a summary: Table 7 of each
+release's summary statistics, "Species changing IUCN Red List Status", with a reason code for each
+change, G (genuine), N (non-genuine) or E (the previous listing was an error, from 2014-2). The
+2008 table lists only genuine changes, in "Genuine improvements" and "Genuine deteriorations"
+sections. Table 9, "Possibly Extinct and Possibly Extinct in the Wild Species" (2014-1 to 2020-2),
+lists every species tagged PE or PEW in the release, with the year of its first such assessment
+and the date last recorded in the wild.
+
+`rules/iucn-summary-tables.yml` lists the files. IUCN's summary statistics page links the current
+Table 7 and a zip of the end-of-year Table 7s; the zip is behind a Cloudflare check, but each PDF in
+it downloads with a plain request. The tables of the other releases of each year and every Table 9
+were found in the Internet Archive's list of files on `nc.iucnredlist.org` and
+`cmsdocs.s3.amazonaws.com`; three (2010-3, 2011-1 and 2013-1) exist only in the Internet Archive.
+Each release's Table 7 includes the changes of the earlier releases of its year, with the version
+each was first published in (from 2010-4; 2010-3 has no version column), so the end-of-year tables
+alone cover nearly everything; the others add changes that a later release of the same year
+changed again, and corrections (`2020-2_RL_Stats_Table7_corrected.pdf`,
+`2024-1_RL_Table_7_corrected_20240916.pdf`). A table later in the list wins when two give one change
+different reasons.
+
+`site build-db` links the rows (`SiteSummaryTables`): the taxon by scientific name, else by IUCN
+synonym, in the kingdom of the row's group heading when it names one; the assessment is the
+taxon's global assessment with the new category published in the version's year (else the year
+after: Bos javanicus's 2024-2 change is on its amended assessment published in 2025), the first one
+whose previous global assessment has another category. LR/nt counts as NT and LR/lc as LC, as
+Table 7's legend says. On release 2026-1, 24,745 of 25,027 rows link and 16,224 assessments get a
+reason. Most of the 262 that do not link name a species whose earlier assessments are not in the
+IUCN API's history (Heloderma horridum has only its 2021 assessment there), or a name that matches
+no taxon (41).
+
+Possibly Extinct: in the IUCN API, `possibly_extinct` is set on CR assessments published as early as 2000,
+before the first of these tables. Of the 1,369 assessments the tables list as PE
+or PEW, 37 have no tag in their own record; `possibly_extinct_listing` keeps them all and the site
+marks only those 37. Table 7 prints "CR(PE)" for some tagged assessments and plain "CR" for others
+(in the 2023-1 table, 3 against 27), so a plain "CR" in Table 7 says nothing about the tag.
+
+On the species page (`Pages/HistoryTableNotes.cs`, `_ReasonCell`, `_ListedTagMarker`,
+`_HistoryTableNotes`; strings in `Display/SiteText.SummaryTables.cs`), the Assessment history and
+Combined assessment history tables get a "Reason for change" column after Category when at least
+one row has a reason: "Genuine change (G)", "Non-genuine change (N)" or "Previous listing was an
+error (E)", with IUCN's definition and the table's version as a tooltip. A note under the table
+links the Table 7 PDF of each version the page's reasons came from and says what a blank cell
+means; a second sentence about the genuine-only 2008 table is added only when a row published in
+2008 has no reason and another category than the assessment before it. An assessment that the
+tables list as PE or PEW and whose record does not have that tag gets "[PE]" or "[PEW]" after its
+badge, linked to a footnote under the table that names the tables and versions. The About page
+lists the tables as a source (meta keys `table7_first_version` and so on) and explains both.
 
 ## Known gaps
 

@@ -544,6 +544,12 @@ public static class SiteDbSchema {
         /// When `iucn api green-status` last downloaded the Green Status assessments ('yyyy-MM-dd'), for
         /// the access date of their citations.
         public const string GreenStatusFetched = "green_status_fetched";
+        /// The first and last Red List versions of the Table 7 and Table 9 files in summary_table
+        /// ('2007', '2026-1'); absent when the build read no summary tables.
+        public const string Table7FirstVersion = "table7_first_version";
+        public const string Table7LastVersion = "table7_last_version";
+        public const string Table9FirstVersion = "table9_first_version";
+        public const string Table9LastVersion = "table9_last_version";
         /// The newest checked_at date ('yyyy-MM-dd') of any row of `iucn resolve-dois`'s doi_check
         /// table, whether the DOI was found in Crossref's list, found at doi.org or not found, when the
         /// build read that cache.

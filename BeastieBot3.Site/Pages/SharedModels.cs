@@ -33,6 +33,14 @@ public sealed record BadgeModel(CategoryDisplay Category, bool Large = false, bo
     };
 }
 
+/// The "Reason for change" cell of a history table row (_ReasonCell); Change is null when IUCN's
+/// Table 7 gives the row no reason.
+public sealed record ReasonCellModel(CategoryChangeRow? Change);
+
+/// The [PE] or [PEW] marker after a history table row's category (_ListedTagMarker); Listing is null
+/// when the row has none. Kind: the taxon's kind ("species"), for the marker's accessible name.
+public sealed record ListedTagMarkerModel(long AssessmentId, PossiblyExtinctListingRow? Listing, string Kind);
+
 /// A help text behind a small "i" button (_InfoTip). Id: the id of the text, unique on the page.
 /// Label: the button's accessible name, naming what the text explains.
 public sealed record InfoTipModel(string Id, string Label, string Text);

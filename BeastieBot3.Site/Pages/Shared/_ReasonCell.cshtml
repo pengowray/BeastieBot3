@@ -1,0 +1,4 @@
+@model ReasonCellModel
+@* The "Reason for change" cell: IUCN Table 7's reason code for the change of category this
+   assessment brought, with IUCN's definition and the table's version as a tooltip. *@
+@if (Model.Change is { } change) {<span title="@SiteText.ReasonTooltip(change.Reason, change.TableRelease)">@SiteText.ReasonLabel(change.Reason)</span>}

@@ -37,6 +37,11 @@ public sealed class AboutModel : PageModel {
     public int? NatureServeYear { get; private set; }
     public string? BuiltDate { get; private set; }
 
+    /// The Red List versions of IUCN's Table 7 and Table 9 files the site's reasons for change and
+    /// Possibly Extinct markers come from ("2007 to 2026-1"); null when the database has none.
+    public string? Table7Versions { get; private set; }
+    public string? Table9Versions { get; private set; }
+
     /// The newest date on which `iucn resolve-dois` checked an assessment's DOI, in Crossref's list
     /// or at doi.org, when the database has it.
     public string? DoiCheckedDate { get; private set; }
@@ -85,6 +90,8 @@ public sealed class AboutModel : PageModel {
             ColUrl = DoiUrl(colDoi);
         }
         SpratDate = SpratReportDate(snapshot.Get(SiteDbSchema.MetaKeys.SpratReport));
+        Table7Versions = SiteText.VersionRange(snapshot.Get(SiteDbSchema.MetaKeys.Table7FirstVersion), snapshot.Get(SiteDbSchema.MetaKeys.Table7LastVersion));
+        Table9Versions = SiteText.VersionRange(snapshot.Get(SiteDbSchema.MetaKeys.Table9FirstVersion), snapshot.Get(SiteDbSchema.MetaKeys.Table9LastVersion));
         if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.NatureServeFetched), out var natureServe)) {
             NatureServeDate = SiteFormat.Date(natureServe);
             NatureServeYear = natureServe.Year;

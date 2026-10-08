@@ -530,6 +530,15 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.NztcsFetched, _stats.NztcsFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.SalveFetched, _stats.SalveFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.GreenStatusFetched, _stats.GreenStatusFetched);
+        if (_stats.SummaryTables is { } summaryTables) {
+            // Tables lists each table's files in release order.
+            string? First(int table) => summaryTables.Tables.FirstOrDefault(t => t.Table == table)?.Release;
+            string? Last(int table) => summaryTables.Tables.LastOrDefault(t => t.Table == table)?.Release;
+            writer.SetMeta(SiteDbSchema.MetaKeys.Table7FirstVersion, First(7));
+            writer.SetMeta(SiteDbSchema.MetaKeys.Table7LastVersion, Last(7));
+            writer.SetMeta(SiteDbSchema.MetaKeys.Table9FirstVersion, First(9));
+            writer.SetMeta(SiteDbSchema.MetaKeys.Table9LastVersion, Last(9));
+        }
         writer.SetMeta(SiteDbSchema.MetaKeys.IucnDoiCheckedTo, _stats.DoiCheckedTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.WikidataItemModel, _inputs.WikidataItemModel.ToJson());
         _stats.WikidataItemModelSource = _inputs.WikidataItemModelSource;

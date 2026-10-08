@@ -366,6 +366,7 @@
 @if (Model.Combined is not null) {
     <partial name="_CombinedHistory" model="Model" />
 } else if (Model.GlobalHistory.Count > 0) {
+    var historyNotes = Model.TableNotes(Model.GlobalHistory.Select(a => (a, true)));
     <section class="history" aria-labelledby="history-heading">
         <h2 id="history-heading">@SiteText.HeadingHistory</h2>
         <div class="table-scroll">
@@ -374,6 +375,9 @@
                     <tr>
                         <th scope="col">@SiteText.ColPublished</th>
                         <th scope="col">@SiteText.ColCategory</th>
+                        @if (historyNotes.ShowReasonColumn) {
+                            <th scope="col">@SiteText.ColReasonForChange</th>
+                        }
                         <th scope="col">@SiteText.ColCriteria</th>
                         <th scope="col" class="narrow-hide">@SiteText.ColAssessed</th>
                         <th scope="col">@SiteText.ColWikitext</th>
@@ -387,7 +391,10 @@
                         var versionNote = Model.VersionNote(a);
                         <tr class="@(isShown ? "shown" : null)">
                             <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</th>
-                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
+                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /><partial name="_ListedTagMarker" model="@(new ListedTagMarkerModel(a.AssessmentId, Model.ListedOnlyInTables(a), taxon.Kind))" /></td>
+                            @if (historyNotes.ShowReasonColumn) {
+                                <td><partial name="_ReasonCell" model="@(new ReasonCellModel(Model.ChangeReasons.GetValueOrDefault(a.AssessmentId)))" /></td>
+                            }
                             <td>@a.Criteria</td>
                             <td class="narrow-hide">@SiteFormat.Date(a.AssessmentDate)</td>
                             <td>
@@ -403,6 +410,7 @@
                 </tbody>
             </table>
         </div>
+        <partial name="_HistoryTableNotes" model="historyNotes" />
         <partial name="_EarlierIds" model="Model" />
     </section>
 } else if (Model.InRelease && Model.LinkedTaxa.Count > 0) {

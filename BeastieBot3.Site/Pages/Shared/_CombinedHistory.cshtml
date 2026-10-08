@@ -39,6 +39,7 @@
         }
     </ul>
     @if (combined.Rows.Count > 0) {
+        var historyNotes = Model.TableNotes(combined.Rows.Select(r => (r.Assessment, r.Id.IsThisPage)));
         <div class="table-scroll">
             <table class="combined-table">
                 <thead>
@@ -49,6 +50,9 @@
                             <th scope="col">@SiteText.ColName</th>
                         }
                         <th scope="col">@SiteText.ColCategory</th>
+                        @if (historyNotes.ShowReasonColumn) {
+                            <th scope="col">@SiteText.ColReasonForChange</th>
+                        }
                         <th scope="col">@SiteText.ColCriteria</th>
                         <th scope="col" class="narrow-hide">@SiteText.ColAssessed</th>
                         <th scope="col">@SiteText.ColWikitext</th>
@@ -76,7 +80,10 @@
                             @if (combined.ShowNames) {
                                 <td><span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(row.Id.Taxon.ScientificName, row.Id.Taxon.SubpopulationName))</span></td>
                             }
-                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
+                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /><partial name="_ListedTagMarker" model="@(new ListedTagMarkerModel(a.AssessmentId, Model.ListedOnlyInTables(a), Model.Taxon!.Kind))" /></td>
+                            @if (historyNotes.ShowReasonColumn) {
+                                <td><partial name="_ReasonCell" model="@(new ReasonCellModel(Model.ChangeReasons.GetValueOrDefault(a.AssessmentId)))" /></td>
+                            }
                             <td>@a.Criteria</td>
                             <td class="narrow-hide">@SiteFormat.Date(a.AssessmentDate)</td>
                             <td>
@@ -95,6 +102,7 @@
                 </tbody>
             </table>
         </div>
+        <partial name="_HistoryTableNotes" model="historyNotes" />
     }
     @if (combined.WithNotes.Count > 0) {
         @* <text> keeps the whitespace of the code lines out of the sentence ("2790 , the"). *@

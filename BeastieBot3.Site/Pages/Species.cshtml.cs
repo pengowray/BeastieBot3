@@ -138,12 +138,17 @@ public sealed class SpeciesModel : PageModel {
         = new Dictionary<long, IReadOnlyList<PossiblyExtinctListingRow>>();
 
     /// The table listing of an assessment as Possibly Extinct (or in the Wild) when the assessment
-    /// itself has neither tag; null otherwise.
+    /// itself does not have that tag; null otherwise. A listing as PE of an assessment tagged PEW
+    /// counts, so the difference shows.
     public PossiblyExtinctListingRow? ListedOnlyInTables(AssessmentRow assessment) =>
-        assessment.PossiblyExtinct || assessment.PossiblyExtinctInTheWild
-            || !PossiblyExtinctListings.TryGetValue(assessment.AssessmentId, out var listings)
-            ? null
-            : listings.FirstOrDefault(l => l.Tag == "PE") ?? listings.FirstOrDefault();
+        PossiblyExtinctListings.TryGetValue(assessment.AssessmentId, out var listings)
+            ? listings.FirstOrDefault(l => l.Tag == "PE" ? !assessment.PossiblyExtinct : !assessment.PossiblyExtinctInTheWild)
+            : null;
+
+    /// What goes under a history table about IUCN's summary tables, for these rows (own: the row is
+    /// this page's taxon's).
+    public HistoryTableNotes TableNotes(IEnumerable<(AssessmentRow Row, bool Own)> rows) =>
+        HistoryTableNotes.Build(rows.ToList(), ChangeReasons, ListedOnlyInTables, Taxon!.Kind);
 
     /// SPRAT profiles and EPBC Act listings: the whole taxon's first, then populations'.
     public IReadOnlyList<EpbcListingRow> EpbcListings { get; private set; } = [];

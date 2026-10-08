@@ -475,6 +475,13 @@ button:hover {
     color: var(--muted);
 }
 
+/* [PE] after a category badge: IUCN's summary tables list the assessment as Possibly Extinct,
+   the assessment itself has no such tag. A footnote link, apart from the badge's own "(PE)". */
+.listed-tag {
+    margin-left: 0.25em;
+    font-size: 0.75rem;
+}
+
 /* "Errata version, published 2016" and similar, under the year in the assessment tables. */
 .version-note {
     display: block;
