@@ -130,6 +130,9 @@
             }
         }
     }
+    @if (Model.Rebuild is not null && r.Missing is { Count: > 0 }) {
+        <p>@UpdateText.RebuildAddsMissing</p>
+    }
     @if (Model.Rebuild is null && !r.Partial && (r.Missing?.Count > 0 || r.MissingExtra?.Count > 0)) {
         @* Off: a button that sends the text again with the option on. On: a ticked checkbox, so
            the option stays on when the form is sent again, and can be turned off. *@
@@ -284,7 +287,7 @@
         <p class="update-scope-add">
             <button type="submit" form="update-form" name="@UpdateModel.RebuildField" value="1" aria-describedby="scope-rebuild-help">@UpdateText.RebuildButton</button>
         </p>
-        <p class="help" id="scope-rebuild-help">@UpdateText.RebuildHelp</p>
+        <p class="help" id="scope-rebuild-help">@UpdateText.RebuildHelp(r.Categories)</p>
     }
     @if (r.Duplicates.Count > 0) {
         <h4>@UpdateText.DuplicatesHeading(r.Duplicates.Count)</h4>
