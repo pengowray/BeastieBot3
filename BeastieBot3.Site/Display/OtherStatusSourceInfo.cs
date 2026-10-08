@@ -93,6 +93,8 @@ public sealed record OtherStatusSourceInfo(
         OtherStatusDateHeading.InEffectFrom, DateHeadingRule.AllDatedRows,
         (_, rows) => rows.Where(r => r.Source == OtherStatusSources.RedLists).Select(r => r.List).OfType<OtherStatusListRow>()
             .DistinctBy(l => l.ListKey)
+            .OrderBy(l => SiteText.OtherStatusGroup(l.Country ?? ""), StringComparer.Ordinal)
+            .ThenBy(l => l.Name, StringComparer.Ordinal)
             .SelectMany(l => new NoteSegment[] {
                 new(l.Name, l.Url),
                 new(SiteText.RedListNotePublisher(l.Publisher)),
