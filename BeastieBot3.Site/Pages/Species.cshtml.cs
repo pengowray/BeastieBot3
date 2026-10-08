@@ -134,23 +134,20 @@ public sealed class SpeciesModel : PageModel {
     /// of OtherStatusSystems.All.
     public IReadOnlyList<OtherStatusRow> OtherStatuses { get; private set; } = [];
 
-    /// The note under the other statuses about one of their sources, with the date the site
-    /// database's copy was downloaded; null for an unknown source.
-    public string? OtherStatusNote(string source) {
+    /// The date the site database's copy of a source of the other statuses was downloaded
+    /// ("25 June 2026"); null when unknown.
+    public string? OtherStatusSourceDate(string source) {
         var snapshot = _db.Snapshot;
         switch (source) {
             case OtherStatusSources.Sprat: {
                 var report = snapshot?.Get(SiteDbSchema.MetaKeys.SpratReport);
                 // SpratReportDate gives the file name back when the name has no date.
-                var date = AboutModel.SpratReportDate(report) is { } d && d != Path.GetFileName(report!.Trim()) ? d : null;
-                return SiteText.OtherStatusSpratNote(date);
+                return AboutModel.SpratReportDate(report) is { } date && date != Path.GetFileName(report!.Trim()) ? date : null;
             }
             case OtherStatusSources.Ecos:
-                return SiteText.OtherStatusEcosNote(SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.EcosFetched), out var ecos)
-                    ? SiteFormat.Date(ecos) : null);
+                return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.EcosFetched), out var ecos) ? SiteFormat.Date(ecos) : null;
             case OtherStatusSources.NatureServe:
-                return SiteText.OtherStatusNatureServeNote(SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.NatureServeFetched), out var ns)
-                    ? SiteFormat.Date(ns) : null);
+                return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.NatureServeFetched), out var ns) ? SiteFormat.Date(ns) : null;
             default:
                 return null;
         }

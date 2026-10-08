@@ -437,13 +437,14 @@
 }
 
 @if (Model.OtherStatuses.Count > 0) {
-    var showAppliesTo = Model.OtherStatuses.Any(r => r.Population is not null);
-    var showListedName = Model.OtherStatuses.Any(r => r.ListedName is not null);
-    var showListedOn = Model.OtherStatuses.Any(r => r.ListedOn is not null);
     <section class="other-statuses" id="other-statuses" aria-labelledby="other-statuses-heading">
         <h2 id="other-statuses-heading">@SiteText.HeadingOtherStatuses</h2>
         <p>@SiteText.OtherStatusesIntro</p>
         @foreach (var group in Model.OtherStatuses.GroupBy(r => BeastieBot3.Shared.SiteData.OtherStatusSystems.Find(r.System)?.Group ?? "")) {
+            // Each table shows a column only when one of its rows has a value for it.
+            var showAppliesTo = group.Any(r => r.Population is not null);
+            var showListedName = group.Any(r => r.ListedName is not null);
+            var showListedOn = group.Any(r => r.ListedOn is not null);
             <h3>@SiteText.OtherStatusGroup(group.Key)</h3>
             <div class="table-scroll">
                 <table>
@@ -459,11 +460,13 @@
                     </thead>
                     <tbody>
                         @foreach (var row in group) {
-                            var (listLabel, listTitle) = SiteText.OtherStatusList(row.System);
+                            var (listLabel, listTitle, listIsAbbreviation) = SiteText.OtherStatusList(row.System);
+                            var rankMeaning = SiteText.NatureServeRankMeaning(row, taxon.Kind);
+                            var rankTitle = SiteText.NatureServeRankTitle(row);
                             <tr>
-                                <th scope="row">@if (listTitle is not null) {<abbr title="@listTitle">@listLabel</abbr>} else {@listLabel}</th>
-                                <td>@SiteText.OtherStatusText(row)</td>
-                                @if (showAppliesTo) {<td>@(row.Population ?? SiteText.OtherStatusWholeTaxon(taxon.Kind))</td>}
+                                <th scope="row">@if (listTitle is null) {@listLabel} else if (listIsAbbreviation) {<abbr title="@listTitle">@listLabel</abbr>} else {<span title="@listTitle">@listLabel</span>}</th>
+                                <td>@if (rankTitle is not null) {<abbr title="@rankTitle">@row.Status</abbr>} else {@row.Status}@if (rankMeaning is not null) {<br><span class="rank-meaning">@rankMeaning</span>}</td>
+                                @if (showAppliesTo) {<td>@if (row.Population is { } population) {@population} else if (SiteText.OtherStatusAppliesToUnknown(row)) {<span class="no-value">@SiteText.OtherStatusNoDate</span>} else {@SiteText.OtherStatusWholeTaxon(taxon.Kind)}</td>}
                                 @if (showListedName) {<td>@if (row.ListedName is { } listedName) {<span class="sci-name">@Html.Raw(SpeciesModel.ListedNameHtml(listedName))</span>}</td>}
                                 @if (showListedOn) {<td>@if (row.ListedOn is { } listedOn) {@SiteFormat.Date(listedOn)} else {<span class="no-value">@SiteText.OtherStatusNoDate</span>}</td>}
                                 <td>@if (row.Url is { } sourceUrl) {<a href="@sourceUrl">@SiteText.OtherStatusSourceLink(row.Source)</a>} else {@SiteText.OtherStatusSourceLink(row.Source)}</td>
@@ -474,8 +477,15 @@
             </div>
         }
         @foreach (var source in Model.OtherStatuses.Select(r => r.Source).Distinct()) {
-            if (Model.OtherStatusNote(source) is { } note) {
-                <p class="help">@note</p>
+            var date = Model.OtherStatusSourceDate(source);
+            if (source == BeastieBot3.Shared.SiteData.OtherStatusSources.Sprat) {
+                <p class="help">@SiteText.OtherStatusSpratNote(date)</p>
+            } else if (source == BeastieBot3.Shared.SiteData.OtherStatusSources.Ecos) {
+                <p class="help">@SiteText.OtherStatusEcosNote(date)</p>
+            } else if (source == BeastieBot3.Shared.SiteData.OtherStatusSources.NatureServe) {
+                var canadian = Model.OtherStatuses.Any(r => r.System is BeastieBot3.Shared.SiteData.OtherStatusSystems.Cosewic or BeastieBot3.Shared.SiteData.OtherStatusSystems.Sara);
+                var global = Model.OtherStatuses.Any(r => r.System == BeastieBot3.Shared.SiteData.OtherStatusSystems.NatureServeGlobal);
+                <p class="help">@SiteText.OtherStatusNatureServeSubject(canadian, global)<a href="@SiteText.NatureServeExplorerUrl">NatureServe Explorer</a> (© NatureServe, <a href="@SiteText.LicenceCcBy">CC BY 4.0</a>)@SiteText.OtherStatusNatureServeDate(date)@if (canadian) {<text> @SiteText.OtherStatusNatureServeCanadaCopy</text>}</p>
             }
         }
     </section>

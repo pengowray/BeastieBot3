@@ -196,7 +196,7 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   taxon in the release and an old id have the same name, the profile goes to the taxon in the
   release.
 - `other_status` (schema 23) has one row per status of a taxon in a list other than the IUCN Red
-  List. For now every row comes from SPRAT: the EPBC Act listing (system `au-epbc`, also in
+  List. Rows from NatureServe and ECOS are described after this item. From SPRAT: the EPBC Act listing (system `au-epbc`, also in
   `epbc_listing`, with the date the listing took effect from `EPBC_Threatened_Species_Date_Effective`)
   and the eight state and territory columns (`au-act` to `au-wa`, `SiteLinkReaders.SpratStateColumns`)
   of each profile in `epbc_listing`. `population` is the population of a population's profile.
@@ -207,8 +207,25 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   `OtherStatusSystems.All` (in `BeastieBot3.Shared`), with the date of the SPRAT report. The SPRAT
   report's state columns are headed with the acts SPRAT names ("NSW TSC Act and FM Act", "Vic. FFG
   Act (Advisory Lists)", "WA WC Act"), some of them since replaced, so the page names the state and
-  says the statuses may differ from the states' current lists. A later source (NatureServe, the US
-  Fish and Wildlife Service's ECOS) adds rows with its own `source` and `system` keys.
+  says the statuses may differ from the states' current lists.
+- `other_status` rows from the status lists store (`docs/status-lists.md`), read by
+  `SiteLinkReaders.ReadStatusLists`. A NatureServe record goes to the taxon with its scientific
+  name in the same kingdom (`StatusListNameIndex` ignores "ssp.", "subsp." and "var.", so
+  NatureServe's bare trinomials find IUCN's subspecies; a subpopulation is never found), else the
+  one taxon that one of NatureServe's synonyms names, else the one taxon whose IUCN synonyms
+  include its name. A taxon gets one record, and Standard records are tried before Provisional
+  and Nonstandard ones with the same name. Each record gives `natureserve-global` (the rank as
+  published in `status`, the rounded rank in `status_code`; GNR, TNR, GNA and TNA are left out),
+  `ca-cosewic` (the code as COSEWIC's words, `OtherStatusSystems.CosewicLabel`) and `ca-sara` (the
+  English part). Each ECOS listing goes to the taxon of its scientific name, of another name its
+  brackets give, or of an IUCN synonym, as `us-esa` with the listing date; its entity description
+  is the population unless it is "Wherever found". In the build of 8 October 2026: 14,058 taxa
+  matched to NatureServe records (10,928 global ranks, 440 COSEWIC, 270 SARA) and 1,611 of the
+  2,478 ECOS listings matched. The COSEWIC and SARA statuses are NatureServe's copy, because
+  Canada's Species at Risk Public Registry has no bulk download; the page says so. The rank's cell
+  gives what the rounded rank means and which part of the rank that is
+  (`SiteText.NatureServeRankMeaning`): "Vulnerable (rounded rank G3)" for G3G4, "Imperiled
+  (subspecies rank T2)" for G5T2.
 - The latest assessments come from the CSV export, which holds exactly one Red List release. Earlier
   assessments come from the list of assessments in each taxon's cached API response (the
   `assessments` array of the taxa JSON, read by `IucnTaxaHeaders`). Take the `latest` flag from that

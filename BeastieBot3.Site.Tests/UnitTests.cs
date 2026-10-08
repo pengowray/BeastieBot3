@@ -687,4 +687,30 @@ public sealed class SearchGroupRuleTests {
     [Fact]
     public void NoGroupGoesNowhere() =>
         Assert.Null(SearchModel.GroupToGoTo([], [Taxon(exact: true, strong: false)]));
+
+    // ------------------------------------------------------------ other conservation statuses
+
+    [Theory]
+    [InlineData("G3", "G3", "species", "Vulnerable")]
+    [InlineData("G3G4", "G3", "species", "Vulnerable (rounded rank G3)")]
+    [InlineData("G2?", "G2", "species", "Imperiled (rounded rank G2)")]
+    [InlineData("G5T2", "T2", "subspecies", "Imperiled (subspecies rank T2)")]
+    [InlineData("G5T2", "T2", "variety", "Imperiled (variety rank T2)")]
+    [InlineData("G5T2T3", "T2", "subspecies", "Imperiled (rounded subspecies rank T2)")]
+    [InlineData("GX", "GX", "species", "Presumed Extinct")]
+    [InlineData("GNR", "GNR", "species", null)]
+    public void NatureServeRankMeaning_SaysWhichPartOfTheRankItIs(string rank, string rounded, string kind, string? expected) {
+        var row = new OtherStatusRow("natureserve-global", rank, rounded, null, null, "natureserve", "1", null, null);
+        Assert.Equal(expected, SiteText.NatureServeRankMeaning(row, kind));
+    }
+
+    [Theory]
+    [InlineData("G3G4", null)]
+    [InlineData("G2?", "The question mark means the rank is uncertain.")]
+    [InlineData("G3Q", "Q means the taxonomy is questionable.")]
+    [InlineData("G3?Q", "The question mark means the rank is uncertain. Q means the taxonomy is questionable.")]
+    public void NatureServeRankTitle_ExplainsQualifiers(string rank, string? expected) {
+        var row = new OtherStatusRow("natureserve-global", rank, "G3", null, null, "natureserve", "1", null, null);
+        Assert.Equal(expected, SiteText.NatureServeRankTitle(row));
+    }
 }

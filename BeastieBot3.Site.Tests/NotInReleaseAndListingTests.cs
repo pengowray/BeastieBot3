@@ -167,6 +167,35 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
         Assert.Contains("<span class=\"sci-name\"><i>Casuarius casuarius johnsonii</i></span>", section);
     }
 
+    // The United States, Canada and NatureServe's global rank: one table each, each with only the
+    // columns its rows have values for, and one note for each source.
+    [Fact]
+    public async Task PolarBearShowsItsUsCanadianAndNatureServeStatuses() {
+        var html = (await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}")).Replace("&#x27;", "'");
+        var section = Html.Section(html, "other-statuses");
+        var text = Html.Text(section);
+        var rows = Html.TableRows(section);
+
+        Assert.True(Html.IndexOf(section, "<h3>Canada</h3>") < Html.IndexOf(section, "<h3>United States</h3>"));
+        Assert.True(Html.IndexOf(section, "<h3>United States</h3>") < Html.IndexOf(section, "<h3>Global</h3>"));
+        Assert.Equal(new[] {
+            new[] { "List", "Status", "Source" },
+            new[] { "COSEWIC", "Special Concern", "NatureServe Explorer" },
+            new[] { "Species at Risk Act", "Special Concern", "NatureServe Explorer" },
+            new[] { "List", "Status", "In effect from", "Source" },
+            new[] { "Endangered Species Act", "Threatened", "15 May 2008", "ECOS profile" },
+            new[] { "List", "Status", "Source" },
+            new[] { "NatureServe", "G3G4 Vulnerable (rounded rank G3)", "NatureServe Explorer" },
+        }, rows);
+        Assert.Contains("<abbr title=\"Committee on the Status of Endangered Wildlife in Canada, an independent committee that assesses species\">COSEWIC</abbr>", section);
+        Assert.Contains("<a href=\"https://ecos.fws.gov/ecp/species/4958\">ECOS profile</a>", section);
+        Assert.Contains("United States statuses are from ECOS, the US Fish and Wildlife Service's Environmental Conservation Online System, downloaded on 7 October 2026.", text);
+        Assert.Contains("Canadian statuses and NatureServe global ranks are from NatureServe Explorer (© NatureServe, CC BY 4.0), downloaded on 8 October 2026. "
+            + "NatureServe's copy of the Canadian statuses may differ from Canada's Species at Risk Public Registry.", text);
+        Assert.Contains("<a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a>", section);
+        Assert.DoesNotContain("SPRAT", text);
+    }
+
     [Fact]
     public async Task TaxonWithNoOtherStatusHasNoSection() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.Lion}");
