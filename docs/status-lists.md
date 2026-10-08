@@ -6,10 +6,11 @@ The status lists store holds conservation statuses from systems other than the I
 - ECOS, the US Fish and Wildlife Service's Environmental Conservation Online System: the list of species, subspecies and populations listed under the US Endangered Species Act (`statuses ecos-import`).
 - The New Zealand Threat Classification System database (nztcs.org.nz, Department of Conservation, CC BY 4.0): the current assessments (`statuses nztcs-import`).
 - SALVE (salve.icmbio.gov.br), ICMBio's system for the national assessments of the extinction risk of Brazil's fauna: the current assessment of each species and subspecies (`statuses salve-import`).
+- JNCC's Conservation Designations for UK Taxa (Joint Nature Conservation Committee, Open Government Licence v3.0): one row per taxon and designation, for the GB and England red lists, Birds of Conservation Concern, Nationally Rare and Scarce, the UK and country priority species lists, the Wildlife and Countryside Act and other UK legislation, and the international conventions and EU directives as they apply to UK taxa (`statuses jncc-import`).
 
 Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a comment on every column.
 
-The three imports (`statuses ecos-import`, `nztcs-import` and `salve-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete). It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs` and `StatusListStore.Salve.cs`.
+The four imports (`statuses ecos-import`, `nztcs-import`, `salve-import` and `jncc-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete), as `<stem>-<yyyy-MM-dd>.<extension>` or, when the spec has `FindFileName`, under the name the source gives its file. It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. A spec's `SourceForFile` changes the `status_source` row for the file imported (JNCC uses it for the file's URL and the year in its attribution). The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs` and `StatusListStore.Jncc.cs`.
 
 ## Files
 
@@ -22,7 +23,7 @@ The three imports (`statuses ecos-import`, `nztcs-import` and `salve-import`) sh
 
 | Table | One row per |
 | --- | --- |
-| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
+| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, `jncc`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
 | `status_sync_state` | key of the NatureServe download's progress (`natureserve_pass_*`, `natureserve_completed*`) |
 | `natureserve_species` | NatureServe record (`element_global_id`): a species, subspecies, variety or population |
 | `natureserve_synonym` | synonym NatureServe lists for a record |
@@ -31,6 +32,7 @@ The three imports (`statuses ecos-import`, `nztcs-import` and `salve-import`) sh
 | `ecos_name` | name an ECOS listing's scientific name gives, the main name included |
 | `nztcs_assessment` | current NZTCS assessment (`assessment_id`), with the scientific name `NztcsApi.ChooseName` gives |
 | `salve_assessment` | current SALVE assessment of a species or subspecies (`ficha_id`, SALVE's sheet id) |
+| `jncc_designation` | row of the Master List sheet of JNCC's Conservation Designations for UK Taxa: one taxon and one of its designations (`row_number`, the row's number in the sheet) |
 
 ## NatureServe Explorer: `statuses natureserve-fetch`
 
@@ -168,6 +170,145 @@ and links each assessment's DOI. Precise localities can be restricted under that
 holds no places, states or biomes. SALVE's numbers do not always match the official list of
 threatened species (Portaria MMA 148/2022), as SALVE's own home page says. SALVE covers animals
 only: no bulk source for the national assessments of Brazil's plants (CNCFlora) was found.
+
+## JNCC: `statuses jncc-import`
+
+Source: Conservation Designations for UK Taxa, published by the Joint Nature Conservation Committee
+at https://jncc.gov.uk/resources/478f7160-967b-4366-acdf-8941fd33850b. It is an Excel workbook
+(8.1 MB) whose "Master List" sheet has one row per taxon and designation. JNCC collates the lists
+from their sources and matches every name to the recommended name in the UK Species Inventory
+(UKSI), kept by the Natural History Museum.
+
+Licence: Open Government Licence v3.0. The resource page asks for this attribution statement, with
+the year of the release:
+
+> Contains JNCC/NE/NRW/NatureScot/NIEA data © copyright and database right 2026
+
+`status_source.citation` holds that statement with the year of the date in the file's name,
+`status_source.url` the URL of the file and `status_source.version` the file's name.
+
+### How the file is found
+
+The workbook's name has the date of its release (`taxon-designations-20260609.xlsx` on
+2026-10-08) and changes with every release. The command reads the resource page and takes the link
+to `taxon-designations-<yyyyMMdd>.xlsx` with the newest date (`JnccDesignations.FindSpreadsheetLink`;
+if no name has a date, the first `.xlsx` in the resource's folder on data.jncc.gov.uk). It keeps the
+file in the status lists folder under JNCC's name. When the folder already has a file of that name,
+the command reads that file again and does not download it. No JNCC API for the resource was found.
+JNCC publishes no CSV of the workbook. The page's other downloads are a zip file of the same
+workbook with two PDFs of guidance, the two PDFs, and a link to the "GB Red List Dataset", a
+separate workbook of the red lists only (`gb-red-list-data-20260609.xlsx`). `--file` imports a workbook already downloaded; the year in the
+attribution then comes from the date in its name, else from the year the command runs.
+
+The workbook is read with ExcelDataReader (MIT licence). Its default settings need the Windows-1252
+code page, so the reader registers .NET's `CodePagesEncodingProvider` first.
+
+### Columns of the Master List
+
+The 2026-06-09 file has 27,152 rows of 15,211 taxa (distinct taxon version keys); the workbook's
+own pivot table also counts 27,152 rows, in 20 columns, with a line of text above the column headings. `JnccDesignations.Read` finds
+the heading row by the heading "Recommended taxon version" and reads the columns by their headings.
+
+| JNCC column | Stored as |
+| --- | --- |
+| Category | `category`: Bird, Mammal, Fish, Reptile, Amphibian, Invertebrate, Vascular plant, Non-vascular plant, Fungi, Algae, Slime mould |
+| Taxon group | `taxon_group`: UKSI's informal group, such as "insect - beetle (Coleoptera)", "lichen" |
+| Recommended taxon name, authority, qualifier | `scientific_name`, `authority`, `qualifier` ("s.l.", "agg.", "sensu stricto"; 239 rows) |
+| Recommended taxon version | `taxon_version_key`: the UKSI key (NBNSYS..., NHMSYS..., BMSSYS...) |
+| Designated name | `designated_name`: the name the source published; it differs from the recommended name in 5,232 rows |
+| Common name | `common_name`; empty in 16,037 rows |
+| Source, URL source | `source` (the document), `source_url` |
+| Date designated | `designated_on` (yyyy-MM-dd); often 1 January of the year of the source |
+| Reporting category | `reporting_category`: the list, such as "Wildlife and Countryside Act 1981" |
+| Designation | `designation`: the schedule, annex or category, such as "Schedule 5 Section 9.4b", "Vulnerable" |
+| Designation abbreviation | `designation_code`, such as WACA-Sch5_sect9.4b, RedList_GB_post2001-VU |
+| IUCN version | `iucn_version`: 2001, 1994 or "pre 1994" |
+| Reporting category sort order | `sort_code`: A, C, C1 ... M |
+| Source description, designation description | not stored: a description of each list, up to 2,315 characters |
+| Criteria description | not stored: IUCN criteria codes on some red list rows ("B2ab(ii,iv)"), sentences on others, and the Scottish Biodiversity List's category and criteria ("Category: Watching brief only; Criterion: S4 - <6 Scottish 10km sqs") |
+| Comments | not stored: notes of up to 5,126 characters |
+
+Read from the other columns (`JnccClassification`):
+
+- `scope` and `area`, from the designation code: `uk` (the whole UK or Great Britain), `country`
+  (part of the UK) or `international` (a convention, an EU directive or regulation, or IUCN's global
+  or European red list). A code that no rule knows gets no scope, and the import names it. Two
+  corrections apply to Great Britain designations: the 20 Extinct and Extinct in the Wild rows of
+  the Vascular Plant Red List for England have the codes RedList_GB_post2001-EX and -EW, and are
+  stored as England; and 200 Wildlife and Countryside Act rows whose comment says that the
+  designation no longer applies in Scotland ("Designation does not apply in Scotland since 2007")
+  are stored as England and Wales, and 5 whose comment starts "England only" as England. The
+  Conservation of Habitats and Species Regulations 2010 extend to England and Wales only (regulation
+  2), so their rows are stored as England and Wales.
+- `status_code`, from a red list's code: the category after the hyphen (RedList_GB_post2001-CR(PE):
+  CR(PE)), WL for the Waiting List of the Vascular Plant Red List for England (taxa it did not
+  assess, waiting for taxonomic or mapping work), and Red or Amber for Birds of
+  Conservation Concern and the spider list. Other designations have none.
+- `population`: breeding or non-breeding, for the bird red list (its codes end _Breeding or
+  _NonBreeding).
+- `kingdom`, in IUCN's spelling: ANIMALIA for the six animal categories, PLANTAE for vascular
+  plants, mosses, liverworts, hornworts and stoneworts, FUNGI for fungi and lichens, CHROMISTA for
+  the group "chromist", and none for algae (red, green and brown) and slime moulds.
+- `rank`, from the form of the name: species 26,169 rows, subspecies 686, variety 121, form 62,
+  aggregate 50 (names with "agg." or a slash, "Anser fabalis/serrirostris"), above species 46 (one
+  word: Cetacea, Sphagnum, Orchidaceae), hybrid 5, section 3, none 10 ("Mycetoporus 'species A'",
+  "Cantharis nigra (=thoracica)", "Mine site community"). A subgenus in brackets after the genus
+  ("Lithobius (Monotarsobius) crassipes", 202 names) and a trailing "s. lat." or "s.l." are
+  left out when the rank is read; `scientific_name` keeps them.
+
+### Designations in the 2026-06-09 file
+
+| `sort_code` | Reporting category | Rows | Taxa (taxon version keys) | Scope: area |
+| --- | --- | ---: | ---: | --- |
+| A | Bern Convention: Appendix 1, 2, 3 (Bern-A1 16, A2 290, A3 73) | 379 | 371 | international: Europe |
+| C | Birds Directive: Annex 1 (111), 2.1 (22), 2.2 (51) | 184 | 180 | international: European Union |
+| C1 | Convention on Migratory Species: Appendix 1 (20), Appendix 2 (215), AEWA Annex II (152), ASCOBANS (11), EUROBATS Annex I (32) | 430 | 286 | international: World; AEWA Africa-Eurasia; ASCOBANS North-East Atlantic and Baltic; EUROBATS Europe |
+| C2 | OSPAR | 34 | 34 | international: North-East Atlantic |
+| D | Habitats Directive: Annex 2 priority species (5), Annex 2 non-priority species (47), Annex 4 (83), Annex 5 (37) | 172 | 139 | international: European Union |
+| E | EC Cites: Annex A (82), B (42), C (5), D (8) | 137 | 137 | international: European Union |
+| F | Global Red list status: IUCN global categories, 2001 and 1994 criteria (293), and IUCN's European red list (6) | 299 | 294 | international: World; Europe |
+| Fa | Red Listing based on pre 1994 IUCN guidelines: Rare 352, Insufficiently known 271, Endangered 214, Vulnerable 178, Indeterminate 90, Extinct 71 | 1,176 | 1,163 | uk: Great Britain |
+| Fb | Red Listing based on 1994 IUCN guidelines: DD 114, NT 73, VU 24, EN 4, EX 2, CR 1 | 218 | 218 | uk: Great Britain |
+| Fc | Red listing based on 2001 IUCN guidelines: GB red lists 10,666 (the bird red list 357 of them); the Vascular Plant Red List for England 1,935 (1,839 coded RedList_ENG, 20 coded RedList_GB, 76 Waiting List) | 12,601 | 10,957 | uk: Great Britain; country: England |
+| Fd | Birds of Conservation Concern 5: Red (70), Amber (103) | 173 | 173 | uk: United Kingdom |
+| Fe | Spider Amber List | 43 | 43 | uk: Great Britain |
+| Ga | Rare and scarce species: Nationally Rare (1,639) and Nationally Scarce (1,360), red-listed taxa included | 2,999 | 2,986 | uk: Great Britain |
+| Gb | Rare and scarce species (not based on IUCN criteria): Nationally Notable 542, Notable A 200, Notable B 419, Nationally Rare 201 and Scarce 334 (red-listed taxa excluded), rare marine 62, scarce marine 53 | 1,811 | 1,805 | uk: Great Britain |
+| Ha | UK Biodiversity Action Plan priority species (BAP-2007) | 1,150 | 1,150 | uk: United Kingdom |
+| Hb | England: NERC Act section 41 | 943 | 943 | country: England |
+| Hc | Scottish Biodiversity List | 2,103 | 2,085 | country: Scotland |
+| Hd | Wales: Environment (Wales) Act section 7 | 569 | 568 | country: Wales |
+| He | Northern Ireland Priority Species | 483 | 482 | country: Northern Ireland |
+| I | Wildlife and Countryside Act 1981: Schedule 1 Part 1 (94) and Part 2 (3), Schedule 5 by section (670), Schedule 8 (183) | 950 | 438 | uk: Great Britain (745 rows); country: England and Wales (200 rows), England (5 rows) |
+| J | Wildlife (Northern Ireland) Order 1985: Schedules 1, 5 and 8 | 133 | 133 | country: Northern Ireland |
+| K | Conservation of Habitats and Species Regulations 2010: Schedules 2, 4 and 5 | 97 | 97 | country: England and Wales |
+| L | Conservation (Natural Habitats, etc.) Regulations (Northern Ireland) 1995: Schedules 2, 3 and 4 | 67 | 67 | country: Northern Ireland |
+| M | Protection of Badgers Act 1992 | 1 | 1 | uk: Great Britain |
+
+In all: 18,982 rows for the UK or Great Britain, 6,535 for part of the UK and 1,635 international.
+
+Values of the main designations:
+
+- GB red lists (2001 criteria, codes RedList_GB_post2001-*, area Great Britain; `designation` and
+  `status_code`): Least concern (LC) 6,543, Vulnerable (VU) 755, Data Deficient (DD) 748, Near
+  Threatened (NT) 697, Not Evaluated (NE) 468, Endangered (EN) 369, Not Applicable (NA) 307,
+  Critically Endangered (CR) 216, Regionally Extinct (RE) 111, Critically Endangered (possibly
+  extinct) (CR(PE)) 54, Extinct (EX) 38, Extinct in the Wild (EW) 3. The bird red list (codes
+  Bird_RedList_GB_post2001-*, 357 rows) assesses the breeding (258) and non-breeding (99)
+  populations of a species separately (`population`), with the same categories. The Great Britain
+  red lists of the 2001 criteria come from 44 documents (`source`), dated from 2004 to 2025.
+- Birds of Conservation Concern: "Bird Population Status - red" and "- amber"; green-listed birds
+  are not in the workbook.
+- Wildlife and Countryside Act and the other legislation: the schedule and section is the
+  designation; there is no status apart from being listed.
+- NERC section 41, section 7, the Scottish Biodiversity List, Northern Ireland Priority Species and
+  the UK BAP list: the designation is the name of the list.
+
+One taxon can have the same designation more than once: 80 pairs of taxon version key and
+designation code appear two or three times, from two published names under one recommended name
+("Anas crecca" and "Anas crecca crecca") or from two source documents. In the GB red lists of the
+2001 criteria, 23 taxa have two different categories for the same population (or for the whole
+taxon), mostly from two published names in one source document.
 
 ## Web UI
 

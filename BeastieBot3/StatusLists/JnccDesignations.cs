@@ -13,9 +13,9 @@ using ExcelDataReader;
 // Museum's UK Species Inventory (UKSI), with its taxon version key.
 //
 // The workbook's name has the date of its release (taxon-designations-20260609.xlsx) and changes
-// with each release, so the download reads the current link from the resource page. JNCC has no
-// API for its resources and no CSV of the workbook: the page's zip holds the same workbook and two
-// PDFs of guidance. Licence: Open Government Licence v3.0, with JNCC's attribution statement,
+// with each release, so the download reads the current link from the resource page. No JNCC API
+// for the resource was found, and JNCC publishes no CSV of the workbook: the page's zip holds the
+// same workbook and two PDFs of guidance. Licence: Open Government Licence v3.0, with JNCC's attribution statement,
 // which names the year of the release.
 //
 // Columns left out: Comments (notes of up to 5,126 characters), Source description and
