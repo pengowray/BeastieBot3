@@ -56,7 +56,7 @@ internal static partial class SiteLinkReaders {
                         .Select(c => (c.Status, Report: c.Row.Source))
                         .ToList()
                     : [(string.Join("; ", group.Select(c => c.Status).Distinct(StringComparer.Ordinal)),
-                        Report: list.SortOrder < 40 ? group.First().Row.Source : null)];
+                        Report: list.Key == "jncc-rarity" ? group.First().Row.Source : null)];
                 foreach (var (status, report) in shown) {
                     taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Jncc, status, null,
                         SiteBuildRules.OtherListedName(group.First().Row.DesignatedName ?? record.Name, taxon.ScientificName),

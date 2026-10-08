@@ -33,7 +33,7 @@ internal static partial class SiteLinkReaders {
         }
         using (var command = connection.CreateCommand()) {
             command.CommandText = """
-                SELECT taxon_concept_id, appendix, party_name, effective_on, short_note, inherited_rank, inherited_name
+                SELECT taxon_concept_id, appendix, party_name, effective_on, short_note, inherited_rank, inherited_name, inherited_short_note
                 FROM cites_listing
                 ORDER BY taxon_concept_id, appendix, listing_change_id
                 """;
@@ -41,7 +41,7 @@ internal static partial class SiteLinkReaders {
             while (reader.Read()) {
                 if (taxa.TryGetValue(reader.GetInt64(0), out var taxon)) {
                     taxon.Listings.Add(new CitesListingRow(reader.GetString(1), Text(reader, 2), Text(reader, 3), Text(reader, 4),
-                        Text(reader, 5), Text(reader, 6)));
+                        Text(reader, 5), Text(reader, 6), Text(reader, 7)));
                 }
             }
         }
@@ -104,14 +104,28 @@ internal static partial class SiteLinkReaders {
                     ? $"{inheritedRank.ToLowerInvariant()} {inheritedName}"
                     : null);
             var status = "Appendix " + listing.Appendix + (listing.Appendix == "III" && listing.PartyName is { } party ? $" ({party})" : "");
-            // A listing's own note names the populations or parts it covers; an inherited listing's note
-            // is about the higher taxon's other members.
-            var population = under is null && listing.ShortNote is { } note ? SiteBuildRules.NullIfBlank(StatusLists.NztcsApi.PlainText(note)) : null;
+            // A listing's own note names the populations or parts it covers. An inherited listing has the
+            // higher taxon's note that applies to this taxon ("Except the populations of Loxodonta
+            // africana of Botswana ..."), unless it is about the higher taxon's other members.
+            var note = listedUnder is not null ? null : under is null ? listing.ShortNote : listing.InheritedShortNote;
+            var population = note is null ? null : CitesNote(note, inherited: under is not null);
             taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Cites, status, listing.Appendix, listedName, population,
                 OtherStatusSources.Cites, cites.Id.ToString(CultureInfo.InvariantCulture), cites.Url, listing.EffectiveOn,
                 ListedUnder: under));
             stats.CitesRows++;
         }
+    }
+
+    // A note as plain text, without Species+'s pointer to its full note; null for an inherited note that
+    // is about the higher taxon's other members ("Except the species included in Appendix I.",
+    // "Includes Alligatoridae, ...", "Formerly included in Boidae spp.").
+    private static string? CitesNote(string html, bool inherited) {
+        var text = StatusLists.NztcsApi.PlainText(html).Replace(" (see full note)", "", StringComparison.Ordinal).Trim();
+        if (inherited && (text.StartsWith("Except the species", StringComparison.Ordinal) || text.StartsWith("Except the subspecies", StringComparison.Ordinal)
+            || text.StartsWith("Includes", StringComparison.Ordinal) || text.StartsWith("Formerly included", StringComparison.Ordinal))) {
+            return null;
+        }
+        return SiteBuildRules.NullIfBlank(text);
     }
 
     // The download date and the citation the Checklist asks for.
@@ -130,5 +144,5 @@ internal static partial class SiteLinkReaders {
         List<CitesListingRow> Listings, List<string> Synonyms);
 
     private sealed record CitesListingRow(string Appendix, string? PartyName, string? EffectiveOn, string? ShortNote,
-        string? InheritedRank, string? InheritedName);
+        string? InheritedRank, string? InheritedName, string? InheritedShortNote);
 }
