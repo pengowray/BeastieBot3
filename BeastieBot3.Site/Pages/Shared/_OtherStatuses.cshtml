@@ -7,6 +7,7 @@
     <p>@SiteText.OtherStatusesIntro</p>
     @foreach (var table in Model.Tables) {
         <h3>@table.Heading</h3>
+        @if (table.Rows.Count > 0) {
         <div class="table-scroll">
             <table>
                 <thead>
@@ -35,6 +36,28 @@
                 </tbody>
             </table>
         </div>
+        }
+        @if (table.PlaceRanks is { } placeRanks) {
+            <details class="place-ranks">
+                <summary>@placeRanks.Summary</summary>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th scope="col">@placeRanks.PlaceHeading</th>
+                                <th scope="col">@SiteText.ColPlaceRank</th>
+                                <th scope="col">@SiteText.ColPlaceRankMeaning</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var place in placeRanks.Rows) {
+                                <tr><th scope="row">@place.Place</th><td>@place.Rank</td><td>@place.Meaning</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        }
     }
     @foreach (var note in Model.Notes) {
         <p class="help">@foreach (var segment in note) {if (segment.Href is { } href) {<a href="@href">@segment.Text</a>} else {@segment.Text}}</p>

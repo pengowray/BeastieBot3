@@ -56,6 +56,7 @@ public static partial class SiteText {
         OtherStatusSystems.Nztcs => ("NZTCS", "New Zealand Threat Classification System", true),
         OtherStatusSystems.Esa => ("Endangered Species Act", null, false),
         OtherStatusSystems.NatureServeGlobal => ("NatureServe", "NatureServe's global conservation status rank", false),
+        OtherStatusSystems.NatureServeNational => ("NatureServe", "NatureServe's national conservation status rank", false),
         _ => (system, null, false),
     };
 
@@ -65,6 +66,9 @@ public static partial class SiteText {
     /// NatureServe's name has "var.", or, when NatureServe uses the page's name, when the page's taxon
     /// is a variety. Null for a row that is not a rank.
     public static string? NatureServeRankMeaning(OtherStatusRow row, string kind) {
+        if (row.System == OtherStatusSystems.NatureServeNational) {
+            return NatureServeLocalRankMeaning(row.Status, row.Qualifier);
+        }
         if (row.System != OtherStatusSystems.NatureServeGlobal || OtherStatusSystems.NatureServeRankMeaning(row.StatusCode) is not { } meaning) {
             return null;
         }
@@ -82,6 +86,41 @@ public static partial class SiteText {
         }
         return $"{meaning} (rounded rank {rounded})";
     }
+
+    /// The line under a NatureServe national or subnational rank: what each part means, with the
+    /// season it applies to ("Apparently Secure when breeding; Secure when not breeding"), and
+    /// "exotic" when NatureServe says the taxon is exotic there. Null when no part has a meaning.
+    public static string? NatureServeLocalRankMeaning(string rank, string? qualifier) {
+        var parts = OtherStatusSystems.NatureServeRankParts(rank)
+            .Select(p => OtherStatusSystems.NatureServeLocalRankMeaning(p.Code) is { } meaning ? meaning + Season(p.Season) : null)
+            .OfType<string>()
+            .ToList();
+        if (qualifier == "exotic") {
+            parts.Add("exotic");
+        }
+        return parts.Count == 0 ? null : string.Join("; ", parts);
+
+        static string Season(NatureServeSeason season) => season switch {
+            NatureServeSeason.Breeding => " when breeding",
+            NatureServeSeason.Nonbreeding => " when not breeding",
+            NatureServeSeason.Migrant => " on migration",
+            _ => "",
+        };
+    }
+
+    /// The text that opens the collapsed table of NatureServe's ranks in a country's states, provinces
+    /// or territories: how many places have a rank, and how many of them rank the taxon S1, S2, SH or SX.
+    public static string PlaceRanksSummary(string group, int places, int imperiled) {
+        var noun = group == "CA" ? (places == 1 ? "province or territory" : "provinces and territories") : (places == 1 ? "state" : "states");
+        var count = places.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+        var rest = imperiled == 0 ? "" : $", imperiled or worse in {imperiled.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}";
+        return $"NatureServe ranks in {count} {noun}{rest}";
+    }
+
+    /// The first column's heading in the table of NatureServe's ranks in a country's states, provinces or territories.
+    public static string PlaceRanksHeading(string group) => group == "CA" ? "Province or territory" : "State";
+    public const string ColPlaceRank = "Rank";
+    public const string ColPlaceRankMeaning = "Meaning";
 
     /// The hover title of a NatureServe rank with a "?" or a "Q"; null for any other.
     public static string? NatureServeRankTitle(OtherStatusRow row) {
@@ -131,9 +170,12 @@ public static partial class SiteText {
     /// The note under the tables when they have rows from NatureServe, in three parts around the
     /// links to NatureServe Explorer and the licence: what the rows are, the date, and, when there are
     /// Canadian rows, that they are NatureServe's copy.
-    public static string OtherStatusNatureServeSubject(bool canadian, bool global) => (canadian, global) switch {
-        (true, true) => "Canadian statuses and NatureServe global ranks are from ",
-        (true, false) => "Canadian statuses are from ",
+    /// local: the page has national or state, province or territory ranks.
+    public static string OtherStatusNatureServeSubject(bool canadian, bool global, bool local = false) => (canadian, global || local, local) switch {
+        (true, true, true) => "Canadian statuses and NatureServe ranks are from ",
+        (true, true, false) => "Canadian statuses and NatureServe global ranks are from ",
+        (true, false, _) => "Canadian statuses are from ",
+        (false, _, true) => "NatureServe ranks are from ",
         _ => "NatureServe global ranks are from ",
     };
     public static string OtherStatusNatureServeDate(string? date) => date is null ? "." : $", downloaded on {date}.";

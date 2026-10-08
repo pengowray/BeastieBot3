@@ -42,8 +42,9 @@ public sealed record OtherStatusSourceInfo(
         (date, rows) => {
             var canadian = rows.Any(r => r.System is OtherStatusSystems.Cosewic or OtherStatusSystems.Sara);
             var global = rows.Any(r => r.System == OtherStatusSystems.NatureServeGlobal);
+            var local = rows.Any(r => r.System is OtherStatusSystems.NatureServeNational or OtherStatusSystems.NatureServeSubnational);
             return [
-                new(SiteText.OtherStatusNatureServeSubject(canadian, global)),
+                new(SiteText.OtherStatusNatureServeSubject(canadian, global, local)),
                 new(SiteText.NatureServeExplorer, SiteText.NatureServeExplorerUrl),
                 new(SiteText.OtherStatusNatureServeCopyright),
                 new(SiteText.LicenceCcByName, SiteText.LicenceCcBy),

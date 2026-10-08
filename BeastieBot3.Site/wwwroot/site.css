@@ -1590,3 +1590,9 @@ th.num {
 .more-list:has(.show-more:checked) .more-item {
     display: revert;
 }
+
+/* Other conservation statuses: NatureServe's ranks in a country's states, provinces or territories,
+   collapsed under the country's table. */
+.place-ranks {
+    margin: 0.2rem 0 1rem;
+}

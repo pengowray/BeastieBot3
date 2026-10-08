@@ -349,6 +349,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Taxa matched to a NatureServe record by a NatureServe synonym", s.NatureServeBySynonym);
         Row("Taxa matched to a NatureServe record by an IUCN synonym", s.NatureServeByIucnSynonym);
         Row("NatureServe global ranks (unranked and not applicable left out)", s.NatureServeRanks);
+        Row("NatureServe national ranks (US, Canada; unranked left out)", s.NatureServeNationalRanks);
+        Row("NatureServe state, province and territory ranks (unranked left out)", s.NatureServeSubnationalRanks);
         Row("COSEWIC statuses (from NatureServe)", s.CosewicStatuses);
         Row("SARA statuses (from NatureServe)", s.SaraStatuses);
         Row("ECOS listings (US Endangered Species Act)", s.EcosListings);

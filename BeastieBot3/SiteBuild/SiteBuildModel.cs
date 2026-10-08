@@ -352,6 +352,8 @@ internal sealed class SiteBuildStats {
     public int NatureServeByIucnSynonym;
     /// other_status rows from NatureServe: global ranks (unranked and not applicable left out), COSEWIC and SARA.
     public int NatureServeRanks;
+    public int NatureServeNationalRanks;
+    public int NatureServeSubnationalRanks;
     public int CosewicStatuses;
     public int SaraStatuses;
     /// ECOS listings, and those matched to a taxon.

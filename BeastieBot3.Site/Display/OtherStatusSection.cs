@@ -37,13 +37,23 @@ public sealed record OtherStatusLine(
 
 /// The table of one group (a country, or NatureServe's global ranks). A column after List and Status
 /// shows only when one of the rows has a value for it; DateHeading is null when no row has a date.
+/// PlaceRanks: NatureServe's ranks in the country's states, provinces or territories, shown under the
+/// table; null when there are none. Rows can be empty when the group has only those.
 public sealed record OtherStatusTable(
     string Heading,
     bool ShowAppliesTo,
     bool ShowListedName,
     bool ShowReport,
     OtherStatusDateHeading? DateHeading,
-    IReadOnlyList<OtherStatusLine> Rows);
+    IReadOnlyList<OtherStatusLine> Rows,
+    OtherStatusPlaceRanks? PlaceRanks = null);
+
+/// NatureServe's ranks in the states, provinces or territories of one country, in a collapsed table
+/// under the country's table. Summary: the text that opens it. PlaceHeading: the first column's heading.
+public sealed record OtherStatusPlaceRanks(string Summary, string PlaceHeading, IReadOnlyList<OtherStatusPlaceRank> Rows);
+
+/// One state, province or territory: its name, the rank as NatureServe gives it, and what it means.
+public sealed record OtherStatusPlaceRank(string Place, string Rank, string? Meaning);
 
 /// The species page's "Other conservation statuses" section: one table per group, in the order of the
 /// rows (OtherStatusSystems.All), then one note for each source, in the order the sources first
@@ -76,7 +86,9 @@ public sealed record OtherStatusSection(IReadOnlyList<OtherStatusTable> Tables, 
         _ => 1,
     };
 
-    private static OtherStatusTable BuildTable(string group, IReadOnlyList<OtherStatusRow> rows, string taxonKind) {
+    private static OtherStatusTable BuildTable(string group, IReadOnlyList<OtherStatusRow> allRows, string taxonKind) {
+        var placeRows = allRows.Where(r => r.System == OtherStatusSystems.NatureServeSubnational).ToList();
+        var rows = allRows.Where(r => r.System != OtherStatusSystems.NatureServeSubnational).ToList();
         var datedSources = rows.Where(r => r.ListedOn is not null).Select(r => r.Source).Distinct().ToList();
         return new OtherStatusTable(
             SiteText.OtherStatusGroup(group),
@@ -84,7 +96,17 @@ public sealed record OtherStatusSection(IReadOnlyList<OtherStatusTable> Tables, 
             ShowListedName: rows.Any(r => r.ListedName is not null),
             ShowReport: rows.Any(r => r.Report is not null),
             DateHeading: datedSources.Count == 0 ? null : DateHeadingFor(datedSources),
-            rows.Select(r => BuildLine(r, taxonKind)).ToList());
+            rows.Select(r => BuildLine(r, taxonKind)).ToList(),
+            placeRows.Count == 0 ? null : BuildPlaceRanks(group, placeRows));
+    }
+
+    private static OtherStatusPlaceRanks BuildPlaceRanks(string group, IReadOnlyList<OtherStatusRow> rows) {
+        var places = rows
+            .Select(r => new OtherStatusPlaceRank(r.Population ?? "", r.Status, SiteText.NatureServeLocalRankMeaning(r.Status, r.Qualifier)))
+            .OrderBy(p => p.Place, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var imperiled = rows.Count(r => OtherStatusSystems.NatureServeRankParts(r.Status).Any(p => p.Code is "1" or "2" or "H" or "X"));
+        return new OtherStatusPlaceRanks(SiteText.PlaceRanksSummary(group, places.Count, imperiled), SiteText.PlaceRanksHeading(group), places);
     }
 
     /// The heading of a date column whose dates come from these sources: the heading of a source with

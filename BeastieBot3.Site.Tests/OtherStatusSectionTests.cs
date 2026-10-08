@@ -36,6 +36,53 @@ public sealed class OtherStatusSectionTests {
         Assert.Equal(["Australia", "Brazil", "Canada", "New Zealand", "United States", "Global", ""], section.Tables.Select(t => t.Heading));
     }
 
+    // ------------------------------------------------------------ NatureServe national and state ranks
+
+    private static OtherStatusRow Local(string system, string country, string rank, string? place = null, string? qualifier = null) =>
+        new(system, rank, rank, null, place, "natureserve", "1", null, null, Country: country, Qualifier: qualifier);
+
+    [Fact]
+    public void NationalRanksGoInTheirCountrysTableAndStateRanksUnderIt() {
+        var section = Build(TaxonKinds.Species,
+            Row("us-esa", "ecos"),
+            Local("natureserve-national", "US", "N3"),
+            Local("natureserve-subnational", "US", "S1", "Texas"),
+            Local("natureserve-subnational", "US", "S4B,S5N", "Alabama"),
+            Local("natureserve-subnational", "US", "SNA", "Hawaii", "exotic"),
+            Local("natureserve-national", "CA", "N2"));
+        Assert.Equal(["Canada", "United States"], section.Tables.Select(t => t.Heading));
+        var us = section.Tables[1];
+        Assert.Equal(["Endangered Species Act", "NatureServe"], us.Rows.Select(r => r.ListLabel));
+        Assert.Equal("Vulnerable", us.Rows[1].RankMeaning);
+        var places = us.PlaceRanks!;
+        Assert.Equal(["Alabama", "Hawaii", "Texas"], places.Rows.Select(p => p.Place));
+        Assert.Equal("Apparently Secure when breeding; Secure when not breeding", places.Rows[0].Meaning);
+        Assert.Equal("Not Applicable; exotic", places.Rows[1].Meaning);
+        Assert.Equal("Critically Imperiled", places.Rows[2].Meaning);
+        Assert.Equal("NatureServe ranks in 3 states, imperiled or worse in 1", places.Summary);
+        Assert.Null(section.Tables[0].PlaceRanks);
+    }
+
+    [Theory]
+    [InlineData("S3", "S3", "3", "Any")]
+    [InlineData("N5B,N5N", "N5", "5", "Breeding")]
+    [InlineData("SNRN", "SNR", "NR", "Nonbreeding")]
+    [InlineData("SHM", "SH", "H", "Migrant")]
+    [InlineData("SZN", "SZ", "Z", "Nonbreeding")]
+    public void NatureServeLocalRanksAreReadPartByPart(string rank, string firstRank, string firstCode, string firstSeason) {
+        var parts = BeastieBot3.Shared.SiteData.OtherStatusSystems.NatureServeRankParts(rank);
+        Assert.Equal(firstRank, parts[0].Rank);
+        Assert.Equal(firstCode, parts[0].Code);
+        Assert.Equal(firstSeason, parts[0].Season.ToString());
+    }
+
+    [Theory]
+    [InlineData("G3")]
+    [InlineData("SQ")]
+    [InlineData("S3Q")]
+    public void ARankThatIsNotANationalOrStateRankHasNoParts(string rank) =>
+        Assert.Empty(BeastieBot3.Shared.SiteData.OtherStatusSystems.NatureServeRankParts(rank));
+
     [Fact]
     public void ATableShowsAColumnOnlyWhenOneOfItsRowsHasAValue() {
         var section = Build(TaxonKinds.Species,
