@@ -11,6 +11,8 @@ using Microsoft.Data.Sqlite;
 //   natureserve_species   one row per NatureServe Explorer species, subspecies, variety or
 //                         population: G rank, US and Canadian N ranks, US ESA, COSEWIC and SARA codes;
 //   natureserve_synonym   the synonyms NatureServe lists for each of them;
+//   natureserve_nation    each record's rounded national ranks (United States, Canada);
+//   natureserve_subnation each record's rounded state, province and territory ranks;
 //   natureserve_partition the name prefixes of the pass under way and how far each has got;
 //   ecos_listing          one row per US Endangered Species Act listing in ECOS (a species,
 //                         subspecies or population);
@@ -119,6 +121,27 @@ internal sealed partial class StatusListStore : SqliteStore {
             PRIMARY KEY (element_global_id, name)
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS natureserve_synonym_name ON natureserve_synonym(name);
+        CREATE TABLE IF NOT EXISTS natureserve_nation (
+            element_global_id INTEGER NOT NULL REFERENCES natureserve_species(element_global_id) ON DELETE CASCADE,
+            nation_code       TEXT NOT NULL,     -- US, CA
+            rounded_n_rank    TEXT,              -- rounded national rank as given, with breeding (B), nonbreeding (N) and migrant (M) parts
+                                                 -- joined by ",": N2, NNR, N5B,N5N, N3B,NUM, NNRB. The search gives no unrounded rank
+            native            INTEGER,           -- 1 or 0 as NatureServe gives it; NULL when not given
+            exotic            INTEGER,           -- 1 or 0 as NatureServe gives it; NULL when not given. native and exotic are both 1
+                                                 -- for a taxon native in part of the nation and introduced in another
+            PRIMARY KEY (element_global_id, nation_code)
+        ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS natureserve_subnation (
+            element_global_id INTEGER NOT NULL REFERENCES natureserve_species(element_global_id) ON DELETE CASCADE,
+            nation_code       TEXT NOT NULL,     -- the nation of the state or province: US, CA
+            subnation_code    TEXT NOT NULL,     -- NatureServe's code of a US state or a Canadian province or territory: TX, ON, DC, NF (island
+                                                 -- of Newfoundland), LB (Labrador), NN (Navajo Nation, under US). The search gives no names
+            rounded_s_rank    TEXT,              -- rounded subnational rank as given: S1, SNR, S3B,S3N, S2,S4N. The search gives no unrounded rank
+            native            INTEGER,           -- 1 or 0 as NatureServe gives it; NULL when not given
+            exotic            INTEGER,           -- 1 or 0 as NatureServe gives it; NULL when not given. native and exotic can both be 1
+            PRIMARY KEY (element_global_id, nation_code, subnation_code)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS natureserve_subnation_place ON natureserve_subnation(nation_code, subnation_code);
         CREATE TABLE IF NOT EXISTS natureserve_partition (
             prefix    TEXT PRIMARY KEY,           -- scientific name prefix ('' = every record)
             expected  INTEGER,                    -- records NatureServe gave for the prefix
