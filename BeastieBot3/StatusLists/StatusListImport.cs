@@ -5,10 +5,12 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 
 // The run shared by `statuses ecos-import`, `statuses nztcs-import`, `statuses salve-import`,
-// `statuses jncc-import` and `statuses cites-import`:
+// `statuses jncc-import`, `statuses cites-import` and `statuses japan-import`:
 //   1. take the file given with --file, or download the source into the status lists folder as
 //      <stem>-<yyyy-MM-dd>.<extension>, or under the name the source gives its file (JNCC's name
-//      holds the date of its release); StatusListDownload writes it through a .part file;
+//      holds the date of its release); StatusListDownload writes it through a .part file. A source
+//      of several files (Japan's Red List: eight CSV files and a PDF) is kept as a folder,
+//      <stem>-<yyyy-MM-dd>, and its command names a kept folder with --dir;
 //   2. read the file into rows; a file with no rows leaves the store as it was;
 //   3. replace the source's rows and its status_source row in the status lists store;
 //   4. print a table of counts, the command's summary lines and the file's path.
@@ -39,8 +41,13 @@ internal sealed class StatusListImportSpec<TRow> {
     public required Func<DateTime, string> Citation { get; init; }
 
     /// The downloaded file is named <FileStem>-<yyyy-MM-dd>.<FileExtension>, unless FindFileName is set.
+    /// A folder (ImportsFolder) is named <FileStem>-<yyyy-MM-dd>, and FileExtension is not used.
     public required string FileStem { get; init; }
     public required string FileExtension { get; init; }
+
+    /// For a source of several files kept in one folder: the File setting names a folder, Download
+    /// is given the folder's path and fills it, and Read reads the folder.
+    public bool ImportsFolder { get; init; }
 
     /// For a source that names its own files: finds the name of the file to download (it may ask the
     /// source), before Download runs. Null: the name above.
@@ -87,8 +94,8 @@ internal static class StatusListImport {
             file = Path.GetFullPath(given.StartsWith("~/", StringComparison.Ordinal)
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), given[2..])
                 : given);
-            if (!File.Exists(file)) {
-                AnsiConsole.MarkupLineInterpolated($"[red]File not found:[/] {file}");
+            if (spec.ImportsFolder ? !Directory.Exists(file) : !File.Exists(file)) {
+                AnsiConsole.MarkupLineInterpolated($"[red]{(spec.ImportsFolder ? "Folder" : "File")} not found:[/] {file}");
                 return -1;
             }
         } else {
@@ -99,8 +106,8 @@ internal static class StatusListImport {
             }
             Directory.CreateDirectory(folder);
             try {
-                var name = spec.FindFileName is { } find
-                    ? await find(cancellationToken).ConfigureAwait(false)
+                var name = spec.FindFileName is { } find ? await find(cancellationToken).ConfigureAwait(false)
+                    : spec.ImportsFolder ? $"{spec.FileStem}-{now:yyyy-MM-dd}"
                     : $"{spec.FileStem}-{now:yyyy-MM-dd}.{spec.FileExtension}";
                 file = Path.Combine(folder, name);
                 await spec.Download(file, cancellationToken).ConfigureAwait(false);
@@ -135,7 +142,7 @@ internal static class StatusListImport {
         }
         AnsiConsole.Write(table);
         spec.Summary(rows);
-        AnsiConsole.MarkupLineInterpolated($"[grey]File:[/] {file}");
+        AnsiConsole.MarkupLineInterpolated($"[grey]{(spec.ImportsFolder ? "Folder" : "File")}:[/] {file}");
         return 0;
     }
 }

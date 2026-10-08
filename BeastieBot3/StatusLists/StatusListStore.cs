@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 // for the public species site. This file has the schema, the source rows and the sync state; the
 // methods that read and write each source's tables are in StatusListStore.NatureServe.cs,
 // StatusListStore.Ecos.cs, StatusListStore.Nztcs.cs, StatusListStore.Salve.cs,
-// StatusListStore.Jncc.cs, StatusListStore.Cites.cs and StatusListStore.RedLists.cs.
+// StatusListStore.Jncc.cs, StatusListStore.Cites.cs, StatusListStore.RedLists.cs and StatusListStore.Japan.cs.
 //   status_source         one row per source: title, licence, citation, when it was last fetched;
 //   status_sync_state     key/value progress of `statuses natureserve-fetch` (the pass under way);
 //   natureserve_species   one row per NatureServe Explorer species, subspecies, variety or
@@ -34,10 +34,14 @@ using Microsoft.Data.Sqlite;
 //                         (rules/status-lists/national-red-lists.yml), with its own status_source row
 //                         'redlist:<key>';
 //   red_list_taxon        one row per status of a taxon in one of those lists;
-//   red_list_synonym      the synonyms a list gives for its taxa with a status.
+//   red_list_synonym      the synonyms a list gives for its taxa with a status;
+//   japan_listing         one row per taxon or threatened local population in the latest Red List of
+//                         Japan's Ministry of the Environment for its group (5th Red List or Red
+//                         List 2020).
 //
-// Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text, and
-// none of JNCC's comments or descriptions.
+// Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text,
+// none of JNCC's comments or descriptions, and none of the habitat, region or threat columns of
+// Japan's Red List.
 
 namespace BeastieBot3.StatusLists;
 
@@ -51,6 +55,7 @@ internal static class StatusSources {
 
     /// A red list's status_source row is 'redlist:<key>', key from national-red-lists.yml.
     public const string RedListPrefix = "redlist:";
+    public const string Japan = "japan";
 }
 
 internal sealed record StatusSourceInfo(
@@ -93,7 +98,7 @@ internal sealed partial class StatusListStore : SqliteStore {
 
     internal const string Ddl = """
         CREATE TABLE IF NOT EXISTS status_source (
-            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'jncc' | 'cites' | 'redlist:<key>' (one per red list)
+            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'jncc' | 'cites' | 'redlist:<key>' (one per red list) | 'japan'
             title       TEXT NOT NULL,
             url         TEXT NOT NULL,      -- the source's site; for JNCC, the URL of the file imported
             licence     TEXT NOT NULL,
@@ -406,6 +411,42 @@ internal sealed partial class StatusListStore : SqliteStore {
             PRIMARY KEY (dataset_key, taxon_id)
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS red_list_synonym_canonical ON red_list_synonym(canonical_name);
+        CREATE TABLE IF NOT EXISTS japan_listing (
+            row_id          INTEGER PRIMARY KEY,  -- the row's place in the import: groups in the Ministry's order (mammals first, fungi last), then
+                                                  -- the rows in their file's order. Not an id: it changes when a list changes. An LP row's
+                                                  -- scientific name is shared by the other populations and the taxon itself, so no column is unique
+            group_key       TEXT NOT NULL,        -- mammals, birds, reptiles, amphibians, fishes, insects, molluscs, other-invertebrates,
+                                                  -- vascular-plants, bryophytes, algae, lichens, fungi
+            group_en        TEXT NOT NULL,        -- Mammals, Brackish and freshwater fishes, Other invertebrates, Vascular plants ...
+            group_ja        TEXT NOT NULL,        -- the group as the list names it: 哺乳類, 汽水・淡水魚類, その他無脊椎動物, 維管束植物
+            kingdom         TEXT,                 -- in IUCN's spelling, from the group: ANIMALIA; PLANTAE (vascular plants, bryophytes); FUNGI
+                                                  -- (lichens, fungi); NULL for algae
+            list_version    TEXT NOT NULL,        -- the edition of the group's latest list: 'Red List 2020' (環境省レッドリスト2020) or
+                                                  -- '5th Red List' (環境省第５次レッドリスト)
+            list_year       INTEGER NOT NULL,     -- the year that list was published: 2020; 2025 (plants, algae, lichens, fungi); 2026 (birds,
+                                                  -- reptiles, amphibians)
+            category        TEXT NOT NULL,        -- EX, EW, CR (IA), EN (IB), CR+EN (I: Red List 2020 groups that do not split I into IA and
+                                                  -- IB for every taxon), VU (II), NT, DD, LP (threatened local population)
+            category_ja     TEXT NOT NULL,        -- the category as the list writes it: 絶滅危惧IA類 (animal CSVs), 絶滅危惧ⅠＡ類（CR） (plant
+                                                  -- CSVs), 絶滅危惧I類（CR+EN） (the Red List 2020 PDF's heading)
+            japanese_name   TEXT,                 -- 和名 as written; for an LP row, the place and the name: 九州地方のカワネズミ
+            scientific_name TEXT NOT NULL,        -- 学名 as written, without authors; full-width letters and punctuation made ASCII (NFKC) and
+                                                  -- spaces collapsed: "Lutra lutra nippon", "Assiminea sp. D", "Heptathela kimurai sensu lato"
+            population      TEXT,                 -- LP rows: the place, japanese_name before its last の: 九州地方, 本州の太平洋側湖沼系群
+            higher_taxa     TEXT,                 -- the groups the list gives before the name, as written: 'カモ目 カモ科' (order and family,
+                                                  -- animal CSVs), 'コウチュウ目' (order, Red List 2020 insects), '節足動物門 甲殻綱 エビ目'
+                                                  -- (phylum, class and order, Red List 2020 other invertebrates); NULL for the other groups
+            criteria        TEXT,                 -- 判定基準 of the animal CSVs as written: 'B2ab', 'A2 C1', '①②' (the Ministry's qualitative
+                                                  -- criteria, numbered); NULL for the other groups
+            list_number     TEXT,                 -- 掲載No. of the animal CSVs: BI0001, RE0044, AM0001; NULL for the other groups
+            source_file     TEXT NOT NULL,        -- the file the row was read from, named as in its URL: redlist2026_birds.csv, 900515981.pdf
+            source_url      TEXT NOT NULL,        -- that file's URL
+            source_page     INTEGER,              -- the PDF's page (1 to 131); NULL for CSV rows
+            source_line     INTEGER NOT NULL,     -- CSV: the row's number in the file, heading rows included; PDF: the line's number on its page,
+                                                  -- top to bottom, header included
+            imported_at     TEXT NOT NULL         -- UTC "O"
+        );
+        CREATE INDEX IF NOT EXISTS japan_listing_name ON japan_listing(scientific_name);
         """;
 
     protected override void EnsureSchema() {

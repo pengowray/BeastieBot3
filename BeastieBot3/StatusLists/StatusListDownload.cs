@@ -73,10 +73,18 @@ internal static class StatusListDownload {
         }
     }
 
-    /// Downloads <paramref name="url"/> into <paramref name="file"/> as it is.
+    /// Downloads <paramref name="url"/> into <paramref name="file"/> as it is. When the answer is not a
+    /// success it throws HttpRequestException with the status and the URL, and when the answer is a
+    /// web page (Content-Type text/html, as a site under maintenance gives for every URL) it throws
+    /// IOException, so the page is never saved under the file's name.
     public static async Task SaveAsync(HttpClient http, string url, string file, CancellationToken cancellationToken) {
         using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode) {
+            throw new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}: {url}", null, response.StatusCode);
+        }
+        if (string.Equals(response.Content.Headers.ContentType?.MediaType, "text/html", StringComparison.OrdinalIgnoreCase)) {
+            throw new IOException($"The server answered with a web page (text/html), not the file: {url}");
+        }
         await WriteAsync(file, output => response.Content.CopyToAsync(output, cancellationToken)).ConfigureAwait(false);
     }
 
