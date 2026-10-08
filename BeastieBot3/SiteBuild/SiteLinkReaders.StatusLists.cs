@@ -15,11 +15,11 @@ internal static partial class SiteLinkReaders {
     /// Adds each matched taxon's NatureServe, COSEWIC, SARA and ESA rows to its OtherStatuses;
     /// returns the dates the store's two sources were last downloaded (yyyy-MM-dd, null when the store
     /// has no rows of that source). A store without a source's tables gives no rows of that source.
-    public static (string? NatureServeFetched, string? EcosFetched) ReadStatusLists(string path,
+    public static (string? NatureServeFetched, string? EcosFetched, string? NztcsFetched) ReadStatusLists(string path,
         IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats, CancellationToken cancellationToken) {
         using var connection = OpenReadOnly(path);
         var index = new StatusListNameIndex(taxa.Values);
-        string? natureServe = null, ecos = null;
+        string? natureServe = null, ecos = null, nztcs = null;
         if (DelimitedTableImporter.GetTableColumns(connection, "natureserve_species") is not null) {
             ReadNatureServe(connection, index, stats, cancellationToken);
             natureServe = SourceFetched(connection, OtherStatusSources.NatureServe);
@@ -32,7 +32,13 @@ internal static partial class SiteLinkReaders {
         } else {
             stats.Warnings.Add($"The status lists store {path} has no ECOS listings: run statuses ecos-import.");
         }
-        return (natureServe, ecos);
+        if (DelimitedTableImporter.GetTableColumns(connection, "nztcs_assessment") is not null) {
+            ReadNztcs(connection, index, stats, cancellationToken);
+            nztcs = SourceFetched(connection, OtherStatusSources.Nztcs);
+        } else {
+            stats.Warnings.Add($"The status lists store {path} has no NZTCS assessments: run statuses nztcs-import.");
+        }
+        return (natureServe, ecos, nztcs);
     }
 
     // NatureServe: each record goes to the taxon with its scientific name, else the one taxon that one
@@ -158,6 +164,51 @@ internal static partial class SiteLinkReaders {
                 OtherStatusSources.Ecos, entityId.ToString(CultureInfo.InvariantCulture), row.GetString(6), Text(row, 5)));
             stats.EcosMatched++;
         }
+    }
+
+    // NZTCS: each current assessment with a scientific name (the store leaves informal names out)
+    // goes to the one taxon with that name in any kingdom (NZTCS gives no kingdom), else the one
+    // taxon whose IUCN synonyms include it. A taxon gets one assessment: matches by name first.
+    private static void ReadNztcs(SqliteConnection connection, StatusListNameIndex index, SiteBuildStats stats,
+        CancellationToken cancellationToken) {
+        var rows = new List<(long Id, string Name, string Status, string? Report)>();
+        using (var command = connection.CreateCommand()) {
+            command.CommandText = """
+                SELECT assessment_id, scientific_name, category, status, report_name
+                FROM nztcs_assessment
+                WHERE scientific_name IS NOT NULL
+                ORDER BY assessment_id
+                """;
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (StatusLists.NztcsApi.StatusText(Text(reader, 2), Text(reader, 3)) is { } status) {
+                    rows.Add((reader.GetInt64(0), reader.GetString(1), status, Text(reader, 4)));
+                }
+            }
+        }
+        stats.NztcsAssessments = rows.Count;
+        var matched = new Dictionary<long, (long Id, string Name, string Status, string? Report)>();
+        var unmatched = new List<(long Id, string Name, string Status, string? Report)>();
+        foreach (var row in rows) {
+            if (index.Find(null, row.Name) is { } taxon) {
+                matched.TryAdd(taxon.TaxonId, row);
+            } else {
+                unmatched.Add(row);
+            }
+        }
+        foreach (var row in unmatched) {
+            if (index.FindByIucnSynonym(null, row.Name) is { } taxon) {
+                matched.TryAdd(taxon.TaxonId, row);
+            }
+        }
+        foreach (var (taxonId, row) in matched) {
+            var taxon = index.Taxon(taxonId);
+            taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Nztcs, row.Status, null,
+                SiteBuildRules.OtherListedName(row.Name, taxon.ScientificName), null, OtherStatusSources.Nztcs,
+                row.Id.ToString(CultureInfo.InvariantCulture), StatusLists.NztcsApi.AssessmentUrl(row.Id), null, row.Report));
+        }
+        stats.NztcsMatched = matched.Count;
     }
 
     // status_source.fetched_at as yyyy-MM-dd; null when the source has no row.

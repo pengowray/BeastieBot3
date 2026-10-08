@@ -110,8 +110,9 @@ public sealed record EpbcListingRow(long SpratTaxonId, string ListedName, string
 /// OtherStatusSystems key. StatusCode: NatureServe's rounded rank. ListedName: the name the listing
 /// uses, only when it is not the taxon's own name. Population: the population or area the listing
 /// applies to, null for the whole taxon. Url: the record at the source. ListedOn: yyyy-MM-dd.
+/// Report: the publication an NZTCS status comes from.
 public sealed record OtherStatusRow(string System, string Status, string? StatusCode, string? ListedName, string? Population,
-    string Source, string SourceId, string? Url, string? ListedOn);
+    string Source, string SourceId, string? Url, string? ListedOn, string? Report = null);
 
 /// One search result: the taxon and the name that matched best.
 /// IsStrongExactMatch: an exact match on the taxon's scientific name, a synonym, its English name

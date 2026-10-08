@@ -143,9 +143,10 @@ internal sealed record EpbcListing(long SpratTaxonId, string ListedName, string?
 
 /// One status of a taxon in a list other than the IUCN Red List (other_status). System: an
 /// OtherStatusSystems key. StatusCode: NatureServe's rounded rank. Population: the population or
-/// area the listing applies to, null for the whole taxon. ListedOn: yyyy-MM-dd.
+/// area the listing applies to, null for the whole taxon. ListedOn: yyyy-MM-dd. Report: the
+/// publication an NZTCS status comes from.
 internal sealed record OtherStatus(string System, string Status, string? StatusCode, string? ListedName, string? Population,
-    string Source, string SourceId, string? Url, string? ListedOn);
+    string Source, string SourceId, string? Url, string? ListedOn, string? Report = null);
 
 /// One assessment row to write. The CSV gives the latest assessments; the API headers add the
 /// earlier ones, whose trend and criteria version come from the payload.
@@ -345,6 +346,10 @@ internal sealed class SiteBuildStats {
     /// ECOS listings, and those matched to a taxon.
     public int EcosListings;
     public int EcosMatched;
+    /// Current NZTCS assessments with a scientific name and a status, and those matched to a taxon.
+    public int NztcsAssessments;
+    public int NztcsMatched;
+    public string? NztcsFetched;
     public string? NatureServeFetched;
     public string? EcosFetched;
 

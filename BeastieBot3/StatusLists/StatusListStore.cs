@@ -12,7 +12,9 @@ using Microsoft.Data.Sqlite;
 //   natureserve_partition the name prefixes of the pass under way and how far each has got;
 //   ecos_listing          one row per US Endangered Species Act listing in ECOS (a species,
 //                         subspecies or population);
-//   ecos_name             every name the ECOS scientific name gives, brackets read (EcosScientificName).
+//   ecos_name             every name the ECOS scientific name gives, brackets read (EcosScientificName);
+//   nztcs_assessment      one row per current New Zealand Threat Classification System assessment
+//                         (StatusListStore.Nztcs.cs).
 //
 // Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text.
 
@@ -21,6 +23,7 @@ namespace BeastieBot3.StatusLists;
 internal static class StatusSources {
     public const string NatureServe = "natureserve";
     public const string Ecos = "ecos";
+    public const string Nztcs = "nztcs";
 }
 
 internal sealed record StatusSourceInfo(
@@ -87,7 +90,7 @@ internal sealed record EcosListing(
     string Url,
     IReadOnlyList<string> Names);
 
-internal sealed class StatusListStore : SqliteStore {
+internal sealed partial class StatusListStore : SqliteStore {
     private StatusListStore(SqliteConnection connection) : base(connection) { }
 
     public static StatusListStore Open(string path) {
@@ -117,7 +120,7 @@ internal sealed class StatusListStore : SqliteStore {
 
     internal const string Ddl = """
         CREATE TABLE IF NOT EXISTS status_source (
-            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos'
+            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs'
             title       TEXT NOT NULL,
             url         TEXT NOT NULL,
             licence     TEXT NOT NULL,
@@ -200,6 +203,24 @@ internal sealed class StatusListStore : SqliteStore {
             PRIMARY KEY (entity_id, name)
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS ecos_name_name ON ecos_name(name);
+        CREATE TABLE IF NOT EXISTS nztcs_assessment (
+            assessment_id   INTEGER PRIMARY KEY,  -- NZTCS assessment id; its page is https://nztcs.org.nz/assessments/<id>
+            species_id      INTEGER NOT NULL,     -- NZTCS species id
+            scientific_name TEXT,                 -- NztcsApi.ChooseName: the species record's name, or the name in the assessment's title
+                                                  -- when the two differ; NULL for an informal name ("sp.", "aff.", quotes)
+            assessment_name TEXT NOT NULL,        -- the assessment's name as plain text, with its authority: "Apteryx haastii Potts, 1872"
+            common_name     TEXT,
+            category        TEXT,                 -- Threatened, At Risk, Not Threatened, Data Deficient, Extinct, Introduced and Naturalised,
+                                                  -- Non-resident Native, Taxonomically indistinct
+            status          TEXT,                 -- the status within the category: Nationally Critical, Declining, Naturally Uncommon ...
+            criteria        TEXT,                 -- NZTCS criteria code: NVu3p
+            qualifiers      TEXT,                 -- qualifier codes: "CD, RF"
+            report_id       INTEGER,
+            report_name     TEXT,                 -- "Birds 2021 (Robertson et al. 2021)"
+            report_year     INTEGER,
+            imported_at     TEXT NOT NULL         -- UTC "O"
+        );
+        CREATE INDEX IF NOT EXISTS nztcs_assessment_name ON nztcs_assessment(scientific_name);
         """;
 
     protected override void EnsureSchema() {

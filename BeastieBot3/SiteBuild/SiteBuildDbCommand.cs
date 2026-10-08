@@ -328,6 +328,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("SARA statuses (from NatureServe)", s.SaraStatuses);
         Row("ECOS listings (US Endangered Species Act)", s.EcosListings);
         Row("ECOS listings matched to a taxon", s.EcosMatched);
+        Row("NZTCS assessments with a scientific name and a status", s.NztcsAssessments);
+        Row("NZTCS assessments matched to a taxon", s.NztcsMatched);
 
         Section("Groups (higher taxa)");
         Row("Groups", s.TreeNodes);

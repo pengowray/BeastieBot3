@@ -81,12 +81,13 @@ public sealed record PublicSiteState {
     /// When the state was read, for the age of the last pass.
     public DateTime ReadAtUtc { get; init; } = DateTime.UtcNow;
 
-    // --- The status lists store (`statuses natureserve-fetch`, `statuses ecos-import`) ---
+    // --- The status lists store (`statuses natureserve-fetch`, `statuses ecos-import`, `statuses nztcs-import`) ---
     public string? StatusListsPath { get; init; }
-    /// The NatureServe and ECOS rows of status_source: when each last finished, and how many rows
+    /// The NatureServe, ECOS and NZTCS rows of status_source: when each last finished, and how many rows
     /// the store holds. Null when the source has never finished.
     public StatusListSourceState? NatureServe { get; init; }
     public StatusListSourceState? Ecos { get; init; }
+    public StatusListSourceState? Nztcs { get; init; }
     /// When the NatureServe download under way started; null when none is under way.
     public DateTime? NatureServePassStartedUtc { get; init; }
     /// How many records the download under way has stored, and how many NatureServe said it has.
@@ -258,17 +259,20 @@ public static class PublicSiteStateReader {
         try {
             using var conn = OpenReadOnly(path!);
             using (var cmd = conn.CreateCommand()) {
-                cmd.CommandText = "SELECT source, fetched_at, row_count FROM status_source WHERE source IN (@natureserve, @ecos)";
+                cmd.CommandText = "SELECT source, fetched_at, row_count FROM status_source WHERE source IN (@natureserve, @ecos, @nztcs)";
                 cmd.Parameters.AddWithValue("@natureserve", StatusLists.StatusSources.NatureServe);
                 cmd.Parameters.AddWithValue("@ecos", StatusLists.StatusSources.Ecos);
+                cmd.Parameters.AddWithValue("@nztcs", StatusLists.StatusSources.Nztcs);
                 cmd.CommandTimeout = 5;
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read()) {
                     if (reader.IsDBNull(1) || StoredUtc.Parse(reader.GetString(1)) is not { } fetched) continue;
                     var source = new StatusListSourceState(fetched, reader.IsDBNull(2) ? 0 : reader.GetInt64(2));
-                    state = reader.GetString(0) == StatusLists.StatusSources.NatureServe
-                        ? state with { NatureServe = source }
-                        : state with { Ecos = source };
+                    state = reader.GetString(0) switch {
+                        StatusLists.StatusSources.NatureServe => state with { NatureServe = source },
+                        StatusLists.StatusSources.Ecos => state with { Ecos = source },
+                        _ => state with { Nztcs = source },
+                    };
                 }
             }
             using (var cmd = conn.CreateCommand()) {

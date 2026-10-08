@@ -24,7 +24,7 @@
         <li>for a species or subspecies, QuickStatements commands that bring the IUCN conservation status on its Wikidata item up to date</li>
         <li>its earlier global assessments, and its latest assessment in each region</li>
         <li>common names and synonyms</li>
-        <li>for Australian species, the status under Australia's EPBC Act and in each state and territory list, as SPRAT records them</li>
+        <li>its status in other conservation lists that include it: Australia's EPBC Act and state and territory lists (as SPRAT records them), the US Endangered Species Act, Canada's COSEWIC and Species at Risk Act, NatureServe's global rank, and the New Zealand Threat Classification System</li>
         <li>links to the assessment on the IUCN Red List website, the English Wikipedia article, the Wikidata item and the Catalogue of Life page, and for Australian species the SPRAT profile</li>
     </ul>
     <p>Some taxa with no current assessment also have pages: old IUCN ids of taxa that now have another id, and taxa that IUCN no longer assesses. These pages show the taxon's earlier assessments, with wikitext for each.</p>
@@ -35,6 +35,7 @@
     <p>This site is run by <a href="https://en.wikipedia.org/wiki/User:Pengo">User:Pengo</a>, an English Wikipedia editor who also runs the Wikipedia bot account <a href="https://en.wikipedia.org/wiki/User:Beastie_Bot">Beastie Bot</a>.</p>
     <p>To report a wrong citation, a wrong link or another problem with this site, contact @ContactHtml(). Include the address of the taxon page.</p>
     <p>If a category or another detail is also wrong on the IUCN Red List website, the error is in IUCN's data. Report it to IUCN through the IUCN Red List website.</p>
+    <p>The source code of this site, and of the tools that build its database, is on GitHub: <a href="@SiteText.SourceCodeUrl">pengowray/BeastieBot3</a>.</p>
     <p>The bat logo is by spiky.fish.</p>
 
     <h2>Logs and privacy</h2>
@@ -126,6 +127,14 @@
                         <td>@Model.NatureServeDate</td>
                     </tr>
                 }
+                @if (Model.NztcsDate is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.NztcsUrl">New Zealand Threat Classification System (NZTCS) database</a>, Department of Conservation</th>
+                        <td>Conservation statuses of New Zealand species</td>
+                        <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
+                        <td>@Model.NztcsDate</td>
+                    </tr>
+                }
                 @if (Model.EcosDate is not null) {
                     <tr>
                         <th scope="row"><a href="@SiteText.EcosUrl">Environmental Conservation Online System (ECOS)</a>, U.S. Fish and Wildlife Service</th>
@@ -151,6 +160,9 @@
         <li><strong>SPRAT:</strong> @Html.Raw(AboutModel.CitationHtml($"Species Profile and Threats Database, {SiteText.SpratLicensor}.", SiteText.SpratUrl))</li>
         @if (Model.NatureServeDate is not null) {
             <li><strong>NatureServe:</strong> @Html.Raw(AboutModel.CitationHtml($"NatureServe. {Model.NatureServeYear}. NatureServe Explorer [web application]. NatureServe, Arlington, Virginia. Available {SiteText.NatureServeExplorerUrl}. (Accessed: {Model.NatureServeDate}).", SiteText.NatureServeExplorerUrl))</li>
+        }
+        @if (Model.NztcsDate is not null) {
+            <li><strong>NZTCS:</strong> @Html.Raw(AboutModel.CitationHtml($"Department of Conservation. New Zealand Threat Classification System database. Accessed {Model.NztcsDate}.", SiteText.NztcsUrl))</li>
         }
         @if (Model.EcosDate is not null) {
             <li><strong>ECOS:</strong> @Html.Raw(AboutModel.CitationHtml($"U.S. Fish and Wildlife Service. Environmental Conservation Online System (ECOS), listed species. Accessed {Model.EcosDate}.", SiteText.EcosUrl))</li>

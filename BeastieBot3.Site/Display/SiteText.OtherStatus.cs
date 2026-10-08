@@ -19,6 +19,8 @@ public static partial class SiteText {
     public const string ColOtherFirstListed = "First listed";
     public const string ColOtherFirstListedTitle = "ECOS gives the date the species or population was first listed. The status may have changed since then.";
     public const string ColOtherSource = "Source";
+    /// The column of the publication an NZTCS status comes from.
+    public const string ColOtherReport = "Published in";
 
     /// In the "In effect from" column, for a listing whose source gives no date.
     public const string OtherStatusNoDate = "not given";
@@ -27,6 +29,7 @@ public static partial class SiteText {
     public static string OtherStatusGroup(string group) => group switch {
         "AU" => "Australia",
         "CA" => "Canada",
+        "NZ" => "New Zealand",
         "US" => "United States",
         OtherStatusSystems.NatureServeGroup => "Global",
         _ => group,
@@ -46,6 +49,7 @@ public static partial class SiteText {
         OtherStatusSystems.WesternAustralia => ("Western Australia", null, false),
         OtherStatusSystems.Cosewic => ("COSEWIC", "Committee on the Status of Endangered Wildlife in Canada, an independent committee that assesses species", true),
         OtherStatusSystems.Sara => ("Species at Risk Act", "Canada's Species at Risk Act, the federal law", false),
+        OtherStatusSystems.Nztcs => ("NZTCS", "New Zealand Threat Classification System", true),
         OtherStatusSystems.Esa => ("Endangered Species Act", null, false),
         OtherStatusSystems.NatureServeGlobal => ("NatureServe", "NatureServe's global conservation status rank", false),
         _ => (system, null, false),
@@ -108,6 +112,7 @@ public static partial class SiteText {
         OtherStatusSources.Sprat => LinkSprat,
         OtherStatusSources.Ecos => "ECOS profile",
         OtherStatusSources.NatureServe => "NatureServe Explorer",
+        OtherStatusSources.Nztcs => "NZTCS assessment",
         _ => source,
     };
 
@@ -132,6 +137,12 @@ public static partial class SiteText {
         _ => "NatureServe global ranks are from ",
     };
     public static string OtherStatusNatureServeDate(string? date) => date is null ? "." : $", downloaded on {date}.";
+    /// The note under the tables when they have NZTCS rows, in two parts around the links to the
+    /// NZTCS database and the licence.
+    public const string OtherStatusNztcsSubject = "New Zealand statuses are from the ";
+    public const string OtherStatusNztcsLink = "New Zealand Threat Classification System database";
+    public static string OtherStatusNztcsDate(string? date) => date is null ? "." : $", downloaded on {date}.";
+
     public const string OtherStatusNatureServeCanadaCopy =
         "NatureServe's copy of the Canadian statuses may differ from Canada's Species at Risk Public Registry.";
 }

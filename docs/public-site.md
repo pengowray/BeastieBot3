@@ -228,6 +228,11 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   gives what the rounded rank means and which part of the rank that is
   (`SiteText.NatureServeRankMeaning`): "Vulnerable (rounded rank G3)" for G3G4, "Imperiled
   (subspecies rank T2)" for G5T2.
+- `nz-nztcs` rows: each current NZTCS assessment with a scientific name and a status other than
+  "Not assessed" goes to the one taxon with that name in any kingdom (NZTCS gives none), else the
+  one taxon whose IUCN synonyms include it; one assessment per taxon. `status` is the category and
+  the status within it as NZTCS writes them ("Threatened - Nationally Vulnerable"), `report` the
+  report it was published in, shown in the New Zealand table's "Published in" column.
 - The latest assessments come from the CSV export, which holds exactly one Red List release. Earlier
   assessments come from the list of assessments in each taxon's cached API response (the
   `assessments` array of the taxa JSON, read by `IucnTaxaHeaders`). Take the `latest` flag from that

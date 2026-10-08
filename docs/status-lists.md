@@ -4,6 +4,7 @@ The status lists store holds conservation statuses from systems other than the I
 
 - NatureServe Explorer: the NatureServe global rank (G rank), the national ranks in the United States and Canada, and the US Endangered Species Act, COSEWIC and SARA statuses that NatureServe records (`statuses natureserve-fetch`).
 - ECOS, the US Fish and Wildlife Service's Environmental Conservation Online System: the list of species, subspecies and populations listed under the US Endangered Species Act (`statuses ecos-import`).
+- The New Zealand Threat Classification System database (nztcs.org.nz, Department of Conservation, CC BY 4.0): the current assessments (`statuses nztcs-import`).
 
 Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a comment on every column.
 
@@ -18,13 +19,14 @@ Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a co
 
 | Table | One row per |
 | --- | --- |
-| `status_source` | source (`natureserve`, `ecos`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
+| `status_source` | source (`natureserve`, `ecos`, `nztcs`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
 | `status_sync_state` | key of the NatureServe download's progress (`natureserve_pass_*`, `natureserve_completed*`) |
 | `natureserve_species` | NatureServe record (`element_global_id`): a species, subspecies, variety or population |
 | `natureserve_synonym` | synonym NatureServe lists for a record |
 | `natureserve_partition` | name prefix of the NatureServe download under way, with the next page to ask for. Empty between downloads. |
 | `ecos_listing` | ESA listing (`entity_id`, the ECOS Listed Species ID) |
 | `ecos_name` | name an ECOS listing's scientific name gives, the main name included |
+| `nztcs_assessment` | current NZTCS assessment (`assessment_id`), with the scientific name `NztcsApi.ChooseName` gives |
 
 ## NatureServe Explorer: `statuses natureserve-fetch`
 
@@ -116,6 +118,31 @@ ECOS writes earlier names in brackets after the word they replace. `EcosScientif
 | Avahi laniger (entire genus) | Avahi laniger, with the note "entire genus" in `name_note` |
 
 The rules are mechanical, so a few names are not real combinations: "Otus magicus (=insularis) insularis" also gives "Otus insularis insularis" (the earlier name was the species Otus insularis). Rank words ("ssp.", "var.", "spp.") are kept as written.
+
+## NZTCS: `statuses nztcs-import`
+
+The NZTCS website's search pages call two JSON endpoints that answer without a login: `POST
+/rest/assessmentSearch` (with `reportEditStatusList: ["PUBLISHED"]`, `reportPublishedStatusList:
+["CURRENT"]`) and `POST /rest/species/findByCriteria`. Both page from `pageNumber` 1, and 1,000 rows
+a page works: on 2026-10-08, 17 pages of assessments (16,331) and 23 of species records (22,633),
+in under a minute. The command keeps both lists in `nztcs-<date>.json` in the downloads folder
+(`--file` imports a kept file) and replaces every stored assessment in one transaction.
+
+An assessment's name is HTML with the authority ("<i>Apteryx haastii</i> Potts, 1872") and has no
+kingdom. Its species record has a plain scientific name, but it can be out of date: the record
+that holds the current assessment of *Apteryx australis australis* is named *Apteryx australis
+lawryi*. `NztcsApi.ChooseName` decides the name stored:
+
+- an informal name in the title (quotes, "aff.", "cf.", "sp.", "nr.") gets none, so an undescribed
+  or informal taxon ("Apteryx australis \"southern Fiordland\"", "Aciphylla aff. glaucescens")
+  never takes the status of the species it is named after (1,557 assessments);
+- the record's name, when the title gives the same name or only the start of it;
+- otherwise the name read from the title (`NameFromTitle`: genus, epithet and an infraspecific
+  epithet with its rank; none when a rank comes after the authority).
+
+Nothing narrative is stored: the species records' notes, descriptions and habitat fields are not
+downloaded (the species search returns only id, name and authority), and the assessments' text
+fields are left out.
 
 ## Web UI
 

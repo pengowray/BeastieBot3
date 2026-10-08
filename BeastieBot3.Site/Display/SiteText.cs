@@ -202,6 +202,8 @@ public static partial class SiteText {
     public const string SpratUrl = "https://www.environment.gov.au/cgi-bin/sprat/public/sprat.pl";
     public const string NatureServeExplorerUrl = "https://explorer.natureserve.org/";
     public const string EcosUrl = "https://ecos.fws.gov/ecp/";
+    public const string NztcsUrl = "https://nztcs.org.nz/";
+    public const string SourceCodeUrl = "https://github.com/pengowray/BeastieBot3";
     public const string CrossrefUrl = "https://www.crossref.org/documentation/retrieve-metadata/rest-api/";
     /// Crossref's licensing statement: bibliographic metadata is facts, in the public domain (CC0).
     public const string CrossrefLicenceUrl = "https://www.crossref.org/documentation/retrieve-metadata/";

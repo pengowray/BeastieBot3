@@ -19,6 +19,8 @@ public static class OtherStatusSystems {
     public const string Cosewic = "ca-cosewic";
     /// Canada's Species at Risk Act, Schedule 1.
     public const string Sara = "ca-sara";
+    /// The New Zealand Threat Classification System.
+    public const string Nztcs = "nz-nztcs";
     /// The United States Endangered Species Act.
     public const string Esa = "us-esa";
     /// NatureServe's global conservation status rank (G rank, with a T rank for an infraspecific taxon).
@@ -38,6 +40,7 @@ public static class OtherStatusSystems {
         new(WesternAustralia, "AU"),
         new(Cosewic, "CA"),
         new(Sara, "CA"),
+        new(Nztcs, "NZ"),
         new(Esa, "US"),
         new(NatureServeGlobal, NatureServeGroup),
     ];
@@ -114,6 +117,8 @@ public static class OtherStatusSources {
     public const string Ecos = "ecos";
     /// NatureServe Explorer; source_id is the element global id.
     public const string NatureServe = "natureserve";
+    /// The New Zealand Threat Classification System database; source_id is the NZTCS assessment id.
+    public const string Nztcs = "nztcs";
 
     /// A taxon's SPRAT profile.
     public static string SpratUrl(long spratTaxonId) =>

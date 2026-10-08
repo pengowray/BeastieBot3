@@ -248,6 +248,7 @@ public static class FixtureDb {
             url: "https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.102233/Ursus_maritimus");
         w.Meta(SiteDbSchema.MetaKeys.NatureServeFetched, "2026-10-08");
         w.Meta(SiteDbSchema.MetaKeys.EcosFetched, "2026-10-07");
+        w.Meta(SiteDbSchema.MetaKeys.NztcsFetched, "2026-10-08");
         w.Assessment(PolarBearLatest, PolarBear, "Global", true, "VU", criteria: "A3c", criteriaVersion: "3.1", year: 2015,
             date: "2015-03-21", trend: "Unknown",
             citation: Citation(PolarBear, PolarBearLatest, 2015, "Ursus maritimus",
@@ -283,6 +284,9 @@ public static class FixtureDb {
         w.Taxon(HouseSparrow, "Passer domesticus", "species", "ANIMALIA", "CHORDATA", "AVES", "PASSERIFORMES", "PASSERIDAE", "Passer",
             authority: "(Linnaeus, 1758)", commonEn: "House sparrow", enwiki: "House sparrow", qid: "Q28922", latest: HouseSparrowLatest,
             qidSource: "p627");
+        // Introduced in New Zealand, as the NZTCS records it.
+        w.OtherStatus(HouseSparrow, "nz-nztcs", "Introduced and Naturalised", null, null, "nztcs", "70001", null,
+            url: "https://nztcs.org.nz/assessments/70001", report: "Birds 2021 (Robertson et al. 2021)");
         w.Assessment(HouseSparrowLatest, HouseSparrow, "Global", true, "LC", criteriaVersion: "3.1", year: 2019, date: "2018-08-07", trend: "Decreasing",
             citation: Citation(HouseSparrow, HouseSparrowLatest, 2019, "Passer domesticus", [Organisation("BirdLife International")],
                 doi: "10.2305/IUCN.UK.2019-3.RLTS.T103818789A155522130.en", doiSource: DoiSource.Citation, text: "BirdLife International. 2019. Passer domesticus.",
@@ -831,13 +835,13 @@ public static class FixtureDb {
                 taxonId, spratId, listedName, status, appliesTo, population);
 
         public void OtherStatus(long taxonId, string system, string status, string? listedName, string? population, string source,
-            string sourceId, string? listedOn, string? statusCode = null, string? url = null) =>
+            string sourceId, string? listedOn, string? statusCode = null, string? url = null, string? report = null) =>
             Run("""
-                INSERT INTO other_status(taxon_id, system, status, status_code, listed_name, population, source, source_id, url, listed_on)
-                VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i, @j)
+                INSERT INTO other_status(taxon_id, system, status, status_code, listed_name, population, source, source_id, url, listed_on, report)
+                VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i, @j, @k)
                 """,
                 taxonId, system, status, statusCode, listedName, population, source, sourceId,
-                url ?? (source == "sprat" ? OtherStatusSources.SpratUrl(long.Parse(sourceId)) : null), listedOn);
+                url ?? (source == "sprat" ? OtherStatusSources.SpratUrl(long.Parse(sourceId)) : null), listedOn, report);
 
         public void Assessment(long id, long taxonId, string scope, bool latest, string category, bool possiblyExtinct = false,
             string? criteria = null, string? criteriaVersion = null, int? year = null, string? date = null, string? trend = null,

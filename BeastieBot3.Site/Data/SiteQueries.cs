@@ -147,7 +147,7 @@ public sealed partial class SiteQueries {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT system, status, status_code, listed_name, population, source, source_id, url, listed_on
+            SELECT system, status, status_code, listed_name, population, source, source_id, url, listed_on, report
             FROM other_status
             WHERE taxon_id = @id
             """;
@@ -156,7 +156,7 @@ public sealed partial class SiteQueries {
         var rows = new List<OtherStatusRow>();
         while (reader.Read()) {
             rows.Add(new OtherStatusRow(reader.GetString(0), reader.GetString(1), Text(reader, 2), Text(reader, 3), Text(reader, 4),
-                reader.GetString(5), reader.GetString(6), Text(reader, 7), Text(reader, 8)));
+                reader.GetString(5), reader.GetString(6), Text(reader, 7), Text(reader, 8), Text(reader, 9)));
         }
         return rows
             .OrderBy(r => BeastieBot3.Shared.SiteData.OtherStatusSystems.Order(r.System))

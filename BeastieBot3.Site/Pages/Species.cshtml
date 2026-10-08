@@ -445,6 +445,7 @@
             var showAppliesTo = group.Any(r => r.Population is not null);
             var showListedName = group.Any(r => r.ListedName is not null);
             var showListedOn = group.Any(r => r.ListedOn is not null);
+            var showReport = group.Any(r => r.Report is not null);
             var firstListed = group.Any(r => r.ListedOn is not null && r.Source == BeastieBot3.Shared.SiteData.OtherStatusSources.Ecos);
             <h3>@SiteText.OtherStatusGroup(group.Key)</h3>
             <div class="table-scroll">
@@ -455,6 +456,7 @@
                             <th scope="col">@SiteText.ColOtherStatus</th>
                             @if (showAppliesTo) {<th scope="col">@SiteText.ColOtherAppliesTo</th>}
                             @if (showListedName) {<th scope="col" title="@SiteText.ColOtherListedNameTitle">@SiteText.ColOtherListedName</th>}
+                            @if (showReport) {<th scope="col">@SiteText.ColOtherReport</th>}
                             @if (showListedOn) {if (firstListed) {<th scope="col" title="@SiteText.ColOtherFirstListedTitle">@SiteText.ColOtherFirstListed</th>} else {<th scope="col">@SiteText.ColOtherListedOn</th>}}
                             <th scope="col">@SiteText.ColOtherSource</th>
                         </tr>
@@ -469,6 +471,7 @@
                                 <td>@if (rankTitle is not null) {<abbr title="@rankTitle">@row.Status</abbr>} else {@row.Status}@if (rankMeaning is not null) {<br><span class="rank-meaning">@rankMeaning</span>}</td>
                                 @if (showAppliesTo) {<td>@if (row.Population is { } population) {@population} else if (SiteText.OtherStatusAppliesToUnknown(row)) {<span class="no-value">@SiteText.OtherStatusNoDate</span>} else {@SiteText.OtherStatusWholeTaxon(taxon.Kind)}</td>}
                                 @if (showListedName) {<td>@if (row.ListedName is { } listedName) {<span class="sci-name">@Html.Raw(SpeciesModel.ListedNameHtml(listedName))</span>}</td>}
+                                @if (showReport) {<td>@row.Report</td>}
                                 @if (showListedOn) {<td>@if (row.ListedOn is { } listedOn) {@SiteFormat.Date(listedOn)} else {<span class="no-value">@SiteText.OtherStatusNoDate</span>}</td>}
                                 <td>@if (row.Url is { } sourceUrl) {<a href="@sourceUrl">@SiteText.OtherStatusSourceLink(row.Source)</a>} else {@SiteText.OtherStatusSourceLink(row.Source)}</td>
                             </tr>
@@ -487,6 +490,8 @@
                 var canadian = Model.OtherStatuses.Any(r => r.System is BeastieBot3.Shared.SiteData.OtherStatusSystems.Cosewic or BeastieBot3.Shared.SiteData.OtherStatusSystems.Sara);
                 var global = Model.OtherStatuses.Any(r => r.System == BeastieBot3.Shared.SiteData.OtherStatusSystems.NatureServeGlobal);
                 <p class="help">@SiteText.OtherStatusNatureServeSubject(canadian, global)<a href="@SiteText.NatureServeExplorerUrl">NatureServe Explorer</a> (© NatureServe, <a href="@SiteText.LicenceCcBy">CC BY 4.0</a>)@SiteText.OtherStatusNatureServeDate(date)@if (canadian) {<text> @SiteText.OtherStatusNatureServeCanadaCopy</text>}</p>
+            } else if (source == BeastieBot3.Shared.SiteData.OtherStatusSources.Nztcs) {
+                <p class="help">@SiteText.OtherStatusNztcsSubject<a href="@SiteText.NztcsUrl">@SiteText.OtherStatusNztcsLink</a> (Department of Conservation, <a href="@SiteText.LicenceCcBy">CC BY 4.0</a>)@SiteText.OtherStatusNztcsDate(date)</p>
             }
         }
     </section>

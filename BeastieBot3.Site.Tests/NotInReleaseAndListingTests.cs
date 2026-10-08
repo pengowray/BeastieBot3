@@ -199,6 +199,22 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
     }
 
     [Fact]
+    public async Task HouseSparrowShowsItsNztcsStatus() {
+        var html = (await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}")).Replace("&#x27;", "'");
+        var section = Html.Section(html, "other-statuses");
+
+        Assert.Contains("<h3>New Zealand</h3>", section);
+        Assert.Equal(new[] {
+            new[] { "List", "Status", "Published in", "Source" },
+            new[] { "NZTCS", "Introduced and Naturalised", "Birds 2021 (Robertson et al. 2021)", "NZTCS assessment" },
+        }, Html.TableRows(section));
+        Assert.Contains("<abbr title=\"New Zealand Threat Classification System\">NZTCS</abbr>", section);
+        Assert.Contains("<a href=\"https://nztcs.org.nz/assessments/70001\">NZTCS assessment</a>", section);
+        Assert.Contains("New Zealand statuses are from the New Zealand Threat Classification System database (Department of Conservation, CC BY 4.0), downloaded on 8 October 2026.",
+            Html.Text(section));
+    }
+
+    [Fact]
     public async Task TaxonWithNoOtherStatusHasNoSection() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.Lion}");
         Assert.DoesNotContain("other-statuses", html);

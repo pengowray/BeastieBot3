@@ -28,6 +28,7 @@ public sealed class AboutModel : PageModel {
     /// When the site database's copies of NatureServe Explorer and of ECOS were downloaded; null when it has none.
     public string? NatureServeDate { get; private set; }
     public string? EcosDate { get; private set; }
+    public string? NztcsDate { get; private set; }
     /// The year of NatureServeDate, for NatureServe's citation form.
     public int? NatureServeYear { get; private set; }
     public string? BuiltDate { get; private set; }
@@ -85,6 +86,7 @@ public sealed class AboutModel : PageModel {
             NatureServeYear = natureServe.Year;
         }
         EcosDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.EcosFetched), out var ecos) ? SiteFormat.Date(ecos) : null;
+        NztcsDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.NztcsFetched), out var nztcs) ? SiteFormat.Date(nztcs) : null;
         if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.IucnDoiCheckedTo), out var doiChecked)) {
             DoiCheckedDate = SiteFormat.Date(doiChecked);
         }

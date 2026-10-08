@@ -147,9 +147,13 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
             new object?[] { "ca-cosewic", "Extirpated", null, null, null, "natureserve", "101", null },
             new object?[] { "ca-sara", "Extirpated", null, null, null, "natureserve", "101", null },
             new object?[] { "natureserve-global", "G4G5", "G4", null, null, "natureserve", "101", null },
+            new object?[] { "nz-nztcs", "Introduced and Naturalised", null, null, null, "nztcs", "5001", null },
             new object?[] { "us-esa", "Endangered", null, null, null, "ecos", "7001", "1970-06-02" },
             new object?[] { "us-esa", "Threatened", null, null, "Gabon, Congo southward", "ecos", "7002", "1982-01-28" },
         }, Of(Leopard));
+        Assert.Equal("Mammals 2024 (Example et al. 2024)", Scalar(db, "SELECT report FROM other_status WHERE source_id = '5001'"));
+        Assert.Equal("https://nztcs.org.nz/assessments/5001", Scalar(db, "SELECT url FROM other_status WHERE source_id = '5001'"));
+        Assert.Equal("2026-10-08", Scalar(db, "SELECT value FROM meta WHERE key = 'nztcs_fetched'"));
         Assert.Equal(new[] { new object?[] { "natureserve-global", "G4T1", "T1", null, null, "natureserve", "102", null } }, Of(AmurLeopard));
         Assert.Equal(new[] { new object?[] { "natureserve-global", "G2?", "G2", "Bettongia ogilbyi", null, "natureserve", "104", null } },
             Of(Woylie));
@@ -420,7 +424,13 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
         Execute(c, """
             INSERT INTO status_source (source, title, url, licence, fetched_at, row_count) VALUES
                 ('natureserve', 'NatureServe Explorer', 'https://explorer.natureserve.org/', 'CC BY 4.0', '2026-10-08T01:04:00.0000000Z', 5),
-                ('ecos', 'ECOS', 'https://ecos.fws.gov/', 'Public domain', '2026-10-07T23:30:00.0000000Z', 3);
+                ('ecos', 'ECOS', 'https://ecos.fws.gov/', 'Public domain', '2026-10-07T23:30:00.0000000Z', 3),
+                ('nztcs', 'NZTCS', 'https://nztcs.org.nz/', 'CC BY 4.0', '2026-10-08T03:00:00.0000000Z', 3);
+            INSERT INTO nztcs_assessment (assessment_id, species_id, scientific_name, assessment_name, category, status, report_name, imported_at) VALUES
+                (5001, 501, 'Panthera pardus', 'Panthera pardus (Linnaeus, 1758)', 'Introduced and Naturalised', 'Introduced and Naturalised',
+                    'Mammals 2024 (Example et al. 2024)', 'x'),
+                (5002, 502, NULL, 'Panthera sp. "Kaitorete"', 'Data Deficient', 'Data Deficient', 'Mammals 2024 (Example et al. 2024)', 'x'),
+                (5003, 503, 'Phascolarctos cinereus', 'Phascolarctos cinereus', 'Not assessed', 'Not assessed', NULL, 'x');
             INSERT INTO natureserve_species (element_global_id, unique_id, scientific_name, g_rank, rounded_g_rank, classification_status,
                 kingdom, infraspecies, cosewic_code, sara_code, nsx_url, fetched_at) VALUES
                 (101, 'ELEMENT_GLOBAL.2.101', 'Panthera pardus', 'G4G5', 'G4', 'Standard', 'Animalia', 0, 'XT', 'Extirpated',
