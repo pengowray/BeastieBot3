@@ -27,7 +27,7 @@ public sealed class SummaryTablesPageTests : IClassFixture<SiteFactory> {
 
         Assert.Contains("<li id=\"history-fn-1\" value=\"1\">From <a href=\"https://nc.iucnredlist.org/redlist/content/attachment_files/2008RL_Stats_Table_7.pdf\">"
             + "Table 7 (\u201cSpecies changing IUCN Red List Status\u201d) of IUCN Red List version 2008</a> (PDF). The 2008 table lists genuine changes only.</li>", history);
-        Assert.Contains("\u2014 Published before 2007, the year of IUCN's first Table 7.", Html.Text(history));
+        Assert.Contains("Reason for change reports were not published before 2007.", Html.Text(history));
     }
 
     private static AssessmentRow Row(long id, string category, int year) =>

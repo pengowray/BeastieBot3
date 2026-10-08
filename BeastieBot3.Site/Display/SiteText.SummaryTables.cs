@@ -42,7 +42,7 @@ public static partial class SiteText {
     /// The cell of an assessment published before the first Table 7, and the line under the table
     /// that explains it.
     public const string ReasonBeforeTables = "—";
-    public const string ReasonBeforeTablesLegend = "— Published before 2007, the year of IUCN's first Table 7.";
+    public const string ReasonBeforeTablesLegend = "Reason for change reports were not published before 2007.";
 
     /// The accessible name of a footnote reference.
     public static string FootnoteLabel(int number) => $"Footnote {number.ToString(CultureInfo.InvariantCulture)}";

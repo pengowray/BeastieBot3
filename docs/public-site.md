@@ -1979,7 +1979,7 @@ one row has a reason. A row with a reason shows IUCN's name for the code ("Genui
 (G)", "Non-genuine status change (N)", "Previous listing was an error (E)") and a numbered footnote
 that links the Table 7 PDF it is from (one footnote per table). The other rows say why there is
 none, in light italic: "—" for an assessment published before 2007 (a line under the table
-explains the dash), "first assessment" for the oldest row, "no change" when the category is the
+says that reason for change reports were not published before 2007), "first assessment" for the oldest row, "no change" when the category is the
 same as the row below it (LR/nt counts as NT and LR/lc as LC), "no reason given" with the 2008
 table's footnote for a change published in 2008 (that table lists genuine changes only), and "not
 found" for any other change. On release 2026-1, over the pages with the column, that is 22,202

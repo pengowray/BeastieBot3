@@ -223,9 +223,9 @@ public sealed class DisplayTests {
     [Fact]
     public void NoEmDashes() {
         foreach (var field in typeof(SiteText).GetFields()) {
-            // The dash in a "Reason for change" cell of an assessment published before 2007, and the
-            // line that explains it, is a table symbol, not punctuation.
-            if (field.Name.StartsWith(nameof(SiteText.ReasonBeforeTables), StringComparison.Ordinal)) {
+            // The dash in a "Reason for change" cell of an assessment published before 2007 is a table
+            // symbol, not punctuation.
+            if (field.Name == nameof(SiteText.ReasonBeforeTables)) {
                 continue;
             }
             if (field.GetValue(null) is string value) {
