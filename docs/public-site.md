@@ -1387,7 +1387,11 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   link.
 - Search, `/name/{name}` and `/api/suggest` rank taxa in the release before taxa that are not,
   within each group of matches (exact name, name that starts with the text, any other match).
-  Search and `/name/{name}` go straight to a taxon page when the text names one taxon exactly: the
+  Next comes the kind of name matched: a scientific name, then a common name, then a synonym. Among
+  exact matches on a common name, a taxon whose English name (`common_name_en`) is the text comes
+  before a taxon that has the text only as another common name, so "Dodo" lists *Raphus cucullatus*
+  before *Euphorbia drupifera* (a common name "dodo"), and "Axolotl" lists *Ambystoma mexicanum*
+  before *Ambystoma bombypellum*. Search and `/name/{name}` go straight to a taxon page when the text names one taxon exactly: the
   only exact match among the taxa in the release or, when no taxon in the release matches exactly,
   the only exact match among all taxa (`SearchModel.SingleExactMatch`). The search box lists each
   suggested name once, ignoring letter case, because two suggestions with the same name open the

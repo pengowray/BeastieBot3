@@ -561,6 +561,9 @@ public static class FixtureDb {
         w.Assessment(ClessiniolaEurope, Clessiniola, "Europe", true, "LC", criteriaVersion: "3.1", year: 2011, date: "2010-06-01");
         w.Name(Clessiniola, "Clessiniola variabilis", "scientific", null, "iucn");
         w.Name(Clessiniola, "Turricaspia trivialis", "synonym", null, "iucn");
+        // The Sumatran tiger's English name as a common name of a taxon that sorts before it, as "dodo"
+        // is a common name of Euphorbia drupifera as well as the English name of Raphus cucullatus.
+        w.Name(Clessiniola, "sumatran tiger", "common", "en", "col");
         w.Taxon(Turricaspia, "Turricaspia trivialis", "species", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "LITTORINIMORPHA", "HYDROBIIDAE", "Turricaspia",
             inRelease: false);
         w.Assessment(Turricaspia2011, Turricaspia, "Global", false, "DD", criteriaVersion: "3.1", year: 2011, date: "2010-06-01");

@@ -454,7 +454,8 @@ public sealed partial class SiteQueries {
     /// 2. a name that starts with the text;
     /// 3. any other name whose words start with the words typed (name_fts).
     /// Within each group taxa in the release come before taxa that are not (no current assessment);
-    /// then a scientific name beats a common name, which beats a synonym; species come before
+    /// then a scientific name beats a common name, which beats a synonym, and in group 1 the taxon's
+    /// English name (taxon.common_name_en) beats its other common names; species come before
     /// infraspecific taxa and subpopulations; then shorter names first.
     /// With exactOnly, only group 1 is searched. TotalTaxa is counted only when countAll is set and
     /// the limit was reached; otherwise it is the number of hits returned.
@@ -471,6 +472,8 @@ public sealed partial class SiteQueries {
         var hitsSql = BuildHitsSql(match is not null);
 
         using var connection = _db.OpenConnection();
+        // Folds taxon.common_name_en for the ranking; called only for names equal to the text.
+        connection.CreateFunction("site_fold", (string? name) => name is null ? null : SiteNameKey.Fold(name), isDeterministic: true);
         // Declared after the connection so it is disposed first: no interrupt can reach the
         // connection once it is back in the pool.
         using var interrupt = InterruptOnCancel(connection, cancellationToken);
@@ -504,7 +507,13 @@ public sealed partial class SiteQueries {
                                     WHEN h.name LIKE @prefix ESCAPE '\' THEN 1
                                     ELSE 2 END * 100000
                                + CASE WHEN t.in_release = 1 THEN 0 ELSE 1 END * 50000
-                               + CASE h.name_type WHEN 'scientific' THEN 0 WHEN 'common' THEN 1 ELSE 2 END * 10000
+                               + CASE h.name_type
+                                     WHEN 'scientific' THEN 0
+                                     WHEN 'common' THEN
+                                         CASE WHEN h.name_id NOT IN (SELECT name_id FROM name_key WHERE key = @key) THEN 2
+                                              WHEN site_fold(t.common_name_en) = @key THEN 1
+                                              ELSE 2 END
+                                     ELSE 3 END * 10000
                                + CASE t.kind WHEN 'species' THEN 0 ELSE 1 END * 1000
                                + CASE WHEN LENGTH(h.name) > 999 THEN 999 ELSE LENGTH(h.name) END) AS score,
                            h.name, h.name_type, h.language,

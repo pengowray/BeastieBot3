@@ -131,6 +131,16 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     }
 
     [Fact]
+    public async Task TaxonWithTheTextAsItsEnglishNameComesFirst() {
+        // Both taxa have "Sumatran tiger" as a name, but it is the English name (common_name_en) only
+        // of the Sumatran tiger, which comes first although Clessiniola sorts before Panthera.
+        var html = await _client.GetStringAsync("/search?q=Sumatran+tiger");
+        var sumatran = Html.IndexOf(html, $"/species/{FixtureDb.SumatranTiger}\"");
+        var clessiniola = Html.IndexOf(html, $"/species/{FixtureDb.Clessiniola}\"");
+        Assert.True(sumatran > 0 && clessiniola > sumatran, "the taxon with the text as its English name comes first");
+    }
+
+    [Fact]
     public async Task NameSharedByTwoTaxaListsBoth() {
         var response = await _client.GetAsync("/search?q=big+cat");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
