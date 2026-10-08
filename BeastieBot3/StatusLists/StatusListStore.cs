@@ -423,9 +423,8 @@ internal sealed partial class StatusListStore : SqliteStore {
             source      TEXT NOT NULL,     -- CT_NAME: "IUCN Red List" (an IUCN taxon id), "IUCN Red List > BirdLife" (BirdLife's id,
                                            -- which is the IUCN taxon id of a bird), "Catalogue of Life" (a CoL id), "GBIF" (a GBIF key)
             external_id TEXT NOT NULL,     -- CT_SP_ID: 22688522, 4QHKG
-            PRIMARY KEY (cd_nom, source, external_id)
+            PRIMARY KEY (cd_ref, cd_nom, source, external_id)
         ) WITHOUT ROWID;
-        CREATE INDEX IF NOT EXISTS france_taxref_link_ref ON france_taxref_link(cd_ref);
         CREATE INDEX IF NOT EXISTS france_taxref_link_id ON france_taxref_link(source, external_id);
         """;
 
