@@ -74,6 +74,8 @@ public static partial class SiteText {
         OtherStatusSystems.Sara => ("Species at Risk Act", "Canada's Species at Risk Act, the federal law", false),
         OtherStatusSystems.Nztcs => ("NZTCS", "New Zealand Threat Classification System", true),
         OtherStatusSystems.Esa => ("Endangered Species Act", null, false),
+        OtherStatusSystems.FranceRedList => ("National Red List", "Liste rouge nationale: France's national red list, by the French committee of IUCN, the MNHN and the OFB", false),
+        OtherStatusSystems.FranceProtection => ("Protected species list", "A French government order (arrêté) listing species protected in France or in an overseas territory", false),
         OtherStatusSystems.JapanMoe => ("Red List of the Ministry of the Environment", "環境省レッドリスト, the Red List of Japan's Ministry of the Environment", false),
         OtherStatusSystems.Cites => ("CITES", "Convention on International Trade in Endangered Species of Wild Fauna and Flora", true),
         OtherStatusSystems.NatureServeGlobal => ("NatureServe global rank", "NatureServe's global conservation status rank (G rank)", false),
@@ -143,7 +145,7 @@ public static partial class SiteText {
                 row.Qualifier is { } party ? $"Listed by {party}" : null,
                 row.ListedUnder is { } under ? $"Covered by the listing of {under}" : null,
             }.OfType<string>()) is { Length: > 0 } line ? line : null,
-        OtherStatusSystems.Jncc => row.Qualifier,
+        OtherStatusSystems.Jncc or OtherStatusSystems.FranceRedList or OtherStatusSystems.FranceProtection => row.Qualifier,
         OtherStatusSystems.NationalRedList or OtherStatusSystems.JapanMoe => row.Qualifier is { } own ? $"In the list: {own}" : null,
         _ => NatureServeRankMeaning(row, kind),
     };
@@ -277,6 +279,20 @@ public static partial class SiteText {
     /// 8 October 2026."
     public static string RedListNotePublisher(string? publisher) => publisher is null ? ": from GBIF (" : $": {publisher}, from GBIF (";
     public static string RedListNoteRest(string? downloaded) => downloaded is null ? "). " : $"), downloaded on {downloaded}. ";
+
+    /// The text of a French row's source: the BDC Statuts gives no page per taxon.
+    public const string OtherStatusFranceRecordLink = "BDC Statuts";
+    public const string FranceBdcUrl = "https://www.data.gouv.fr/datasets/statuts-reglementaires-et-de-conservation-des-especes";
+    public const string FranceTaxrefUrl = "https://www.data.gouv.fr/datasets/referentiel-taxonomique-taxref-1";
+    public const string LicenceOuverteUrl = "https://www.etalab.gouv.fr/licence-ouverte-open-licence/";
+    public const string LicenceOuverteName = "Licence Ouverte 2.0";
+    /// The note under the tables when they have French rows, in parts around the links to the dataset and
+    /// the licence: "French statuses are from [PatriNat's BDC Statuts] (base of species statuses in
+    /// France, version for TAXREF v18) on data.gouv.fr ([Licence Ouverte 2.0]), downloaded on 9 October 2026."
+    public const string OtherStatusFranceSubject = "French statuses are from ";
+    public const string OtherStatusFranceLink = "PatriNat's BDC Statuts";
+    public const string OtherStatusFranceMiddle = " (base of species statuses in France, version for TAXREF v18) on data.gouv.fr (";
+    public static string OtherStatusFranceRest(string? downloaded) => ")" + (downloaded is null ? "." : $", downloaded on {downloaded}.");
 
     /// The text of a Japanese Red List row's link to the list's file (the Red List 2020 PDF, a 5th Red
     /// List CSV file).

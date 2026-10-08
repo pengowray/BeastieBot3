@@ -354,6 +354,11 @@ internal sealed class SiteBuildStats {
     public int NatureServeRanks;
     public int NatureServeNationalRanks;
     public int JnccDesignations;
+    public int FranceRows;
+    public int FranceByTaxrefLink;
+    public int FranceByName;
+    public int FranceSiteRows;
+    public string? FranceFetched;
     public int JapanRows;
     public int JapanMatched;
     public int JapanSiteRows;

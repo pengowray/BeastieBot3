@@ -350,6 +350,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Taxa matched to a NatureServe record by an IUCN synonym", s.NatureServeByIucnSynonym);
         Row("NatureServe global ranks (unranked and not applicable left out)", s.NatureServeRanks);
         Row("NatureServe national ranks (US, Canada; unranked left out)", s.NatureServeNationalRanks);
+        Row("French statuses (national red list, national and overseas protection)", s.FranceRows);
+        Row("French taxa matched by TAXREF's IUCN id", s.FranceByTaxrefLink);
+        Row("French taxa matched by name", s.FranceByName);
+        Row("French rows on the site", s.FranceSiteRows);
         Row("Japan's Red List rows (taxa and local populations)", s.JapanRows);
         Row("Japan's Red List taxa matched to a site taxon", s.JapanMatched);
         Row("Japan's Red List rows on the site", s.JapanSiteRows);

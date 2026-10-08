@@ -151,6 +151,14 @@
                         <td>@Model.NztcsDate</td>
                     </tr>
                 }
+                @if (Model.FranceDate is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.FranceBdcUrl">Base de connaissance « Statuts » des espèces (BDC Statuts)</a>, PatriNat (OFB, MNHN, CNRS, IRD), on data.gouv.fr; with <a href="@SiteText.FranceTaxrefUrl">TAXREF v18</a></th>
+                        <td>France's national red list (metropolitan France and the overseas territories) and its national and overseas lists of protected species; TAXREF's names and IUCN taxon ids to match them to this site's taxa</td>
+                        <td><a href="@SiteText.LicenceOuverteUrl">Licence Ouverte / Open Licence 2.0 (Etalab)</a></td>
+                        <td>@Model.FranceDate</td>
+                    </tr>
+                }
                 @if (Model.JapanDate is not null) {
                     <tr>
                         <th scope="row"><a href="https://www.env.go.jp/nature/kisho/hozen/redlist/index.html">Red List 2020 and 5th Red List</a>, Ministry of the Environment, Japan</th>
@@ -214,6 +222,10 @@
         }
         @if (Model.NztcsDate is not null) {
             <li><strong>NZTCS:</strong> @Html.Raw(AboutModel.CitationHtml($"Department of Conservation. New Zealand Threat Classification System database. Accessed {Model.NztcsDate}.", SiteText.NztcsUrl))</li>
+        }
+        @if (Model.FranceDate is not null) {
+            <li><strong>France:</strong> Gargominy, O. &amp; Régnier, C. 2025. Base de connaissance "Statuts" des espèces en France. Version pour TAXREF v18.0. PatriNat (OFB-MNHN-CNRS-IRD). Data.gouv.fr: @Html.Raw(SiteHtml.Linkify(SiteText.FranceBdcUrl)). Licence Ouverte 2.0.</li>
+            <li><strong>TAXREF:</strong> TAXREF [Eds] 2025. TAXREF v18.0, référentiel taxonomique pour la France. PatriNat (OFB-CNRS-MNHN-IRD), Muséum national d'Histoire naturelle, Paris. Data.gouv.fr: @Html.Raw(SiteHtml.Linkify(SiteText.FranceTaxrefUrl)). Licence Ouverte 2.0.</li>
         }
         @if (Model.JapanDate is not null) {
             <li><strong>Japan:</strong> 出典：「環境省レッドリスト2020」（環境省）（@Html.Raw(SiteHtml.Linkify("https://www.env.go.jp/content/900515981.pdf"))）及び「環境省第５次レッドリスト」（環境省）（@Html.Raw(SiteHtml.Linkify("https://ikilog.biodic.go.jp/"))）を加工して作成</li>

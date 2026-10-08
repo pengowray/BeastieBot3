@@ -101,6 +101,17 @@ public sealed record OtherStatusSourceInfo(
             })
             .ToList());
 
+    /// PatriNat's BDC Statuts: France's national red list and protection lists.
+    public static readonly OtherStatusSourceInfo France = new(OtherStatusSources.France, SiteText.OtherStatusFranceRecordLink,
+        OtherStatusDateHeading.InEffectFrom, DateHeadingRule.AllDatedRows,
+        (date, _) => [
+            new(SiteText.OtherStatusFranceSubject),
+            new(SiteText.OtherStatusFranceLink, SiteText.FranceBdcUrl),
+            new(SiteText.OtherStatusFranceMiddle),
+            new(SiteText.LicenceOuverteName, SiteText.LicenceOuverteUrl),
+            new(SiteText.OtherStatusFranceRest(date)),
+        ]);
+
     /// The Red List of Japan's Ministry of the Environment.
     public static readonly OtherStatusSourceInfo Japan = new(OtherStatusSources.Japan, SiteText.OtherStatusJapanRecordLink,
         OtherStatusDateHeading.InEffectFrom, DateHeadingRule.AllDatedRows,
@@ -120,7 +131,7 @@ public sealed record OtherStatusSourceInfo(
                 System.Globalization.DateTimeStyles.None, out var accessed) ? accessed : null)),
         ]);
 
-    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve, Jncc, Cites, RedLists, Japan];
+    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve, Jncc, Cites, RedLists, Japan, France];
 
     /// The source with this key, or null for a source the site does not know.
     public static OtherStatusSourceInfo? Find(string source) => All.FirstOrDefault(s => s.Key == source);

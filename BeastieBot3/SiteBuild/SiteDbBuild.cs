@@ -543,6 +543,7 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.CitesCitation, _stats.CitesCitation);
         writer.SetMeta(SiteDbSchema.MetaKeys.JnccFetched, _stats.JnccFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.JapanFetched, _stats.JapanFetched);
+        writer.SetMeta(SiteDbSchema.MetaKeys.FranceFetched, _stats.FranceFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.JnccFileDate, _stats.JnccFileDate);
         writer.SetMeta(SiteDbSchema.MetaKeys.JnccAttribution, _stats.JnccAttribution);
         writer.SetMeta(SiteDbSchema.MetaKeys.GreenStatusFetched, _stats.GreenStatusFetched);

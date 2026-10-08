@@ -19,8 +19,9 @@ internal static partial class SiteLinkReaders {
     // taxon and list. A taxon with several statuses in one list (Ecuador's birds: the mainland and the
     // Galápagos) gets one row per status, with the locality as the area it applies to. Each list is an
     // other_status_list row, named in English with its year. Returns the lists.
+    // skipCountries: countries whose lists another source gives (France's, from the BDC Statuts).
     private static List<OtherStatusList> ReadRedLists(SqliteConnection connection, StatusListNameIndex index, SiteBuildStats stats,
-        CancellationToken cancellationToken) {
+        IReadOnlyCollection<string> skipCountries, CancellationToken cancellationToken) {
         var datasets = new Dictionary<string, OtherStatusList>(StringComparer.Ordinal);
         using (var command = connection.CreateCommand()) {
             command.CommandText = """
@@ -78,7 +79,7 @@ internal static partial class SiteLinkReaders {
         // A list that replaces another is read first, so the other knows which taxa to leave out.
         var order = taxa.Values.GroupBy(t => t.Dataset).OrderBy(g => RedListReplaces.ContainsKey(g.Key) ? 0 : 1).ThenBy(g => g.Key, StringComparer.Ordinal);
         foreach (var dataset in order) {
-            if (!datasets.TryGetValue(dataset.Key, out var list)) {
+            if (!datasets.TryGetValue(dataset.Key, out var list) || (list.Country is { } country && skipCountries.Contains(country))) {
                 continue;
             }
             var replacedBy = RedListReplaces.FirstOrDefault(p => p.Value == dataset.Key).Key;

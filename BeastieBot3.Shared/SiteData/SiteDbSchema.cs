@@ -582,6 +582,8 @@ public static class SiteDbSchema {
         public const string JnccFetched = "jncc_fetched";
         /// When `statuses japan-import` last downloaded Japan's Red List ('yyyy-MM-dd').
         public const string JapanFetched = "japan_fetched";
+        /// When `statuses france-import` last downloaded the BDC Statuts ('yyyy-MM-dd').
+        public const string FranceFetched = "france_fetched";
         public const string JnccFileDate = "jncc_file_date";
         public const string JnccAttribution = "jncc_attribution";
         /// When `iucn api green-status` last downloaded the Green Status assessments ('yyyy-MM-dd'), for

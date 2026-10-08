@@ -23,6 +23,11 @@ public static class OtherStatusSystems {
     public const string Sara = "ca-sara";
     /// The New Zealand Threat Classification System.
     public const string Nztcs = "nz-nztcs";
+    /// France's national red list (Liste rouge nationale), for metropolitan France and each overseas
+    /// territory, from PatriNat's BDC Statuts.
+    public const string FranceRedList = "fr-lrn";
+    /// France's national and overseas lists of protected species (arrêtés), from the BDC Statuts.
+    public const string FranceProtection = "fr-protection";
     /// The Red List of Japan's Ministry of the Environment (Red List 2020 and 5th Red List).
     public const string JapanMoe = "jp-moe";
     /// The United States Endangered Species Act.
@@ -62,6 +67,8 @@ public static class OtherStatusSystems {
         new(Salve, "BR"),
         new(Cosewic, "CA"),
         new(Sara, "CA"),
+        new(FranceRedList, "FR"),
+        new(FranceProtection, "FR"),
         new(JapanMoe, "JP"),
         new(Nztcs, "NZ"),
         new(Jncc, "GB"),
@@ -232,6 +239,8 @@ public static class OtherStatusSources {
     public const string Salve = "salve";
     /// JNCC's Conservation Designations for UK Taxa; source_id is the taxon version key (UK Species Inventory).
     public const string Jncc = "jncc";
+    /// PatriNat's BDC Statuts (`statuses france-import`); source_id is france_status.row_number.
+    public const string France = "france";
     /// Japan's Red List (`statuses japan-import`); source_id is japan_listing.row_id.
     public const string Japan = "japan";
     /// National and subnational red lists from GBIF; source_id is "<dataset key>:<the archive's taxon id>".
