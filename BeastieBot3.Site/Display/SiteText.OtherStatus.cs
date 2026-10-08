@@ -74,6 +74,7 @@ public static partial class SiteText {
         OtherStatusSystems.Sara => ("Species at Risk Act", "Canada's Species at Risk Act, the federal law", false),
         OtherStatusSystems.Nztcs => ("NZTCS", "New Zealand Threat Classification System", true),
         OtherStatusSystems.Esa => ("Endangered Species Act", null, false),
+        OtherStatusSystems.JapanMoe => ("Red List of the Ministry of the Environment", "環境省レッドリスト, the Red List of Japan's Ministry of the Environment", false),
         OtherStatusSystems.Cites => ("CITES", "Convention on International Trade in Endangered Species of Wild Fauna and Flora", true),
         OtherStatusSystems.NatureServeGlobal => ("NatureServe global rank", "NatureServe's global conservation status rank (G rank)", false),
         OtherStatusSystems.NatureServeNational => ("NatureServe national rank",
@@ -143,7 +144,7 @@ public static partial class SiteText {
                 row.ListedUnder is { } under ? $"Covered by the listing of {under}" : null,
             }.OfType<string>()) is { Length: > 0 } line ? line : null,
         OtherStatusSystems.Jncc => row.Qualifier,
-        OtherStatusSystems.NationalRedList => row.Qualifier is { } own ? $"In the list: {own}" : null,
+        OtherStatusSystems.NationalRedList or OtherStatusSystems.JapanMoe => row.Qualifier is { } own ? $"In the list: {own}" : null,
         _ => NatureServeRankMeaning(row, kind),
     };
 
@@ -276,6 +277,17 @@ public static partial class SiteText {
     /// 8 October 2026."
     public static string RedListNotePublisher(string? publisher) => publisher is null ? ": from GBIF (" : $": {publisher}, from GBIF (";
     public static string RedListNoteRest(string? downloaded) => downloaded is null ? "). " : $"), downloaded on {downloaded}. ";
+
+    /// The text of a Japanese Red List row's link to the list's file (the Red List 2020 PDF, a 5th Red
+    /// List CSV file).
+    public const string OtherStatusJapanRecordLink = "Ministry of the Environment";
+    /// The note under the tables when they have rows from Japan's Red List. The Public Data License asks
+    /// for the source and a note of what was changed; the Japanese part is the source line in the form
+    /// the Ministry's terms show.
+    public static string OtherStatusJapanNote(string? downloaded) =>
+        "Japanese statuses are from the Ministry of the Environment's Red List 2020 and 5th Red List, used under the Public Data License (Version 1.0)"
+        + (downloaded is null ? "." : $", downloaded on {downloaded}.")
+        + " This site gives the categories in English and matches the scientific names to its taxa. 出典：「環境省レッドリスト2020」及び「環境省第５次レッドリスト」（環境省）を加工して作成";
 
     /// The text of a JNCC row's link to JNCC's page of the designations.
     public const string OtherStatusJnccRecordLink = "JNCC";

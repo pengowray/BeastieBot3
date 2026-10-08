@@ -151,6 +151,14 @@
                         <td>@Model.NztcsDate</td>
                     </tr>
                 }
+                @if (Model.JapanDate is not null) {
+                    <tr>
+                        <th scope="row"><a href="https://www.env.go.jp/nature/kisho/hozen/redlist/index.html">Red List 2020 and 5th Red List</a>, Ministry of the Environment, Japan</th>
+                        <td>The national Red List categories of Japan's species and threatened local populations</td>
+                        <td><a href="https://www.digital.go.jp/resources/open_data/public_data_license_v1.0">Public Data License (Version 1.0)</a>; this site gives the categories in English and matches the scientific names to its taxa</td>
+                        <td>@Model.JapanDate</td>
+                    </tr>
+                }
                 @if (Model.JnccDate is not null) {
                     <tr>
                         <th scope="row"><a href="https://jncc.gov.uk/resources/478f7160-967b-4366-acdf-8941fd33850b">Conservation Designations for UK Taxa</a>, Joint Nature Conservation Committee (JNCC)</th>
@@ -206,6 +214,9 @@
         }
         @if (Model.NztcsDate is not null) {
             <li><strong>NZTCS:</strong> @Html.Raw(AboutModel.CitationHtml($"Department of Conservation. New Zealand Threat Classification System database. Accessed {Model.NztcsDate}.", SiteText.NztcsUrl))</li>
+        }
+        @if (Model.JapanDate is not null) {
+            <li><strong>Japan:</strong> 出典：「環境省レッドリスト2020」（環境省）（@Html.Raw(SiteHtml.Linkify("https://www.env.go.jp/content/900515981.pdf"))）及び「環境省第５次レッドリスト」（環境省）（@Html.Raw(SiteHtml.Linkify("https://ikilog.biodic.go.jp/"))）を加工して作成</li>
         }
         @if (Model.JnccDate is not null) {
             <li><strong>JNCC:</strong> @Html.Raw(AboutModel.CitationHtml($"Joint Nature Conservation Committee. Conservation Designations for UK Taxa{(Model.JnccFileDate is null ? "" : $", spreadsheet dated {Model.JnccFileDate}")}. {Model.JnccAttribution ?? ""}", "https://jncc.gov.uk/resources/478f7160-967b-4366-acdf-8941fd33850b"))</li>

@@ -101,6 +101,11 @@ public sealed record OtherStatusSourceInfo(
             })
             .ToList());
 
+    /// The Red List of Japan's Ministry of the Environment.
+    public static readonly OtherStatusSourceInfo Japan = new(OtherStatusSources.Japan, SiteText.OtherStatusJapanRecordLink,
+        OtherStatusDateHeading.InEffectFrom, DateHeadingRule.AllDatedRows,
+        (date, _) => [new(SiteText.OtherStatusJapanNote(date))]);
+
     // "2026-06-09" as "9 June 2026"; null when not a date.
     private static string? DateText(string? isoDate) => isoDate is null ? null : SiteFormat.Date(isoDate);
 
@@ -115,7 +120,7 @@ public sealed record OtherStatusSourceInfo(
                 System.Globalization.DateTimeStyles.None, out var accessed) ? accessed : null)),
         ]);
 
-    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve, Jncc, Cites, RedLists];
+    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve, Jncc, Cites, RedLists, Japan];
 
     /// The source with this key, or null for a source the site does not know.
     public static OtherStatusSourceInfo? Find(string source) => All.FirstOrDefault(s => s.Key == source);

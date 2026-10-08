@@ -37,6 +37,8 @@ public sealed class AboutModel : PageModel {
     public string? SalveDate { get; private set; }
     /// JNCC's spreadsheet: when it was downloaded, its date and the attribution JNCC asks for.
     public string? JnccDate { get; private set; }
+    /// When Japan's Red List was downloaded.
+    public string? JapanDate { get; private set; }
     public string? JnccFileDate { get; private set; }
     public string? JnccAttribution { get; private set; }
     /// The Checklist of CITES Species: when it was downloaded, as a date and as its citation's access date (dd/MM/yyyy).
@@ -118,6 +120,7 @@ public sealed class AboutModel : PageModel {
             string[] months = ["jan.", "fev.", "mar.", "abr.", "maio", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez."];
             SalveAccessed = $"{salve.Day:00} de {months[salve.Month - 1]} de {salve.Year}";
         }
+        JapanDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.JapanFetched), out var japan) ? SiteFormat.Date(japan) : null;
         JnccDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.JnccFetched), out var jncc) ? SiteFormat.Date(jncc) : null;
         JnccFileDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.JnccFileDate), out var jnccFile) ? SiteFormat.Date(jnccFile) : null;
         JnccAttribution = snapshot.Get(SiteDbSchema.MetaKeys.JnccAttribution);

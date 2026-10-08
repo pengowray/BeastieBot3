@@ -354,6 +354,10 @@ internal sealed class SiteBuildStats {
     public int NatureServeRanks;
     public int NatureServeNationalRanks;
     public int JnccDesignations;
+    public int JapanRows;
+    public int JapanMatched;
+    public int JapanSiteRows;
+    public string? JapanFetched;
     public int RedListStatuses;
     public int RedListMatched;
     public int RedListRows;

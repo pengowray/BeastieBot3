@@ -181,6 +181,8 @@ public sealed class SpeciesModel : PageModel {
                 return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.EcosFetched), out var ecos) ? SiteFormat.Date(ecos) : null;
             case OtherStatusSources.NatureServe:
                 return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.NatureServeFetched), out var ns) ? SiteFormat.Date(ns) : null;
+            case OtherStatusSources.Japan:
+                return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.JapanFetched), out var japan) ? SiteFormat.Date(japan) : null;
             case OtherStatusSources.Cites:
                 return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.CitesFetched), out var cites) ? SiteFormat.Date(cites) : null;
             case OtherStatusSources.Salve:
