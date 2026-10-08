@@ -8,10 +8,11 @@ The status lists store holds conservation statuses from systems other than the I
 - SALVE (salve.icmbio.gov.br), ICMBio's system for the national assessments of the extinction risk of Brazil's fauna: the current assessment of each species and subspecies (`statuses salve-import`).
 - JNCC's Conservation Designations for UK Taxa (Joint Nature Conservation Committee, Open Government Licence v3.0): one row per taxon and designation, for the GB and England red lists, Birds of Conservation Concern, Nationally Rare and Scarce, the UK and country priority species lists, the Wildlife and Countryside Act and other UK legislation, and the international conventions and EU directives as they apply to UK taxa (`statuses jncc-import`).
 - The Checklist of CITES Species (checklist.cites.org, compiled by UNEP-WCMC for the CITES Secretariat): the current CITES Appendix listings of every taxon in the Appendices, with the listings each taxon inherits from a higher taxon (`statuses cites-import`).
+- PatriNat's BDC Statuts (base of species statuses in France, Licence Ouverte 2.0): the French national red list (Liste rouge nationale, by UICN France, MNHN and OFB) of metropolitan France and the overseas territories, the regional red lists, and the national, overseas, regional and departmental protection lists, with each listed taxon's TAXREF names and its IUCN, BirdLife, Catalogue of Life and GBIF ids from TAXREF (`statuses france-import`).
 
 Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a comment on every column.
 
-The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-import` and `cites-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete), as `<stem>-<yyyy-MM-dd>.<extension>` or, when the spec has `FindFileName`, under the name the source gives its file. It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. A spec's `SourceForFile` changes the `status_source` row for the file imported (JNCC uses it for the file's URL and the year in its attribution). The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs` and `StatusListStore.Jncc.cs`.
+The six imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-import`, `cites-import` and `france-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete), as `<stem>-<yyyy-MM-dd>.<extension>` or, when the spec has `FindFileName`, under the name the source gives its file. It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. A spec's `SourceForFile` changes the `status_source` row for the file imported (JNCC uses it for the file's URL and the year in its attribution; the BDC for its citation, which has the version and date of the file). The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs`, `StatusListStore.Jncc.cs`, `StatusListStore.Cites.cs` and `StatusListStore.France.cs`.
 
 ## Files
 
@@ -24,7 +25,7 @@ The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-
 
 | Table | One row per |
 | --- | --- |
-| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, `jncc`, `cites`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
+| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, `jncc`, `cites`, `france`, `taxref`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
 | `status_sync_state` | key of the NatureServe download's progress (`natureserve_pass_*`, `natureserve_completed*`) |
 | `natureserve_species` | NatureServe record (`element_global_id`): a species, subspecies, variety or population |
 | `natureserve_synonym` | synonym NatureServe lists for a record |
@@ -40,6 +41,12 @@ The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-
 | `cites_listing` | current CITES listing of a taxon (`taxon_concept_id`, `listing_change_id`): its own, or inherited from a higher taxon |
 | `cites_note` | long note of the CITES listings (a full note, the text of an annotation such as #4), stored once and referred to by id |
 | `cites_synonym` | synonym the Checklist gives for a taxon, with and without its author |
+| `france_status` | row of the BDC Statuts of a stored status type: a taxon (`cd_nom`, the TAXREF id of the name the list used, and `cd_ref`, the id of its accepted name), its status in one list and one place (`row_number`, the row's number in the BDC's CSV) |
+| `france_status_type` | status type of the BDC (`type_code`: LRN, LRR, PN ...), stored or not |
+| `france_territory` | place of the stored statuses (`territory_code`, the BDC's CD_SIG), with its English name |
+| `france_document` | document that gives the stored statuses (`cd_doc`): a red list chapter, a regional red list, a decree; its year, title and citation |
+| `france_taxref_name` | TAXREF name (`cd_nom`) whose accepted name is the `cd_ref` of a stored status: the accepted name, its synonyms and the other names under it |
+| `france_taxref_link` | id of one of those names in the IUCN Red List, BirdLife, the Catalogue of Life or GBIF, from TAXREF |
 
 ## NatureServe Explorer: `statuses natureserve-fetch`
 
@@ -478,6 +485,171 @@ A full download took 44 requests and 14 minutes on 2026-10-08, and no request ha
 
 The command uses the endpoint that the Checklist's web app uses, not a published API, so UNEP-WCMC can change its parameters or its answers without notice. The download fails, and the store is not changed, when a page is not JSON, when `total_cnt` changes during the download, or when the rows do not have `total_cnt` different taxon ids. A renamed field would show only as missing values, so compare the counts that the command prints after a run with the counts above.
 
+## France: `statuses france-import`
+
+### Sources
+
+- The BDC Statuts ("Base de connaissance « Statuts » des espèces"), kept by PatriNat (OFB, MNHN, CNRS and IRD): every status of the taxa of TAXREF in France, its overseas territories, regions and departments, one row per taxon, status type and place, with the document that gives it. Version 18 is built on TAXREF v18. `BDC.zip` (32.6 MB; the server's date for it is 2025-11-28) holds `BDC_18/bdc_18_01.csv` (329 MB, 447,664 rows, 30 columns, dated 24 July 2025) and the list of the 24 status types, as CSV and as xlsx.
+- TAXREF v18, the French national taxonomic reference, also kept by PatriNat: `TAXREF_v18_2025.zip` (60.6 MB) holds `TAXREFv18.txt` (708,685 names) and `TAXREF_LIENS.txt` (2,016,747 links from a name to its id in another database), with 6 smaller files and the methodology report as a PDF.
+
+Code: `FranceImportCommand.cs` (the command, the download and the summary), `FranceBdc.cs` (reading the BDC, the documents, which red list row is current, the BDC's citation), `FranceRedListRemark.cs` (the parts of a red list remark), `FranceTaxref.cs` (reading TAXREF, its citation), `FranceTerritories.cs` (English names of the places) and `StatusListStore.France.cs`. Tests: `FranceStatusesTests`.
+
+### Licence and citations
+
+The owner of this project decided in October 2026 that both datasets are used under the Licence Ouverte / Open Licence 2.0 (Etalab), https://www.etalab.gouv.fr/licence-ouverte-open-licence/, the licence that data.gouv.fr lists for them:
+
+- BDC Statuts: https://www.data.gouv.fr/datasets/statuts-reglementaires-et-de-conservation-des-especes ("Statuts réglementaires et de conservation des espèces", published by Système d'information sur la biodiversité).
+- TAXREF: https://www.data.gouv.fr/datasets/referentiel-taxonomique-taxref-1 ("Référentiel Taxonomique TaxRef", same publisher). A second data.gouv.fr page for TAXREF, https://www.data.gouv.fr/datasets/referentiel-taxonomique-taxref, published by the MNHN, lists the Licence Ouverte 1.0.
+
+TAXREF's own terms of use (taxref.mnhn.fr, "Conditions d'utilisation", as archived in July 2025) put TAXREF under the Licence Ouverte, allow any use when TAXREF is cited, and do not forbid redistribution, though PatriNat prefers that people download TAXREF from its own site. GBIF's description of its TAXREF dataset still quotes older download conditions from INPN, which asked that no part of TAXREF be put online without PatriNat's permission.
+
+`status_source` has two rows: `france` for the BDC and `taxref` for TAXREF. Each has its data.gouv.fr page in `url`, the licence's name and address in `licence`, and the kept file's name in `version`. Their citations, as stored after importing the files of November 2025:
+
+> Gargominy, O. & Régnier, C. 2025. Base de connaissance "Statuts" des espèces en France. Version pour TAXREF v18.0. PatriNat (OFB-MNHN-CNRS-IRD). Archive contenant trois fichiers. [version du 24 juillet 2025]
+
+> TAXREF [Eds] 2025. TAXREF v18.0, référentiel taxonomique pour la France. PatriNat (OFB-CNRS-MNHN-IRD), Muséum national d'Histoire naturelle, Paris. Archive de téléchargement contenant 8 fichiers générés le 9 janvier 2025. https://inpn.mnhn.fr/telechargement/referentielEspece/taxref/18.0/menu
+
+Where the citation forms come from:
+
+- The BDC's download page on INPN loaded its citation from DOCS-Web document 232324 (`https://inpn.mnhn.fr/docs-web/docs/DocJson/232324`). The Internet Archive has that answer for version 14 (2021), version 16 (3 April 2023) and version 17 (29 May 2024), in the same form since 2023: "Gargominy, O. & Régnier, C. 2024. Base de connaissance "Statuts" des espèces en France. Version pour TAXREF v17.0. PatriNat (OFB-MNHN-CNRS-IRD). Archive contenant deux fichiers. [version du 29 mai 2024]". No copy for version 18 was found, so `FranceBdc.Citation` fills in that form from the zip: the version from the CSV's name (`bdc_18_01.csv`), the year and the date from the CSV's date in the zip, and the number of files in the zip (three in version 18, which adds the xlsx). It is built on PatriNat's form; it is not PatriNat's wording for version 18.
+- TAXREF's form is the one that taxref.mnhn.fr gave for TAXREF v18.0 (archived in July 2025). `FranceTaxref.Citation` fills it in from the zip: the version from `TAXREFv18.txt`, the date of that file in the zip, and the number of .txt and .csv files (8).
+- The BDC's guide (Régnier, C. & Gargominy, O. 2018. Diffusion des statuts des espèces : principes et objectifs. Rapport Patrinat 2018-109) gives only the reference of the guide itself. INPN's pages ask for "MNHN & OFB [Ed]. 2003-2025. Inventaire national du patrimoine naturel (INPN), Site web : https://inpn.mnhn.fr" for the site's content.
+
+Each list also has its own citation, in `france_document.citation` (plain text) and `citation_html` (as the BDC gives it). The chapters of the national red list are cited as, for example, "UICN Comité français, MNHN, LPO, SEOF & ONCFS. 2016. La Liste rouge des espèces menacées en France - Chapitre Oiseaux de France métropolitaine. 31 pp."
+
+### Download
+
+MNHN's sites (inpn.mnhn.fr and taxref.mnhn.fr) have been down or behind a Cloudflare challenge since a cyberattack in July 2025, and the download links on the data.gouv.fr pages point to inpn.mnhn.fr. PatriNat lists the files on a temporary download page, https://www.patrinat.fr/fr/page-temporaire-de-telechargement-des-referentiels-de-donnees-lies-linpn-7353, which says that they will be removed when INPN is back. The command's defaults are the addresses on that page:
+
+| Option | Default |
+| --- | --- |
+| `--bdc-url` | https://assets.patrinat.fr/files/referentiel/BDC.zip |
+| `--taxref-url` | https://assets.patrinat.fr/files/referentiel/TAXREF_v18_2025.zip |
+
+The command sends a HEAD request for each file and names the kept copy after the file's name in the address and the date the server gives for the file (Last-Modified): `BDC-2025-11-28.zip` and `TAXREF_v18_2025-2025-11-28.zip`. When the status lists folder already has a file of that name, the command reads it and does not download it again. Each file is downloaded as a `.part` file and renamed when it is complete.
+
+The command stops without changing the store when an address answers with an error (HTTP 404 when PatriNat removes the file), when the server answers with a web page, or when the file downloaded is not a zip file. Its message gives the address, the error, the temporary download page, the two data.gouv.fr pages, and the option that takes the file's new address (`--bdc-url` or `--taxref-url`).
+
+`--file` and `--taxref-file` import kept copies and must be given together. Give the TAXREF version that the BDC was built on (TAXREF v18 for `BDC_18`): the BDC's `CD_REF` is the accepted name in that version. The summary warns when the two versions differ, and counts the names on which they differ (2 in version 18, both in protection lists).
+
+Importing kept copies of both zips takes about 20 seconds. The French tables take about 66 MB of the store.
+
+### What is stored
+
+| Type (`type_code`) | What it is | Rows | Taxa (`cd_ref`) | Documents | Places |
+| --- | --- | ---: | ---: | ---: | ---: |
+| LRN | Liste rouge nationale: the national red list, for metropolitan France and each overseas territory | 23,020 | 20,615 | 35 | 13 |
+| LRR | Listes rouges régionales: the regional red lists that UICN France has endorsed, by region (before and after the merger of regions in 2016) | 75,650 | 19,222 | 141 | 25 |
+| PR | Protection régionale: regional protection lists | 4,632 | 2,402 | 26 | 25 |
+| PD | Protection départementale: departmental protection lists | 4,372 | 3,002 | 41 | 52 |
+| PN | Protection nationale: national protection, in metropolitan France, the overseas departments and collectivities, and the whole of France (ETATFRA: marine mammals, sea turtles, marine invertebrates and some fish) | 3,871 | 3,225 | 34 | 11 |
+| POM | Protection COM: protection in the overseas collectivities (the provinces of New Caledonia, French Polynesia, Saint Pierre and Miquelon, Clipperton) | 3,036 | 2,292 | 6 | 6 |
+
+In all, 114,581 rows of 34,816 taxa, 275 documents and 104 places.
+
+Not stored:
+
+- IUCN's global and European red lists (LRM, 19,461 rows; LRE, 5,831), which the site has from IUCN.
+- The international conventions and EU directives (BERN, BONN, BARC, OSPAR, DH and DO; 3,750 rows). Their remarks say which populations a listing covers ("excepté la population estonienne ..."), so a row means little without its remark, and the remarks are long.
+- ZNIEFF determinant species (ZDET, 173,912 rows), national action plans (PNA and exPNA), the regulations on introductions, control and trade (REGLII, REGLSO, REGL and REGLLUTTE; 125,345 rows), and the lists of taxa whose records are sensitive (SENSNAT, SENSREG and SENSDEP).
+- The remarks of the protection lists: notes and comments of up to 599 characters, some with personal communications. The red lists' remarks are codes and are stored, except 5 regional remarks that are sentences ("Espèce erratique non autochtone dans la région").
+- The columns NOM_COMPLET_HTML and NOM_VALIDE_HTML (names as HTML), GROUP1_INPN and GROUP2_INPN (INPN's informal groups), CD_SUP, THEMATIQUE and TYPE_VALUE (the same in every row). `france_status_type` keeps every type's label and group, the types not stored included.
+
+From TAXREF, for the 34,814 accepted names of the stored rows (two accepted names of protection rows are under another name in TAXREF): 173,261 names in `france_taxref_name` (the accepted names, their synonyms and the other names under them), and 265,245 links in `france_taxref_link`: GBIF 163,822, Catalogue of Life 87,986, IUCN Red List 11,701, and BirdLife 1,736.
+
+### The national red list
+
+Rows by place, with the English name in `france_territory.name_en`:
+
+| Place (`territory_code`) | `name` in the BDC | Rows | Taxa | EX | RE | CR* | CR | EN | VU | NT | LC | DD | NA | NE |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Metropolitan France (TERFXFR) | France métropolitaine | 12,278 | 11,903 | 6 | 44 | 28 | 122 | 377 | 687 | 746 | 6,855 | 1,612 | 1,801 | 0 |
+| Guadeloupe (TER971) | Guadeloupe | 2,451 | 2,447 | 10 | 11 | 7 | 85 | 114 | 130 | 158 | 1,156 | 589 | 191 | 0 |
+| Réunion (TER974) | Réunion | 2,235 | 2,235 | 22 | 44 | 15 | 154 | 165 | 171 | 93 | 969 | 482 | 120 | 0 |
+| New Caledonia (TER988) | Nouvelle-Calédonie | 1,693 | 1,683 | 1 | 0 | 0 | 153 | 302 | 224 | 219 | 691 | 84 | 0 | 19 |
+| French Guiana (TER973) | Guyane | 1,496 | 1,496 | 0 | 1 | 0 | 24 | 58 | 68 | 91 | 924 | 252 | 78 | 0 |
+| Mayotte (TER976) | Mayotte | 998 | 998 | 0 | 0 | 0 | 36 | 47 | 208 | 96 | 399 | 139 | 73 | 0 |
+| Martinique (TER972) | Martinique | 747 | 747 | 7 | 9 | 6 | 62 | 53 | 42 | 56 | 207 | 126 | 179 | 0 |
+| French Polynesia (TER987) | Polynésie française | 693 | 693 | 37 | 1 | 14 | 125 | 164 | 73 | 60 | 102 | 63 | 54 | 0 |
+| French Southern and Antarctic Lands: Scattered Islands (TER984B) | TAAF : Îles éparses | 244 | 244 | 0 | 2 | 0 | 1 | 7 | 10 | 6 | 65 | 118 | 35 | 0 |
+| French Southern and Antarctic Lands: sub-Antarctic islands (TER984A) | TAAF : Îles sub-antarctiques | 154 | 154 | 1 | 1 | 0 | 9 | 12 | 5 | 4 | 50 | 14 | 58 | 0 |
+| French Southern and Antarctic Lands: Adélie Land (TER984C) | TAAF : Terre-Adélie | 25 | 25 | 0 | 0 | 0 | 1 | 1 | 4 | 0 | 5 | 1 | 13 | 0 |
+| Wallis and Futuna (TER986) | Wallis et Futuna | 4 | 4 | 0 | 0 | 0 | 0 | 1 | 2 | 0 | 0 | 1 | 0 | 0 |
+| Saint Martin (TER978) | Saint-Martin | 2 | 2 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
+| All places | | 23,020 | 20,615 | 84 | 113 | 70 | 772 | 1,303 | 1,624 | 1,529 | 11,423 | 3,481 | 2,602 | 19 |
+
+The codes (`code`, with the French label in `label`) are IUCN's categories as UICN France applies them to a region: EX "Eteinte au niveau mondial" (extinct worldwide), RE "Disparue au niveau régional" (regionally extinct), CR* "On ne sait pas si l'espèce n'est pas éteinte ou disparue" (CR, and possibly extinct or regionally extinct; 70 rows), CR, EN, VU, NT, LC, DD, NA "Non applicable" and NE "Non évaluée". The regional red lists also use "RE?" (59 rows).
+
+#### Remarks
+
+The remark (`RQ_STATUT`) of a red list row is stored as given in `remark`, and `FranceRedListRemark.Parse` reads its parts. A remark has, in this order, each part optional: the criteria, the category and criteria before a regional adjustment, or the letter of the reason for NA; then " - " and the population or presence that the row assesses. 10,101 national rows have a remark (1,350 of them only "/"), and every other national remark has at least one part that the parser reads.
+
+| Remark | Columns |
+| --- | --- |
+| `B2ab(iii)` | `criteria` B2ab(iii) |
+| `pr. D2` | `criteria` pr. D2: an NT taxon that came close to meeting criterion D2 ("proche") |
+| `VU D1 (-1) - Nicheur` | `criteria` D1, `adjusted_from` VU, `adjustment` -1 (the taxon met VU D1 and was moved down one category for the region, the code is NT), `population_fr` Nicheur, `population` breeding |
+| `NT (pr. D1) (-1) - Visiteur régulier` | `criteria` pr. D1, `adjusted_from` NT, `adjustment` -1, `population_fr` Visiteur régulier, `population` visiting |
+| `b - Visiteur` | `na_reason` b, `population_fr` Visiteur, `population` visiting |
+| `Hivernant` | `population_fr` Hivernant, `population` wintering |
+
+National rows by remark part: 5,112 have criteria, 144 have a regional adjustment (`adjusted_from`, `adjustment`), and 2,425 NA rows have a reason: a 1,486, b 688, c 105, d 146. UICN France's national red list defines NA as a species that is not assessed because it was introduced in recent times (generally after 1500; reason a) or occurs in the region only occasionally or marginally (reason b). Reasons c and d are used only on bird rows of wintering and passage populations; as far as is known (not checked against the lists), c is a species present regularly in winter or on passage that does not meet the criteria of a significant presence, and d one for which too few data are available to confirm that it does.
+
+Populations (`population_fr` as the BDC writes it, `population` the key):
+
+| `population_fr` | `population` | National rows | English, for the site |
+| --- | --- | ---: | --- |
+| Nicheur | breeding | 866 | breeding |
+| Nicheur certain, Reproducteur certain | breeding | 137, 146 | breeding (confirmed) |
+| Nicheur probable, Reproducteur probable | breeding | 2, 7 | breeding (probable) |
+| Hivernant | wintering | 185 | wintering |
+| Visiteur | visiting | 509 | on passage in metropolitan France (415 rows; the 2011 bird list calls them "de passage"); visiting in French Guiana (94) |
+| Visiteur régulier | visiting | 172 | regular visitor |
+| Visiteur occasionnel | visiting | 228 | occasional visitor |
+| Visiteur et possiblement nicheur; Visiteur régulier et reproducteur probable; Visiteur régulier et nicheur probable | visiting | 9, 9, 2 | visitor, possibly or probably breeding |
+| Inconnu | NULL | 9 | presence unknown (French Guiana) |
+
+A row with no population is about the whole taxon. Most regional lists of birds are of breeding birds and give no population in their remarks; for a bird row (`taxclass` Aves) with none, `population` comes from its document's title when the title names one population ("Liste rouge des oiseaux nicheurs de Franche-Comté": breeding; `france_document.bird_population`, `FranceBdc.TitlePopulation`). 2,440 regional rows get their population this way; `population_fr` stays NULL. No national row does.
+
+#### Birds of metropolitan France: two lists
+
+Two national lists of the birds of metropolitan France are in the BDC: the 2011 list (`cd_doc` 31343, 600 rows) and the 2016 list (`cd_doc` 165208, 317 rows). In version 18, the 2016 list has only its breeding rows (Nicheur), and the 2011 list only its wintering rows (Hivernant, 185) and its passage rows (Visiteur, 415): the BDC does not have the 2016 list's wintering and passage assessments. 219 taxa have rows from both lists, always for different populations (Crex crex: EN breeding in 2016, NA passage in 2011), so the 2011 rows are the current rows for wintering and passage birds.
+
+#### The current row
+
+`is_current` (`FranceBdc.MarkCurrent`) marks the row to show for a taxon. Red list rows are grouped by type (LRN, LRR), accepted name (`cd_ref`), place and `population` (breeding, wintering, visiting, or none). In each group:
+
+1. the rows of the newest document are current (by `france_document.year`; a document with no year is older than any);
+2. of those, when one is the row of the accepted name itself (`cd_nom` = `cd_ref`), only the rows of the accepted name are current.
+
+Other rows are 0, and protection rows are NULL (every protection row applies).
+
+| | LRN | LRR |
+| --- | ---: | ---: |
+| Current rows | 22,976 | 71,676 |
+| Rows of an older list for the same taxon, place and population | 0 | 3,146 |
+| Rows of another name of a taxon that has a row under its accepted name in the same list | 44 | 828 |
+| Taxa with two or more current rows for one place and population | 7 | 267 |
+
+The 44 national rows are rows of two names that TAXREF now treats as one taxon, in one list: 35 in the vascular plants of metropolitan France, nearly all a species and its nominate subspecies (Pinus mugo subsp. mugo, NT, is a synonym of Pinus mugo, LC, in TAXREF v18, so the row of Pinus mugo is the current one), and 9 in the vascular plants of New Caledonia, two names of one palm or fern (Kentiopsis oliviformis and Chambeyronia oliviformis). Of the 7 national taxa with two current rows, 6 are a species and its nominate subspecies in metropolitan France, both LC and neither of them TAXREF's accepted name (Sarcocornia perennis and Sarcocornia perennis subsp. perennis); and Sarcochilus hillii has two rows in the 2024 list of the vascular plants of New Caledonia, DD and VU. Of the 267 regional taxa, 188 are birds in the 2020 list of Provence-Alpes-Côte d'Azur, which assesses breeding, passage and wintering birds but whose rows in the BDC do not say which population each is about (Pluvialis squatarola: LC and NA).
+
+The rule compares lists only for the same place code. A region before the merger of 2016 (`admin_level` "Ancienne région", such as Alsace) has its own code, so the current rows of an old region's list stay current beside the list of the new region that contains it (Grand Est).
+
+### Matching taxa to IUCN taxa
+
+TAXREF's ids first, then names:
+
+1. `france_taxref_link` rows with `source` "IUCN Red List" (an IUCN taxon id) or "IUCN Red List > BirdLife" (BirdLife's id, which is the IUCN taxon id of a bird). Many birds have only the BirdLife link (Crex crex: 22692543). Look them up by the status row's `cd_ref`: the links are on TAXREF names, and a link on a synonym counts for its accepted name. Of the 20,615 national red list taxa, 9,070 have an IUCN id this way, and 8,909 have an id that is a taxon id in the IUCN Red List 2026-1. 172 national taxa have two or more IUCN ids (131 with two or more in 2026-1), because TAXREF puts two names that IUCN assesses apart under one accepted name (Eliomys quercinus, 7618, and Eliomys melanurus, 7619). For those, prefer the link on the accepted name itself (`cd_nom` = `cd_ref`; 162 of the 172 have one), then the link on the status row's `cd_nom`, then any.
+2. Names: the status row's `name` (the name the list used), then the `france_taxref_name` names with the same `cd_ref` (the accepted name and its synonyms). Matching only exact names, without kingdoms, 735 more national taxa match a scientific name of IUCN 2026-1 by their accepted name and 233 by another TAXREF name. The other 10,738 match no IUCN name; most are taxa that IUCN has not assessed.
+
+The Catalogue of Life and GBIF links are there for matching by those ids.
+
+### Using the rows on the site
+
+- Label a place with `france_territory.name_en` ("Metropolitan France", "French Guiana", "French Southern and Antarctic Lands: Scattered Islands"), else its French `name` (the departments of metropolitan France have no English name).
+- Show `population` (breeding, wintering, passage or visiting) beside a bird's category; a bird can have one current row for each population in one place.
+- Show the rows with `is_current` = 1, and cite each row's document (`france_document`) beside the BDC itself.
+
 ## Web UI
 
-The Data sources page has a card for the store, with the number of NatureServe records and ECOS listings. The "Update the public species site" workflow has a step for each command before the site build, each with a light: NatureServe is blue while a download is under way, and either step is amber when its last download is more than 30 days old. The site build's light counts the store as one of its inputs.
+The Data sources page has a card for the store, with the number of NatureServe records and ECOS listings. The "Update the public species site" workflow has a step for each command before the site build, each with a light: NatureServe is blue while a download is under way, and either step is amber when its last download is more than 30 days old. The site build's light counts the store as one of its inputs. `statuses france-import` has no step in the workflow yet, and `site build-db` does not read the French tables yet.
