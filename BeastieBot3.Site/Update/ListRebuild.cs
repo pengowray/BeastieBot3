@@ -45,6 +45,22 @@ public sealed record RebuildResult(string Text, IReadOnlyList<RebuiltTaxon> Taxa
         new(text, []) { Refusal = refusal, LineCount = lineCount };
 }
 
+/// The choices of a rebuild; null means as the wikitext has it.
+/// HeadingRanks: the ranks of the headings, broad to narrow ("order", "family"), in place of the
+/// text's own headings (an empty list: no headings). KeepWording: lines already in the list keep their
+/// wording (false: every line is written anew, keeping only the lines under it). Style and Sort: of new
+/// lines (of every line when KeepWording is off) and of the order of lines. IucnOrder: sections in
+/// IUCN's order (alphabetical within each group) in place of the text's. Infra: whether subspecies and
+/// varieties are listed, and how.
+public sealed record RebuildOptions {
+    public IReadOnlyList<string>? HeadingRanks { get; init; }
+    public bool KeepWording { get; init; } = true;
+    public BeastieBot3.Shared.Wikitext.SpeciesListStyle? Style { get; init; }
+    public ListSort? Sort { get; init; }
+    public bool IucnOrder { get; init; }
+    public InfraMode? Infra { get; init; }
+}
+
 /// Rebuilds a list of list lines: every taxon the comparison counts in the group (ListScope.ComparedTaxa)
 /// gets a line, and every line is in the section of its group, keeping the text's own arrangement.
 /// A listed taxon stays in its section while the section's group holds it; a missing taxon, or one
@@ -61,11 +77,11 @@ public sealed record RebuildResult(string Text, IReadOnlyList<RebuiltTaxon> Taxa
 /// as they are.
 public static partial class ListRebuild {
     public static RebuildResult Rebuild(string text, StatusUpdater updater, IReadOnlyList<ListMember> members, ListScopeResult scope,
-        ListPlacementOptions options, IListScopeLookup lookup) {
+        ListPlacementOptions options, IListScopeLookup lookup, RebuildOptions? rebuild = null) {
         if (scope.Partial && scope.Missing is null) {
             return RebuildResult.Refused(text, RebuildRefusal.Partial);
         }
-        return new Builder(text, updater, members, scope, options, lookup).Build();
+        return new Builder(text, updater, members, scope, options, lookup, rebuild ?? new RebuildOptions()).Build();
     }
 
     // An entry of a section's list: an old block of lines (a taxon's line with the lines under it, or
@@ -106,7 +122,20 @@ public static partial class ListRebuild {
         public bool Before { get; set; }
     }
 
+    // A section of the rebuilt list: an old section (Old), whose heading and text it keeps, or a new
+    // one for Group, in the form of Anchor. Level: its heading level (1 for the whole text).
+    private sealed class OutNode {
+        public ListSection? Old { get; init; }
+        public GroupRow? Group { get; init; }
+        public ListSection? Anchor { get; init; }
+        public int Level { get; init; }
+        public List<OutNode> Children { get; } = [];
+        public List<Entry> Entries { get; } = [];
+        public bool IsNew => Old is null;
+    }
+
     private sealed class Builder {
+        private readonly RebuildOptions _rebuild;
         private readonly string _text;
         private readonly StatusUpdater _updater;
         private readonly ListScopeResult _scope;
@@ -120,7 +149,8 @@ public static partial class ListRebuild {
         private readonly Dictionary<ListSection, Body> _bodies = [];
 
         public Builder(string text, StatusUpdater updater, IReadOnlyList<ListMember> members, ListScopeResult scope,
-            ListPlacementOptions options, IListScopeLookup lookup) {
+            ListPlacementOptions options, IListScopeLookup lookup, RebuildOptions rebuild) {
+            _rebuild = rebuild;
             _text = text;
             _updater = updater;
             _scope = scope;
@@ -151,7 +181,8 @@ public static partial class ListRebuild {
             var removedLines = _placer.RemovalOfLine;
             var removedIds = removed.Select(r => r.Member.Taxon.TaxonId).ToHashSet();
             var stay = _scope.OtherCategory.Select(m => m.Taxon.TaxonId).Where(id => !removedIds.Contains(id)).ToHashSet();
-            List<ListTaxonRow> target = [.. ListScope.ComparedTaxa(_scope, _lookup, stay), .. _scope.MissingExtra ?? []];
+            List<ListTaxonRow> target = [.. ListScope.ComparedTaxa(_scope, _lookup, stay, _rebuild.Infra is { } infraMode ? infraMode != InfraMode.None : null),
+                .. _scope.MissingExtra ?? []];
             if (target.Count > GroupList.MaxLines) {
                 return RebuildResult.Refused(_text, RebuildRefusal.TooLong, target.Count);
             }
@@ -195,53 +226,23 @@ public static partial class ListRebuild {
                 }
             }
 
-            // Where each taxon goes: species first, so that a subspecies can go with its species.
-            var home = new Dictionary<long, object>();
-            var newSections = new Dictionary<(ListSection, int), NewSection>();
-            var keptLines = _lineMembers.Where(m => !removedLines.ContainsKey(m.Line)).ToList();
-            foreach (var taxon in target.OrderBy(t => t.Kind == TaxonKinds.Species ? 0 : 1)) {
+            // The taxa whose lines go with another taxon's line (a subspecies under its species, two taxa
+            // on one line), or stay under a line that names no taxon of the list (Holder null).
+            var under = new Dictionary<long, long?>();
+            foreach (var taxon in target) {
                 if (lineOf.TryGetValue(taxon.TaxonId, out var line)) {
                     var start = blockOf.GetValueOrDefault(line, line);
                     if (owner.TryGetValue(start, out var holder) && holder != taxon.TaxonId) {
-                        // On the line of another taxon of the list, or on a line under it (a
-                        // subspecies under its species): it goes with that line.
-                        home[taxon.TaxonId] = new Under(holder);
-                        continue;
+                        under[taxon.TaxonId] = holder;
+                    } else if (!owner.ContainsKey(start)) {
+                        under[taxon.TaxonId] = null;
                     }
-                    if (!owner.ContainsKey(start)) {
-                        // Under a line that names no taxon of the list: it stays there.
-                        home[taxon.TaxonId] = new Under(null);
-                        continue;
-                    }
-                    if (Holds(_sections.SectionOf(line), taxon)) {
-                        home[taxon.TaxonId] = _sections.SectionOf(line);
-                        continue;
-                    }
-                }
-                if (taxon.Kind != TaxonKinds.Species && taxon.ParentTaxonId is { } parent && home.TryGetValue(parent, out var parentHome)
-                    && parentHome is not Under) {
-                    home[taxon.TaxonId] = parentHome;
-                    continue;
-                }
-                var placed = Place(taxon, keptLines);
-                if (placed is NewSection ns) {
-                    var key = (ns.Parent, ns.Group.NodeId);
-                    home[taxon.TaxonId] = newSections.TryGetValue(key, out var existing) ? existing : newSections[key] = ns;
-                } else {
-                    home[taxon.TaxonId] = placed;
                 }
             }
 
             // Old blocks that are neither a taxon's line, removed nor a duplicate name no taxon of the
-            // list and stay where they are.
+            // list and stay in their section.
             var otherLines = 0;
-            var entriesOf = new Dictionary<object, List<(Entry Entry, bool Infra)>>();
-            void Add(object where, Entry entry) {
-                if (!entriesOf.TryGetValue(where, out var list)) {
-                    entriesOf[where] = list = [];
-                }
-                list.Add((entry, entry.Infra));
-            }
             foreach (var (section, body) in _bodies) {
                 foreach (var (part, index) in body.Parts.Select((p, i) => (p, i))) {
                     foreach (var (first, last) in part.Blocks) {
@@ -256,61 +257,47 @@ public static partial class ListRebuild {
                 }
             }
 
-            var reports = new List<(ListTaxonRow Taxon, object Where, int? OldLine)>();
+            // Where each taxon goes, and the sections of the rebuilt list.
+            var home = new Dictionary<long, OutNode>();
+            var keptLines = _lineMembers.Where(m => !removedLines.ContainsKey(m.Line)).ToList();
+            var (dropped, newHeadings) = _rebuild.HeadingRanks is { } ranks
+                ? HomeByRanks(target, under, home, ranks)
+                : HomeInText(target, under, home, lineOf, keptLines);
+
+            // Each taxon's line in its section: its old lines, or a new line.
+            var reports = new List<(ListTaxonRow Taxon, OutNode Node, int? OldLine)>();
             var underEntries = new Dictionary<long, List<string>>();
+            var nested = _rebuild.Infra switch { InfraMode.UnderSpecies => true, InfraMode.Separate => false, _ => NestedInfra() };
             foreach (var taxon in target) {
-                var where = home[taxon.TaxonId];
-                if (where is Under under) {
-                    var holderHome = under.Holder is { } h && home.TryGetValue(h, out var hh) ? hh : _sections.SectionOf(lineOf[taxon.TaxonId]);
-                    reports.Add((taxon, holderHome is Under ? _sections.SectionOf(lineOf[taxon.TaxonId]) : holderHome, lineOf[taxon.TaxonId]));
+                if (under.TryGetValue(taxon.TaxonId, out var holder)) {
+                    var line = lineOf[taxon.TaxonId];
+                    var node = holder is { } h && home.TryGetValue(h, out var hn) ? hn : NodeOfOld(_sections.SectionOf(line));
+                    reports.Add((taxon, node, line));
                     continue;
                 }
+                var where = home[taxon.TaxonId];
                 var infra = taxon.Kind != TaxonKinds.Species;
-                Entry entry;
-                if (lineOf.TryGetValue(taxon.TaxonId, out var line)) {
-                    var member = _lineMembers.First(m => m.Line == line && m.Taxon.TaxonId == taxon.TaxonId);
+                if (lineOf.TryGetValue(taxon.TaxonId, out var old)) {
+                    var member = _lineMembers.First(m => m.Line == old && m.Taxon.TaxonId == taxon.TaxonId);
                     // A line that names the taxon by its article's title ("[[Northern pig-tailed macaque]]")
                     // sorts by the taxon's scientific name.
                     var scientific = StatusUpdater.IsScientificNameShape(member.Written) ? member.Written : taxon.ScientificName;
-                    entry = new Entry(BlockText(line, _lines.LastOfBlock(line)), scientific, ListPlacement.CommonOnLine(_lines.Text(line)) ?? taxon.CommonNameEn,
-                        line, infra, Moved: where is not ListSection same || same != _sections.SectionOf(line));
-                } else if (infra && taxon.ParentTaxonId is { } parent && lineOf.ContainsKey(parent) && NestedInfra()) {
+                    var text = _rebuild.KeepWording ? BlockText(old, _lines.LastOfBlock(old)) : Rewritten(where, taxon, old);
+                    where.Entries.Add(new Entry(text, scientific, ListPlacement.CommonOnLine(_lines.Text(old)) ?? taxon.CommonNameEn, old, infra,
+                        Moved: where.Old != _sections.SectionOf(old)));
+                } else if (infra && nested && taxon.ParentTaxonId is { } parent && lineOf.ContainsKey(parent)) {
                     // A new subspecies or variety goes under its species' line.
                     (underEntries.TryGetValue(parent, out var list) ? list : underEntries[parent] = []).Add(NewInfraLine(taxon, lineOf[parent]));
-                    reports.Add((taxon, where, null));
-                    continue;
                 } else {
-                    entry = new Entry(NewLineFor(where, taxon), taxon.ScientificName, taxon.CommonNameEn, int.MaxValue, infra);
+                    where.Entries.Add(new Entry(NewLineFor(where, taxon), taxon.ScientificName, taxon.CommonNameEn, int.MaxValue, infra));
                 }
-                Add(where, entry);
-                reports.Add((taxon, where, lineOf.TryGetValue(taxon.TaxonId, out var old) ? old : null));
+                reports.Add((taxon, where, lineOf.TryGetValue(taxon.TaxonId, out var was) ? was : null));
             }
             _underEntries = underEntries;
             _lineOfOwner = owner;
+            var rebuilt = reports.Select(r => Report(r.Taxon, r.Node, r.OldLine)).ToList();
 
-            // Sections with no taxon of the list and no other lines are dropped; new sections get their place.
-            var dropped = new List<DroppedSection>();
-            var droppedSet = new HashSet<ListSection>();
-            foreach (var section in All(_sections.Root).Where(s => s != _sections.Root && s.Group is not null)) {
-                if (droppedSet.Contains(section.Parent!) || All(section).Any(s => entriesOf.ContainsKey(s) || _bodies[s].Parts.Any(p => p.Entries.Count > 0))
-                    || newSections.Values.Any(n => All(section).Contains(n.Parent))) {
-                    if (droppedSet.Contains(section.Parent!)) {
-                        droppedSet.Add(section);
-                    }
-                    continue;
-                }
-                droppedSet.Add(section);
-                dropped.Add(new DroppedSection(section.Plain, OtherText(section)));
-            }
-            foreach (var ns in newSections.Values) {
-                PlaceSection(ns, droppedSet);
-            }
-            _droppedSet = droppedSet;
-            var rebuilt = reports.Select(r => Report(r.Taxon, r.Where, r.OldLine)).ToList();
-            _entriesOf = entriesOf;
-            _newSections = newSections;
-
-            var output = Render(_sections.Root);
+            var output = Render(_root);
             var trailing = _text[_text.TrimEnd('\n', '\r').Length..];
             output = output.TrimEnd('\n', '\r') + trailing;
             if (_text.Contains("\r\n", StringComparison.Ordinal)) {
@@ -320,18 +307,197 @@ public static partial class ListRebuild {
                 Removed = removed,
                 Kept = kept,
                 DuplicateLines = duplicates,
-                NewHeadings = [.. newSections.Values.Where(n => n.Anchor is not null).Select(n => ListSections.PlainTitle(ListSections.NewTitle(n.Anchor!, n.Group)))],
+                NewHeadings = newHeadings,
                 Dropped = dropped,
                 OtherLines = otherLines,
                 LineCount = target.Count,
             };
         }
 
+        // The old section's place in the rebuilt list: its own node, else the whole text's.
+        private readonly Dictionary<ListSection, OutNode> _nodeOfOld = [];
+        private OutNode NodeOfOld(ListSection section) {
+            for (ListSection? at = section; at is not null; at = at.Parent) {
+                if (_nodeOfOld.TryGetValue(at, out var node)) {
+                    return node;
+                }
+            }
+            return _root;
+        }
+
+        // The text's own sections: a taxon stays in its section while the section's group holds it;
+        // the others go where ListPlacement would put them, or in new sections. A section with no taxon
+        // and no other line left is dropped.
+        private (List<DroppedSection> Dropped, List<string> NewHeadings) HomeInText(List<ListTaxonRow> target, Dictionary<long, long?> under,
+            Dictionary<long, OutNode> home, Dictionary<long, int> lineOf, List<ListMember> keptLines) {
+            var where = new Dictionary<long, object>();
+            var newSections = new Dictionary<(ListSection, int), NewSection>();
+            foreach (var taxon in target.OrderBy(t => t.Kind == TaxonKinds.Species ? 0 : 1)) {
+                if (under.ContainsKey(taxon.TaxonId)) {
+                    continue;
+                }
+                if (lineOf.TryGetValue(taxon.TaxonId, out var line) && Holds(_sections.SectionOf(line), taxon)) {
+                    where[taxon.TaxonId] = _sections.SectionOf(line);
+                    continue;
+                }
+                if (taxon.Kind != TaxonKinds.Species && taxon.ParentTaxonId is { } parent && where.TryGetValue(parent, out var parentWhere)) {
+                    where[taxon.TaxonId] = parentWhere;
+                    continue;
+                }
+                var placed = Place(taxon, keptLines);
+                if (placed is NewSection ns) {
+                    var key = (ns.Parent, ns.Group.NodeId);
+                    where[taxon.TaxonId] = newSections.TryGetValue(key, out var existing) ? existing : newSections[key] = ns;
+                } else {
+                    where[taxon.TaxonId] = placed;
+                }
+            }
+            // The taxa under another line stay in that line's section.
+            var occupied = new HashSet<ListSection>(where.Values.OfType<ListSection>());
+            occupied.UnionWith(newSections.Values.Select(n => n.Parent));
+            occupied.UnionWith(_bodies.Where(b => b.Value.Parts.Any(p => p.Entries.Count > 0)).Select(b => b.Key));
+            foreach (var (id, _) in under) {
+                occupied.Add(_sections.SectionOf(lineOf[id]));
+            }
+            var dropped = new List<DroppedSection>();
+            var droppedSet = new HashSet<ListSection>();
+            foreach (var section in _sections.Root.Descendants().Where(s => s.Group is not null)) {
+                if (droppedSet.Contains(section.Parent!)) {
+                    droppedSet.Add(section);
+                } else if (!All(section).Any(occupied.Contains)) {
+                    droppedSet.Add(section);
+                    dropped.Add(new DroppedSection(section.Plain, OtherText(section, subsections: true)));
+                }
+            }
+            foreach (var ns in newSections.Values) {
+                PlaceSection(ns, droppedSet);
+            }
+
+            var newNodes = new Dictionary<NewSection, OutNode>();
+            OutNode NewNode(NewSection ns) => newNodes[ns] = new OutNode {
+                Group = ns.Group, Anchor = ns.Anchor, Level = ns.Anchor?.Level ?? Math.Min(6, ns.Parent.Level + 1),
+            };
+            OutNode Mirror(ListSection section) {
+                var node = new OutNode { Old = section, Group = section.Group, Level = section.Level };
+                _nodeOfOld[section] = node;
+                var news = newSections.Values.Where(n => n.Parent == section).OrderBy(n => n.Group.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                foreach (var child in section.Children) {
+                    node.Children.AddRange(news.Where(n => n.Anchor == child && n.Before).Select(NewNode));
+                    if (!droppedSet.Contains(child)) {
+                        node.Children.Add(Mirror(child));
+                    }
+                    node.Children.AddRange(news.Where(n => n.Anchor == child && !n.Before).Select(NewNode));
+                }
+                // A new section with no section beside it goes after the others.
+                node.Children.AddRange(news.Where(n => n.Anchor is null || !section.Children.Contains(n.Anchor)).Select(NewNode));
+                return node;
+            }
+            _root = Mirror(_sections.Root);
+            if (_rebuild.IucnOrder) {
+                IucnOrder(_root);
+            }
+            foreach (var (id, w) in where) {
+                home[id] = w is NewSection ns ? newNodes[ns] : _nodeOfOld[(ListSection)w];
+            }
+            return (dropped, [.. newNodes.Values.Select(TitleOf)]);
+        }
+
+        // Headings for the ranks the reader chose, in IUCN's order. A heading keeps the heading line
+        // and text of the text's section of its group, when it has one; the text's other sections of
+        // groups are dropped, and their lines that name no taxon of the list go to the heading of the
+        // nearest group. Sections of no group (See also, References) stay where they are.
+        private (List<DroppedSection> Dropped, List<string> NewHeadings) HomeByRanks(List<ListTaxonRow> target, Dictionary<long, long?> under,
+            Dictionary<long, OutNode> home, IReadOnlyList<string> ranks) {
+            var root = _sections.Root;
+            var groupSections = root.Descendants().Where(s => s.Group is not null).ToList();
+            var oldByGroup = groupSections.Where(s => !ListSections.IsOthers(s)).GroupBy(s => s.Group!.NodeId).ToDictionary(g => g.Key, g => g.First());
+            var top = _sections.GroupChildren(root).FirstOrDefault()?.Level ?? 2;
+            var rootNode = new OutNode { Old = root, Group = root.Group, Level = 1 };
+            _nodeOfOld[root] = rootNode;
+            var byGroup = new Dictionary<int, OutNode>();
+            var groupNodes = new List<OutNode>();
+            foreach (var taxon in target.OrderBy(t => t.Kind == TaxonKinds.Species ? 0 : 1)) {
+                if (under.ContainsKey(taxon.TaxonId)) {
+                    continue;
+                }
+                if (taxon.Kind != TaxonKinds.Species && taxon.ParentTaxonId is { } parent && home.TryGetValue(parent, out var parentNode)) {
+                    home[taxon.TaxonId] = parentNode;
+                    continue;
+                }
+                var path = _sections.PathOf(taxon.NodeId);
+                var at = rootNode;
+                var level = top;
+                foreach (var rank in ranks) {
+                    if (path.FirstOrDefault(g => g.Rank == rank) is not { } group) {
+                        continue;
+                    }
+                    if (!byGroup.TryGetValue(group.NodeId, out var node)) {
+                        var old = oldByGroup.GetValueOrDefault(group.NodeId);
+                        node = new OutNode {
+                            Old = old, Group = group, Level = Math.Min(6, level),
+                            Anchor = old is null ? groupSections.FirstOrDefault(s => s.Group!.Rank == group.Rank) ?? groupSections.FirstOrDefault() : null,
+                        };
+                        if (old is not null) {
+                            _nodeOfOld[old] = node;
+                        }
+                        byGroup[group.NodeId] = node;
+                        (at == rootNode ? groupNodes : at.Children).Add(node);
+                    }
+                    at = node;
+                    level++;
+                }
+                home[taxon.TaxonId] = at;
+            }
+            var top_ = new OutNode { Level = 0 };
+            top_.Children.AddRange(groupNodes);
+            IucnOrder(top_);
+            // The sections of no group before the first section of a group stay before the headings.
+            var firstGroup = root.Children.FirstOrDefault(c => c.Group is not null);
+            var before = firstGroup is null ? [] : root.Children.TakeWhile(c => c != firstGroup).Where(c => c.Group is null).ToList();
+            rootNode.Children.AddRange(before.Select(s => _nodeOfOld[s] = new OutNode { Old = s, Level = s.Level }));
+            rootNode.Children.AddRange(top_.Children);
+            rootNode.Children.AddRange(root.Children.Where(c => c.Group is null && !before.Contains(c)).Select(s => _nodeOfOld[s] = new OutNode { Old = s, Level = s.Level }));
+            _root = rootNode;
+
+            var used = byGroup.Values.Select(n => n.Old).OfType<ListSection>().ToHashSet();
+            var dropped = new List<DroppedSection>();
+            foreach (var section in groupSections.Where(s => !used.Contains(s))) {
+                if (!ListSections.IsOthers(section)) {
+                    dropped.Add(new DroppedSection(section.Plain, OtherText(section, subsections: false)));
+                }
+                // Its lines that name no taxon of the list go to the heading of the nearest group.
+                var nearest = _sections.PathOf(section.Group!.NodeId).Reverse().Select(g => byGroup.GetValueOrDefault(g.NodeId)).FirstOrDefault(n => n is not null) ?? rootNode;
+                foreach (var part in _bodies[section].Parts) {
+                    nearest.Entries.AddRange(part.Entries.Select(e => e with { Moved = true }));
+                    part.Entries.Clear();
+                }
+            }
+            return (dropped, [.. byGroup.Values.Where(n => n.IsNew).Select(TitleOf)]);
+        }
+
+        // The sections of groups in IUCN's order (alphabetical within each group), at every level;
+        // other sections keep their places.
+        private static void IucnOrder(OutNode node) {
+            var slots = node.Children.Select((c, i) => (c, i)).Where(x => x.c.Group is { } g && g.NodeId != node.Group?.NodeId).ToList();
+            var sorted = slots.Select(x => x.c).OrderBy(c => c.Group!.FirstPos).ToList();
+            for (var k = 0; k < slots.Count; k++) {
+                node.Children[slots[k].i] = sorted[k];
+            }
+            foreach (var child in node.Children) {
+                IucnOrder(child);
+            }
+        }
+
+        // A line written anew for a listed taxon, with the lines that were under its old line.
+        private string Rewritten(OutNode node, ListTaxonRow taxon, int line) {
+            var last = _lines.LastOfBlock(line);
+            var first = NewLineFor(node, taxon);
+            return last > line ? first + "\n" + BlockText(line + 1, last) : first;
+        }
+
         private Dictionary<long, List<string>> _underEntries = [];
         private Dictionary<int, long> _lineOfOwner = [];
-        private HashSet<ListSection> _droppedSet = [];
-        private Dictionary<object, List<(Entry Entry, bool Infra)>> _entriesOf = [];
-        private Dictionary<(ListSection, int), NewSection> _newSections = [];
+        private OutNode _root = new();
 
         // A taxon whose line is the line of another taxon of the list, or under it (Holder), or under
         // a line that names no taxon of the list (Holder null).
@@ -382,19 +548,22 @@ public static partial class ListRebuild {
         private static bool Rising(IReadOnlyList<int> keys) =>
             keys.Zip(keys.Skip(1)).Count(p => p.First >= p.Second) <= (keys.Count - 1) / 10;
 
-        private RebuiltTaxon Report(ListTaxonRow taxon, object where, int? oldLine) {
-            var (heading, isNew) = where switch {
-                NewSection ns => (ns.Anchor is { } a ? ListSections.PlainTitle(ListSections.NewTitle(a, ns.Group)) : ns.Group.Name, true),
-                ListSection s => (s == _sections.Root ? null : s.Plain, false),
-                _ => ((string?)null, false),
-            };
+        // The heading of a section of the rebuilt list as a reader sees it.
+        private static string TitleOf(OutNode node) =>
+            node.Old is { } old ? old.Plain
+            : node.Anchor is { } anchor ? ListSections.PlainTitle(ListSections.NewTitle(anchor, node.Group!))
+            : GroupList.HeadingText(node.Group!);
+
+        private RebuiltTaxon Report(ListTaxonRow taxon, OutNode node, int? oldLine) {
+            var heading = node == _root ? null : TitleOf(node);
             if (oldLine is not { } line) {
-                return new RebuiltTaxon(taxon, RebuildChange.Added, heading, isNew, null);
+                return new RebuiltTaxon(taxon, RebuildChange.Added, heading, node.IsNew, null);
             }
             var oldSection = _sections.SectionOf(line);
-            return where is ListSection same && same == oldSection
-                ? new RebuiltTaxon(taxon, RebuildChange.Kept, heading, false, null)
-                : new RebuiltTaxon(taxon, RebuildChange.Moved, heading, isNew, oldSection == _sections.Root ? null : oldSection.Plain);
+            // With headings by rank every section is rebuilt, so a taxon is not reported as moved.
+            return node.Old == oldSection || _rebuild.HeadingRanks is not null
+                ? new RebuiltTaxon(taxon, RebuildChange.Kept, heading, node.IsNew, null)
+                : new RebuiltTaxon(taxon, RebuildChange.Moved, heading, node.IsNew, oldSection == _sections.Root ? null : oldSection.Plain);
         }
 
         private static IEnumerable<ListSection> All(ListSection section) => [section, .. section.Descendants()];
@@ -527,9 +696,10 @@ public static partial class ListRebuild {
         private string? LeadingScientific(int line) =>
             ListPlacement.LeadingName().Match(ListPlacement.Placer.ListPart(_lines.Text(line))) is { Success: true } m ? m.Groups["name"].Value : null;
 
-        // What a dropped section had besides its heading, list lines, layout templates and labels.
-        private string OtherText(ListSection section) {
-            var lines = All(section).SelectMany(s => _bodies[s].Before.Concat(_bodies[s].After))
+        // What a dropped section had besides its heading, list lines, layout templates, labels and
+        // {{gray}} line; with subsections, theirs too.
+        private string OtherText(ListSection section, bool subsections) {
+            var lines = (subsections ? All(section) : [section]).SelectMany(s => _bodies[s].Before.Concat(_bodies[s].After))
                 .SelectMany(span => _text[span.Start..span.End].Replace("\r", string.Empty, StringComparison.Ordinal).Split('\n'))
                 .Where(t => t.Trim().Length > 0 && !ListSections.IsGrayLine(t));
             return string.Join("\n", lines);
@@ -549,19 +719,20 @@ public static partial class ListRebuild {
         // ------------------------------------------------------------ new lines
 
         // A line for a new taxon in the form of a line of the section it goes in (or of the section
-        // beside a new section, or of the text's first list line).
-        private string NewLineFor(object where, ListTaxonRow taxon) {
-            var model = where switch {
-                ListSection s => ModelLine(s),
-                NewSection ns => ns.Anchor is { } a ? ModelLine(a) : null,
-                _ => null,
-            } ?? _lineMembers.OrderBy(m => m.Line).FirstOrDefault();
+        // beside a new section, or of the text's first list line), or in the chosen style.
+        private string NewLineFor(OutNode node, ListTaxonRow taxon) {
+            var model = (node.Old ?? node.Anchor) is { } section ? ModelLine(section) : null;
+            model ??= _lineMembers.OrderBy(m => m.Line).FirstOrDefault();
             if (model is null) {
-                return ListScope.MissingLines([taxon], _scope.Style);
+                return ListScope.MissingLines([taxon], _rebuild.Style ?? _scope.Style);
             }
             var listPart = ListPlacement.Placer.ListPart(_lines.Text(model.Line));
-            return ListPlacement.NewLine(listPart, taxon, _scope.Style, model.HasStatusTemplate || _options.StatusOnLines, _options,
-                _placer.LinksScientificName(model));
+            var withStatus = model.HasStatusTemplate || _options.StatusOnLines;
+            if (_rebuild.Style is { } style) {
+                // The markers of the model line; the names in the chosen style.
+                return ListPlacement.NewLine(ListPlacement.Prefix().Match(listPart).Value, taxon, style, withStatus, _options);
+            }
+            return ListPlacement.NewLine(listPart, taxon, _scope.Style, withStatus, _options, _placer.LinksScientificName(model));
         }
 
         // The first species line of the section or of the sections under it.
@@ -579,89 +750,101 @@ public static partial class ListRebuild {
 
         // ------------------------------------------------------------ writing
 
-        private string Render(ListSection section) {
-            var sb = new StringBuilder();
-            if (section != _sections.Root) {
-                sb.Append(_lines.Text(section.HeadingLine).TrimEnd('\r'));
-            }
-            var body = _bodies[section];
-            var hasTaxa = All(section).Any(s => _lineMembers.Any(m => s.Holds(m.Line))) || _newSections.Values.Any(n => All(section).Contains(n.Parent));
-            if (!hasTaxa && section != _sections.Root) {
+        private string Render(OutNode node) {
+            if (node != _root && node.Old is { } old && old.Group is null && node.Entries.Count == 0
+                && !All(old).Any(s => _lineMembers.Any(m => s.Holds(m.Line)))) {
                 // A section with no list lines of taxa stays as it is.
-                var span = _sections.Span(section);
-                return _updater.TextWithin(span).TrimEnd('\n', '\r', ' ', '\t').Replace("\r", string.Empty, StringComparison.Ordinal);
+                return _updater.TextWithin(_sections.Span(old)).TrimEnd('\n', '\r', ' ', '\t').Replace("\r", string.Empty, StringComparison.Ordinal);
             }
-            AppendOwn(sb, section, body, _entriesOf.GetValueOrDefault(section) ?? []);
-            var children = Children(section);
-            foreach (var (child, newSection) in children) {
-                var gap = child is not null ? _sections.BlankBefore(child) : newSection!.Anchor is { } a && _sections.BlankBefore(a);
+            var sb = new StringBuilder();
+            if (node != _root) {
+                sb.Append(HeadingLine(node));
+                if (node.IsNew && node.Anchor is { } anchor && _sections.GrayLineFor(anchor, node.Group!) is { } gray) {
+                    sb.Append('\n').Append(gray);
+                }
+            }
+            AppendOwn(sb, node);
+            foreach (var child in node.Children) {
                 if (sb.Length > 0) {
                     sb.Append('\n');
-                    if (gap) {
+                    if (Gap(child)) {
                         sb.Append('\n');
                     }
                 }
-                sb.Append(child is not null ? Render(child) : RenderNew(newSection!));
+                sb.Append(Render(child));
             }
             return sb.ToString();
         }
 
-        // The sections under this one, with the new ones in their places and the dropped ones left out.
-        private List<(ListSection? Old, NewSection? New)> Children(ListSection section) {
-            var list = new List<(ListSection?, NewSection?)>();
-            var news = _newSections.Values.Where(n => n.Parent == section).OrderBy(n => n.Group.Name, StringComparer.OrdinalIgnoreCase).ToList();
-            foreach (var child in section.Children) {
-                list.AddRange(news.Where(n => n.Anchor == child && n.Before).Select(n => ((ListSection?)null, (NewSection?)n)));
-                if (!_droppedSet.Contains(child)) {
-                    list.Add((child, null));
-                }
-                list.AddRange(news.Where(n => n.Anchor == child && !n.Before).Select(n => ((ListSection?)null, (NewSection?)n)));
+        // A blank line before a heading: as before that heading in the text, else as before most headings.
+        private bool Gap(OutNode node) =>
+            node.Old is { } old && _rebuild.HeadingRanks is null ? _sections.BlankBefore(old)
+            : node.Anchor is { } anchor && _rebuild.HeadingRanks is null ? _sections.BlankBefore(anchor)
+            : _mostHeadingsGap ??= _sections.Root.Descendants().Count(_sections.BlankBefore) * 2 >= _sections.Root.Descendants().Count();
+
+        private bool? _mostHeadingsGap;
+
+        // The heading line: the old one as written (at the node's level when that changed), or a new one
+        // in the form of the anchor's, or "== Family Felidae ==" when the text has no headings.
+        private string HeadingLine(OutNode node) {
+            if (node.Old is { } old) {
+                var line = _lines.Text(old.HeadingLine).TrimEnd('\r');
+                return node.Level == old.Level ? line : new string('=', node.Level) + old.RawTitle + new string('=', node.Level);
             }
-            // A new section with no section beside it goes after the others.
-            list.AddRange(news.Where(n => n.Anchor is null || !section.Children.Contains(n.Anchor)).Select(n => ((ListSection?)null, (NewSection?)n)));
-            return list;
+            if (node.Anchor is { } anchor) {
+                return ListSections.HeadingLine(anchor, ListSections.NewTitle(anchor, node.Group!), node.Level);
+            }
+            var marks = new string('=', node.Level);
+            return $"{marks} {GroupList.HeadingText(node.Group!)} {marks}";
         }
 
         // The section's own text: text before the list, the list by parts, text after the list.
-        private void AppendOwn(StringBuilder sb, ListSection section, Body body, List<(Entry Entry, bool Infra)> homed) {
-            var pieces = new List<string>();
-            var before = string.Join("\n", body.Before.Select(Within)).Trim('\n');
-            var parts = body.Parts.Select(p => (Part: p, Entries: new List<Entry>(p.Entries))).ToList();
-            foreach (var (entry, infra) in homed) {
-                var target = infra ? parts.Skip(1).FirstOrDefault(p => p.Part.Label is { } l && InfraLabel().IsMatch(l)).Part ?? parts[0].Part : parts[0].Part;
-                parts.First(p => p.Part == target).Entries.Add(entry);
+        private void AppendOwn(StringBuilder sb, OutNode node) {
+            var body = node.Old is { } old ? _bodies[old] : null;
+            var parts = body?.Parts.Select(p => (Part: p, Entries: new List<Entry>(p.Entries))).ToList() ?? [(new Part(), new List<Entry>())];
+            foreach (var entry in node.Entries) {
+                var target = parts[0];
+                if (entry.Infra) {
+                    var infraPart = parts.Skip(1).FirstOrDefault(p => p.Part.Label is { } l && InfraLabel().IsMatch(l));
+                    if (infraPart.Part is null && _rebuild.Infra == InfraMode.Separate) {
+                        parts.Add(infraPart = (new Part { Label = "'''Subspecies'''" }, []));
+                    }
+                    target = infraPart.Part is not null ? infraPart : parts[0];
+                }
+                target.Entries.Add(entry);
             }
+            var model = ModelPart(node);
             var listText = new StringBuilder();
-            var model = body.Parts[0];
             foreach (var (part, entries) in parts) {
                 if (entries.Count == 0) {
                     continue;
                 }
-                if (listText.Length > 0 || part.Label is not null) {
-                    if (part.Label is not null) {
-                        if (listText.Length > 0) {
+                if (part.Label is not null) {
+                    if (listText.Length > 0) {
+                        listText.Append('\n');
+                        if (part.BlankBeforeLabel) {
                             listText.Append('\n');
-                            if (part.BlankBeforeLabel) {
-                                listText.Append('\n');
-                            }
                         }
-                        listText.Append(part.Label);
                     }
-                    listText.Append('\n');
-                } else if (body.SpeciesLabel) {
+                    listText.Append(part.Label).Append('\n');
+                } else if (body?.SpeciesLabel == true) {
                     listText.Append("'''Species'''\n");
+                } else if (listText.Length > 0) {
+                    listText.Append('\n');
                 }
                 listText.Append(Wrap(part.Blocks.Count > 0 ? part : model, Sorted(entries)));
             }
+            var pieces = new List<string>();
+            var before = body is null ? string.Empty : string.Join("\n", body.Before.Select(Within)).Trim('\n');
             if (before.Length > 0) {
-                pieces.Add(before + (body.BlankBeforeList && listText.Length > 0 ? "\n" : string.Empty));
+                pieces.Add(before + (body!.BlankBeforeList && listText.Length > 0 ? "\n" : string.Empty));
             }
             if (listText.Length > 0) {
                 pieces.Add(listText.ToString());
             }
-            var after = string.Join("\n", body.After.Select(Within)).Trim('\n');
+            var after = body is null ? string.Empty : string.Join("\n", body.After.Select(Within)).Trim('\n');
             if (after.Length > 0) {
-                pieces.Add((body.BlankAfterList ? "\n" : string.Empty) + after);
+                pieces.Add((body!.BlankAfterList ? "\n" : string.Empty) + after);
             }
             foreach (var piece in pieces) {
                 if (sb.Length > 0) {
@@ -671,18 +854,35 @@ public static partial class ListRebuild {
             }
         }
 
+        // The list layout template new lines go in: of the section's first list; for a new section, of
+        // the section its first old line came from, or of the anchor's section or a section under it;
+        // else of the text's first list.
+        private Part ModelPart(OutNode node) {
+            var from = node.Entries.Where(e => e.OldLine != int.MaxValue).Select(e => _sections.SectionOf(e.OldLine)).FirstOrDefault();
+            IEnumerable<ListSection> where = node.Old is { } old ? All(old)
+                : [.. from is null ? [] : All(from), .. node.Anchor is { } anchor ? All(anchor) : []];
+            return where.Concat(All(_sections.Root)).Select(s => _bodies[s].Parts.FirstOrDefault(p => p.Blocks.Count > 0)).FirstOrDefault(p => p is not null)
+                ?? new Part();
+        }
+
         private string Within(TextSpan span) => _updater.TextWithin(span).Replace("\r", string.Empty, StringComparison.Ordinal);
 
         // The entries in the order the old ones keep: by scientific name or by common name when they
         // are in that order, else the old ones in their old order and the others after them by
         // scientific name. When that arrangement is itself in order (many new lines after a few old
-        // ones out of order), it is sorted, so that rebuilding the rebuilt list changes nothing. A
-        // line with no name to sort by goes after the line it came after (first when it was first). New subspecies and
-        // varieties go under their species' line.
+        // ones out of order), it is sorted, so that rebuilding the rebuilt list changes nothing. A line
+        // with no name to sort by goes after the line it came after (first when it was first). With a
+        // chosen order, every line is sorted. New subspecies and varieties go under their species' line.
         private List<string> Sorted(List<Entry> entries) {
+            // The old lines of this section; in a new section, the old lines moved into it, which keep
+            // the order of the sections they came from.
             var old = entries.Where(e => e.OldLine != int.MaxValue && !e.Moved).OrderBy(e => e.OldLine).ToList();
+            if (old.Count == 0) {
+                old = [.. entries.Where(e => e.OldLine != int.MaxValue).OrderBy(e => e.OldLine)];
+            }
             static string? Scientific(Entry e) => Key(e.Scientific);
             static string? Common(Entry e) => Key(e.Common);
+            static string? CommonFirst(Entry e) => Key(e.Common ?? e.Scientific);
             static bool InOrder(IEnumerable<Entry> list, Func<Entry, string?> key) =>
                 ListPlacement.OrderedPlace([.. list.Select(key).Where(k => k is not null)], string.Empty) is not null;
             List<Entry> ByKey(Func<Entry, string?> key) {
@@ -694,12 +894,16 @@ public static partial class ListRebuild {
                 return ordered;
             }
             List<Entry> arranged;
-            if (old.Count == 0 || InOrder(old, Scientific)) {
+            if (_rebuild.Sort is { } sort) {
+                var byScientific = sort == ListSort.ScientificName
+                    || (sort == ListSort.FirstName && (_rebuild.Style ?? _scope.Style) == BeastieBot3.Shared.Wikitext.SpeciesListStyle.ScientificNameFirst);
+                arranged = ByKey(byScientific ? Scientific : CommonFirst);
+            } else if (old.Count == 0 || InOrder(old, Scientific)) {
                 arranged = ByKey(Scientific);
             } else if (InOrder(old, Common)) {
                 arranged = ByKey(Common);
             } else {
-                List<Entry> kept = [.. old, .. entries.Where(e => e.OldLine == int.MaxValue || e.Moved).OrderBy(Scientific, StringComparer.OrdinalIgnoreCase)];
+                List<Entry> kept = [.. old, .. entries.Except(old).OrderBy(Scientific, StringComparer.OrdinalIgnoreCase)];
                 arranged = InOrder(kept, Scientific) ? ByKey(Scientific) : InOrder(kept, Common) ? ByKey(Common) : kept;
             }
             return [.. arranged.Select(WithUnder)];
@@ -720,22 +924,6 @@ public static partial class ListRebuild {
             var opening = part.OpeningOnFirstLine ? part.Opening : part.Opening + "\n";
             var closing = part.Closing is null ? string.Empty : part.ClosingOnLastLine ? part.Closing : "\n" + part.Closing;
             return opening + joined + closing;
-        }
-
-        // A new section: a heading like the one beside it, its {{gray}} line with the group's English
-        // name, and the lines in its list layout template.
-        private string RenderNew(NewSection ns) {
-            var sb = new StringBuilder();
-            var anchor = ns.Anchor;
-            var title = anchor is not null ? ListSections.NewTitle(anchor, ns.Group) : $"[[{ns.Group.Name}]]";
-            sb.Append(anchor is not null ? ListSections.HeadingLine(anchor, title) : $"{new string('=', Math.Min(6, ns.Parent.Level + 1))}{title}{new string('=', Math.Min(6, ns.Parent.Level + 1))}");
-            if (anchor is not null && _sections.GrayLineFor(anchor, ns.Group) is { } gray) {
-                sb.Append('\n').Append(gray);
-            }
-            var entries = (_entriesOf.GetValueOrDefault(ns) ?? []).Select(e => e.Entry).ToList();
-            var model = anchor is not null ? _bodies[anchor].Parts[0] : new Part();
-            sb.Append('\n').Append(Wrap(model, Sorted(entries)));
-            return sb.ToString();
         }
     }
 

@@ -369,10 +369,11 @@ public static partial class ListScope {
 
     /// Every taxon the comparison counts in the group, listed in the text or not: the group's taxa
     /// (of the area or region when the comparison is of one) with a latest assessment in the list's
-    /// categories, species only unless subspecies and varieties were compared, in tree order. Also:
-    /// the group's taxa with these ids whatever their category.
-    public static List<ListTaxonRow> ComparedTaxa(ListScopeResult result, IListScopeLookup lookup, IReadOnlySet<long>? also = null) {
-        string[] kinds = result.InfraChecked ? [TaxonKinds.Species, TaxonKinds.Subspecies, TaxonKinds.Variety] : [TaxonKinds.Species];
+    /// categories, species only unless subspecies and varieties were compared (or infra says), in tree
+    /// order. Also: the group's taxa with these ids whatever their category.
+    public static List<ListTaxonRow> ComparedTaxa(ListScopeResult result, IListScopeLookup lookup, IReadOnlySet<long>? also = null,
+        bool? infra = null) {
+        string[] kinds = infra ?? result.InfraChecked ? [TaxonKinds.Species, TaxonKinds.Subspecies, TaxonKinds.Variety] : [TaxonKinds.Species];
         IEnumerable<ListTaxonRow> rows = result.Area is { } area
             ? lookup.TaxaInArea(result.Scope, kinds, area).Where(t => t.Record.Includes(result.AreaMode)).Select(t => t.Row)
             : result.Region is { } region ? lookup.TaxaInRegion(result.Scope, kinds, region)

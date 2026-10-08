@@ -1,4 +1,6 @@
 using BeastieBot3.Shared.Wikitext;
+using BeastieBot3.Site.Data;
+using BeastieBot3.Site.Lists;
 using BeastieBot3.Site.Update;
 using static BeastieBot3.Site.Tests.ListPlacementSectionTests;
 
@@ -7,12 +9,13 @@ namespace BeastieBot3.Site.Tests;
 // Rebuilding a list of list lines (ListRebuild), on the birds of ListPlacementSectionTests (all EN
 // unless now says VU), compared with class Aves, EN only.
 public sealed class ListRebuildTests {
-    private static RebuildResult Run(string text, long[]? now = null, long[]? remove = null, FakeStatusLookup? statuses = null) {
-        var tree = Birds(now ?? []);
+    private static RebuildResult Run(string text, long[]? now = null, long[]? remove = null, FakeStatusLookup? statuses = null,
+        RebuildOptions? options = null, FakeScopeLookup? tree = null) {
+        tree ??= Birds(now ?? []);
         var updater = new StatusUpdater(statuses ?? Statuses(now ?? []), new DateOnly(2026, 10, 8));
         var result = updater.Update(text);
         var scope = ListScope.Check(result.Members!, tree, new ListScopeOptions("class/Aves") { Categories = ListCategories.Find("EN") })!;
-        return ListRebuild.Rebuild(text, updater, result.Members!, scope, new ListPlacementOptions { Remove = (remove ?? []).ToHashSet() }, tree);
+        return ListRebuild.Rebuild(text, updater, result.Members!, scope, new ListPlacementOptions { Remove = (remove ?? []).ToHashSet() }, tree, options);
     }
 
     private const string Lead = "{{Short description|none}}\nThe IUCN lists these birds as endangered.\n\n";
@@ -146,5 +149,82 @@ public sealed class ListRebuildTests {
             + "== See also ==\n*  [[List of birds]]\n\n== References ==\n{{Reflist}}\n\n[[Category:Birds]]\n";
         var result = Run(text);
         Assert.Equal(text, result.Text);
+    }
+    // ------------------------------------------------------------ options
+
+    private static string Flat => Lead + string.Join("\n", new long[] { 100, 101, 102, 110, 111, 120, 121, 130, 131, 132, 140, 141 }.Select(Line)) + "\n\n" + End;
+
+    [Fact]
+    public void AListWithNoHeadingsGetsHeadingsForTheChosenRanks() {
+        var result = Run(Flat, options: new RebuildOptions { HeadingRanks = ["order", "family"] });
+        // In IUCN's order: Anseriformes, Columbiformes, Galliformes (with Cracidae before Phasianidae).
+        Assert.Equal(Lead + $"== Order Anseriformes ==\n\n=== Family Anatidae ===\n{Line(130)}\n{Line(131)}\n{Line(132)}\n\n"
+            + $"== Order Columbiformes ==\n\n=== Family Columbidae ===\n{Line(140)}\n{Line(141)}\n\n"
+            + $"== Order Galliformes ==\n\n=== Family Cracidae ===\n{Line(120)}\n{Line(121)}\n\n"
+            + $"=== Family Phasianidae ===\n{Line(100)}\n{Line(101)}\n{Line(102)}\n{Line(110)}\n{Line(111)}\n\n" + End, result.Text);
+        Assert.Equal(7, result.NewHeadings.Count);
+        // Rebuilding again with the same ranks changes nothing.
+        Assert.Equal(result.Text, Run(result.Text, options: new RebuildOptions { HeadingRanks = ["order", "family"] }).Text);
+    }
+
+    [Fact]
+    public void HeadingsByRankKeepTheTextsHeadingsAndText() {
+        var text = "==[[Galliformes|Landfowl]]==\n{{gray|Landfowl}}\nLandfowl are heavy birds.\n" + string.Join("\n", new long[] { 100, 101, 102, 110, 111, 120, 121 }.Select(Line))
+            + "\n\n" + Section("Anseriformes", 130, 131, 132) + Section("Columbiformes", 140, 141) + End;
+        var result = Run(text, options: new RebuildOptions { HeadingRanks = ["order", "family"] });
+        Assert.Contains("==[[Galliformes|Landfowl]]==\n{{gray|Landfowl}}\nLandfowl are heavy birds.\n\n===[[Cracidae]]===\n{{gray|Curassows}}\n", result.Text);
+        Assert.Contains("===[[Phasianidae]]===\n" + Line(100), result.Text);
+        Assert.Contains("==[[Anseriformes]]==\n\n===[[Anatidae]]===\n{{columns-list|colwidth=30em|\n" + Line(130), result.Text);
+        Assert.EndsWith(End, result.Text);
+    }
+
+    [Fact]
+    public void ADroppedHeadingsLinesGoToTheNearestHeading() {
+        // A line that names no taxon of the list stays with its order's heading, or goes under the
+        // family heading of its order when only families have headings.
+        var text = Section("Galliformes", 100, 101, 102, 110, 111, 120, 121).Replace(Line(110), Line(110) + "\n*''Lophura imaginaria''")
+            + Section("Anseriformes", 130, 131, 132) + Section("Columbiformes", 140, 141) + End;
+        var result = Run(text, options: new RebuildOptions { HeadingRanks = ["order"] });
+        Assert.Contains("*''Lophura imaginaria''", result.Text);
+        Assert.Empty(result.Dropped);
+        var families = Run(text, options: new RebuildOptions { HeadingRanks = ["family"] });
+        Assert.Contains("*''Lophura imaginaria''", families.Text);
+        Assert.Equal(["Galliformes", "Anseriformes", "Columbiformes"], families.Dropped.Select(d => d.Heading));
+    }
+
+    [Fact]
+    public void LinesWrittenAnewInTheChosenStyle() {
+        var text = Section("Galliformes", 100, 101, 102, 110, 111, 120, 121) + Section("Anseriformes", 130, 131, 132) + Section("Columbiformes", 140, 141) + End;
+        var result = Run(text, options: new RebuildOptions { KeepWording = false, Style = SpeciesListStyle.ScientificNameFirst });
+        Assert.DoesNotContain(Line(100), result.Text);
+        Assert.Contains("*''[[Pavo spbaa]]''", result.Text);
+    }
+
+    [Fact]
+    public void LinesInTheChosenOrder() {
+        // The fixture's lines are in order of common name; sorted by scientific name, Crax comes first.
+        var text = Section("Galliformes", 100, 101, 102, 110, 111, 120, 121) + Section("Anseriformes", 130, 131, 132) + Section("Columbiformes", 140, 141) + End;
+        var result = Run(text, options: new RebuildOptions { Sort = ListSort.ScientificName });
+        Assert.Contains($"{{{{columns-list|colwidth=30em|\n{Line(120)}\n{Line(121)}\n{Line(110)}\n{Line(111)}\n{Line(100)}", result.Text);
+    }
+
+    [Fact]
+    public void SectionsInIucnOrder() {
+        var text = Section("Galliformes", 100, 101, 102, 110, 111, 120, 121) + Section("Anseriformes", 130, 131, 132) + End;
+        var result = Run(text, options: new RebuildOptions { IucnOrder = true });
+        var a = result.Text.IndexOf("Anseriformes", StringComparison.Ordinal);
+        var c = result.Text.IndexOf("Columbiformes", StringComparison.Ordinal);
+        var g = result.Text.IndexOf("Galliformes", StringComparison.Ordinal);
+        Assert.True(a < c && c < g, result.Text);
+    }
+
+    [Fact]
+    public void SubspeciesInAPartOfTheirOwn() {
+        var tree = Birds().Infra(500, 100, "alpha");
+        var statuses = Statuses().Taxon(500, "Pavo spbaa ssp. alpha", "EN", 2020, 5000, node: 20, kind: TaxonKinds.Subspecies);
+        var text = Section("Galliformes", 100, 101, 102, 110, 111, 120, 121) + Section("Anseriformes", 130, 131, 132) + Section("Columbiformes", 140, 141) + End;
+        var result = Run(text, statuses: statuses, tree: tree, options: new RebuildOptions { Infra = InfraMode.Separate });
+        Assert.Contains("'''Subspecies'''\n{{columns-list|colwidth=30em|\n*", result.Text);
+        Assert.Contains("Pavo spbaa alpha", result.Text);
     }
 }
