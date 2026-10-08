@@ -134,9 +134,27 @@ public sealed class SpeciesModel : PageModel {
     /// of OtherStatusSystems.All.
     public IReadOnlyList<OtherStatusRow> OtherStatuses { get; private set; } = [];
 
-    /// The date of the SPRAT report the site database was built from, for the note under the other
-    /// statuses; null when the file name gives no date.
-    public string? SpratReportDate { get; private set; }
+    /// The note under the other statuses about one of their sources, with the date the site
+    /// database's copy was downloaded; null for an unknown source.
+    public string? OtherStatusNote(string source) {
+        var snapshot = _db.Snapshot;
+        switch (source) {
+            case OtherStatusSources.Sprat: {
+                var report = snapshot?.Get(SiteDbSchema.MetaKeys.SpratReport);
+                // SpratReportDate gives the file name back when the name has no date.
+                var date = AboutModel.SpratReportDate(report) is { } d && d != Path.GetFileName(report!.Trim()) ? d : null;
+                return SiteText.OtherStatusSpratNote(date);
+            }
+            case OtherStatusSources.Ecos:
+                return SiteText.OtherStatusEcosNote(SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.EcosFetched), out var ecos)
+                    ? SiteFormat.Date(ecos) : null);
+            case OtherStatusSources.NatureServe:
+                return SiteText.OtherStatusNatureServeNote(SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.NatureServeFetched), out var ns)
+                    ? SiteFormat.Date(ns) : null);
+            default:
+                return null;
+        }
+    }
 
     /// The taxon's Wikimedia Commons gallery and category ("Category:Panthera leo"), from its Wikidata item.
     public string? CommonsGallery { get; private set; }
@@ -250,11 +268,6 @@ public sealed class SpeciesModel : PageModel {
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         OtherStatuses = _queries.GetOtherStatuses(Taxon.TaxonId);
-        if (OtherStatuses.Any(r => r.Source == BeastieBot3.Shared.SiteData.OtherStatusSources.Sprat)) {
-            var report = _db.Snapshot?.Get(SiteDbSchema.MetaKeys.SpratReport);
-            // SpratReportDate gives the file name back when the name has no date.
-            SpratReportDate = AboutModel.SpratReportDate(report) is { } date && date != Path.GetFileName(report!.Trim()) ? date : null;
-        }
         ExtraPairs = _queries.GetExtraOverlapsOfTaxon(Taxon.TaxonId);
         LoadAssessments(assessment);
         var externalIds = _queries.GetExternalIds(Taxon.TaxonId);

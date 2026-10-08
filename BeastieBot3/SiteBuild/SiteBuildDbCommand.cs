@@ -65,6 +65,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [Description("Folder with the Catalogue of Life ColDP zip, read for the release's citation and DOI. Default: Datasets:COL_dir in paths.ini.")]
         public string? ColDir { get; init; }
 
+        [CommandOption("--status-lists-db <PATH>")]
+        [Description("Status lists store (statuses natureserve-fetch, statuses ecos-import). Default: Datastore:status_lists_sqlite in paths.ini, else status_lists.sqlite in the datastore folder.")]
+        public string? StatusListsDatabase { get; init; }
+
         [CommandOption("--sprat-db <PATH>")]
         [Description("SPRAT database. Default: Datastore:SPRAT_sqlite in paths.ini.")]
         public string? SpratDatabase { get; init; }
@@ -118,6 +122,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 ColDatabase = Full(colDatabase),
                 ColDir = Full(settings.ColDir ?? paths.GetColDir()),
                 SpratDatabase = Full(settings.SpratDatabase ?? paths.GetSpratDatabasePath()),
+                StatusListsDatabase = Full(settings.StatusListsDatabase ?? paths.GetStatusListsPath()),
                 GbifChecklist = Full(settings.GbifChecklist ?? GbifIucnChecklistReader.FindNewest(paths.GetGbifIucnDir())),
                 DoiCache = Full(settings.DoiCache ?? paths.GetIucnDoiCachePath()),
                 RulesList = rulesList,
@@ -314,6 +319,15 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Of those, listed under the EPBC Act", s.EpbcPopulationListings);
         Row("SPRAT names with a voucher or other text in brackets after a taxon's name (not linked)", s.SpratBracketsNotPopulation);
         Row("Australian state and territory statuses from those SPRAT profiles", s.StateStatuses);
+        Row("NatureServe records in the status lists store", s.NatureServeRecords);
+        Row("Taxa matched to a NatureServe record by its scientific name", s.NatureServeByName);
+        Row("Taxa matched to a NatureServe record by a NatureServe synonym", s.NatureServeBySynonym);
+        Row("Taxa matched to a NatureServe record by an IUCN synonym", s.NatureServeByIucnSynonym);
+        Row("NatureServe global ranks (unranked and not applicable left out)", s.NatureServeRanks);
+        Row("COSEWIC statuses (from NatureServe)", s.CosewicStatuses);
+        Row("SARA statuses (from NatureServe)", s.SaraStatuses);
+        Row("ECOS listings (US Endangered Species Act)", s.EcosListings);
+        Row("ECOS listings matched to a taxon", s.EcosMatched);
 
         Section("Groups (higher taxa)");
         Row("Groups", s.TreeNodes);

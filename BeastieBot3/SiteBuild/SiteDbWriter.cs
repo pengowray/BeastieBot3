@@ -89,10 +89,10 @@ internal sealed class SiteDbWriter : IDisposable {
             """,
             "@taxon_id", "@sprat_taxon_id", "@listed_name", "@status", "@applies_to", "@population");
         _otherStatus = Prepare("""
-            INSERT INTO other_status (taxon_id, system, status, listed_name, population, source, source_id, listed_on)
-            VALUES (@taxon_id, @system, @status, @listed_name, @population, @source, @source_id, @listed_on)
+            INSERT INTO other_status (taxon_id, system, status, status_code, listed_name, population, source, source_id, url, listed_on)
+            VALUES (@taxon_id, @system, @status, @status_code, @listed_name, @population, @source, @source_id, @url, @listed_on)
             """,
-            "@taxon_id", "@system", "@status", "@listed_name", "@population", "@source", "@source_id", "@listed_on");
+            "@taxon_id", "@system", "@status", "@status_code", "@listed_name", "@population", "@source", "@source_id", "@url", "@listed_on");
         _taxonLink = Prepare("INSERT INTO taxon_link (taxon_id, current_taxon_id, link_kind) VALUES (@taxon_id, @current_taxon_id, @link_kind)",
             "@taxon_id", "@current_taxon_id", "@link_kind");
     }
@@ -137,8 +137,8 @@ internal sealed class SiteDbWriter : IDisposable {
     }
 
     public void AddOtherStatus(long taxonId, OtherStatus status) {
-        Bind(_otherStatus, taxonId, status.System, status.Status, status.ListedName, status.Population, status.Source,
-            status.SourceId, status.ListedOn);
+        Bind(_otherStatus, taxonId, status.System, status.Status, status.StatusCode, status.ListedName, status.Population,
+            status.Source, status.SourceId, status.Url, status.ListedOn);
         _otherStatus.ExecuteNonQuery();
     }
 

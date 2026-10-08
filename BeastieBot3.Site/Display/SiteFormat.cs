@@ -71,8 +71,7 @@ public static class SiteFormat {
     public static string CatalogueOfLifeUrl(string colId) =>
         "https://www.catalogueoflife.org/data/taxon/" + EscapePathSegment(colId.Trim());
 
-    public static string SpratUrl(long spratTaxonId) =>
-        "https://www.environment.gov.au/cgi-bin/sprat/public/publicspecies.pl?taxon_id=" + spratTaxonId.ToString(Invariant);
+    public static string SpratUrl(long spratTaxonId) => BeastieBot3.Shared.SiteData.OtherStatusSources.SpratUrl(spratTaxonId);
 
     // Percent-encodes a path segment, leaving the characters Wikipedia titles commonly contain and
     // that are safe in a path ( ) , ' ! : _ - . ~ as they are, so links stay readable.

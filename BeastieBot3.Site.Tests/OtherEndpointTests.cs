@@ -135,7 +135,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("This site reformats and combines the data from these sources.", text);
 
         // Every licence cell links to its licence.
-        Assert.Equal(4, Regex.Matches(html, "<td><a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a></td>").Count);
+        Assert.Equal(5, Regex.Matches(html, "<td><a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a></td>").Count);
         Assert.Contains("<td><a href=\"https://creativecommons.org/licenses/by-sa/4.0/\">CC BY-SA 4.0</a></td>", html);
         Assert.Contains("<td><a href=\"https://creativecommons.org/publicdomain/zero/1.0/\">CC0</a></td>", html);
         Assert.Contains("<td><a href=\"https://www.crossref.org/documentation/retrieve-metadata/\">CC0</a></td>", html);
@@ -169,6 +169,12 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("<a href=\"https://doi.org/10.48580/dgykv\">https://doi.org/10.48580/dgykv</a>", html);
         Assert.Contains("Department of Climate Change, Energy, the Environment and Water (DCCEEW), Australian Government", text);
         Assert.Contains("<a href=\"https://www.environment.gov.au/cgi-bin/sprat/public/sprat.pl\">", html);
+
+        // NatureServe in its own citation form (CC BY asks for it), and ECOS.
+        Assert.Contains("NatureServe. 2026. NatureServe Explorer [web application]. NatureServe, Arlington, Virginia. "
+            + "Available https://explorer.natureserve.org/. (Accessed: 8 October 2026).", text);
+        Assert.Contains("Public domain (work of the U.S. federal government)", text);
+        Assert.Contains("U.S. Fish and Wildlife Service. Environmental Conservation Online System (ECOS), listed species. Accessed 7 October 2026.", text);
     }
 
     [Fact]

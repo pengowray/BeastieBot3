@@ -115,9 +115,9 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
         using var db = OpenReadOnly(Build());
         var koala = Rows(db, $"""
             SELECT system, status, listed_name, population, source, source_id, listed_on
-            FROM other_status WHERE taxon_id = {Koala} ORDER BY source_id, system
+            FROM other_status WHERE taxon_id = {Koala} AND source = 'sprat' ORDER BY source_id, system
             """);
-        var leopard = Rows(db, $"SELECT system, status, listed_name, listed_on FROM other_status WHERE taxon_id = {Leopard} ORDER BY system");
+        var leopard = Rows(db, $"SELECT system, status, listed_name, listed_on FROM other_status WHERE taxon_id = {Leopard} AND source = 'sprat' ORDER BY system");
 
         Assert.Equal(new[] {
             new object?[] { "au-nsw", "Endangered", null, null, "sprat", "197", null },
@@ -129,6 +129,34 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
             new object?[] { "au-epbc", "Vulnerable", "Panthera pardus melas", "2000-07-16" },
             new object?[] { "au-nsw", "Vulnerable", "Panthera pardus melas", null },
         }, leopard);
+    }
+
+    // NatureServe and ECOS rows: a taxon gets the Standard NatureServe record of its name before a
+    // Provisional one, an infraspecific taxon is found without IUCN's "ssp.", a record under another
+    // name is found by its synonym (and keeps that name), unranked ranks are left out, and an ECOS
+    // listing wherever found is a listing of the whole taxon.
+    [Fact]
+    public void Build_StoresNatureServeAndEcosStatuses() {
+        using var db = OpenReadOnly(Build());
+        IReadOnlyList<object?[]> Of(long taxonId) => Rows(db, $"""
+            SELECT system, status, status_code, listed_name, population, source, source_id, listed_on
+            FROM other_status WHERE taxon_id = {taxonId} AND source <> 'sprat' ORDER BY system, source_id
+            """);
+
+        Assert.Equal(new[] {
+            new object?[] { "ca-cosewic", "Extirpated", null, null, null, "natureserve", "101", null },
+            new object?[] { "ca-sara", "Extirpated", null, null, null, "natureserve", "101", null },
+            new object?[] { "natureserve-global", "G4G5", "G4", null, null, "natureserve", "101", null },
+            new object?[] { "us-esa", "Endangered", null, null, null, "ecos", "7001", "1970-06-02" },
+            new object?[] { "us-esa", "Threatened", null, null, "Gabon, Congo southward", "ecos", "7002", "1982-01-28" },
+        }, Of(Leopard));
+        Assert.Equal(new[] { new object?[] { "natureserve-global", "G4T1", "T1", null, null, "natureserve", "102", null } }, Of(AmurLeopard));
+        Assert.Equal(new[] { new object?[] { "natureserve-global", "G2?", "G2", "Bettongia ogilbyi", null, "natureserve", "104", null } },
+            Of(Woylie));
+        Assert.Empty(Of(Koala));
+        Assert.Equal("https://ecos.fws.gov/ecp/species/4086", Scalar(db, $"SELECT url FROM other_status WHERE source_id = '7001'"));
+        Assert.Equal("2026-10-08", Scalar(db, "SELECT value FROM meta WHERE key = 'natureserve_fetched'"));
+        Assert.Equal("2026-10-07", Scalar(db, "SELECT value FROM meta WHERE key = 'ecos_fetched'"));
     }
 
     // A listed name that differs from SPRAT's scientific name is stored; a voucher in brackets is
@@ -287,17 +315,20 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
         var cache = _sources.PathOf("cache.sqlite");
         var sprat = _sources.PathOf("sprat.sqlite");
         var doiCache = _sources.PathOf("iucn_doi_cache.sqlite");
+        var statusLists = _sources.PathOf("status_lists.sqlite");
         if (!File.Exists(iucn)) {
             WriteIucn(iucn);
             WriteCache(cache);
             WriteSprat(sprat);
             WriteDoiCache(doiCache);
+            WriteStatusLists(statusLists);
         }
         return new SiteBuildInputs {
             IucnDatabase = iucn,
             ApiCache = cache,
             SpratDatabase = sprat,
             DoiCache = doiCache,
+            StatusListsDatabase = statusLists,
             Output = output,
         };
     }
@@ -375,6 +406,44 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
                     NULL, NULL, 'Vulnerable, vulnerable', NULL, NULL, NULL),
                 (1, '90002', 'Panthera pardus (A.B.Smith 123)', 'Endangered', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
                 (1, '90003', 'Bettongia penicillata (sensu lato)', 'Endangered', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+            """);
+    }
+
+    // NatureServe: the leopard twice (Standard and Provisional), the Amur leopard as a bare trinomial,
+    // an unranked koala, and the woylie only under another name with Bettongia penicillata as a
+    // synonym. ECOS: the leopard's listing wherever found and one for a population, under a name with
+    // a bracketed earlier genus, and a listing of a species IUCN does not have.
+    private static void WriteStatusLists(string path) {
+        using (BeastieBot3.StatusLists.StatusListStore.Open(path)) {
+        }
+        using var c = OpenWritable(path);
+        Execute(c, """
+            INSERT INTO status_source (source, title, url, licence, fetched_at, row_count) VALUES
+                ('natureserve', 'NatureServe Explorer', 'https://explorer.natureserve.org/', 'CC BY 4.0', '2026-10-08T01:04:00.0000000Z', 5),
+                ('ecos', 'ECOS', 'https://ecos.fws.gov/', 'Public domain', '2026-10-07T23:30:00.0000000Z', 3);
+            INSERT INTO natureserve_species (element_global_id, unique_id, scientific_name, g_rank, rounded_g_rank, classification_status,
+                kingdom, infraspecies, cosewic_code, sara_code, nsx_url, fetched_at) VALUES
+                (101, 'ELEMENT_GLOBAL.2.101', 'Panthera pardus', 'G4G5', 'G4', 'Standard', 'Animalia', 0, 'XT', 'Extirpated',
+                    'https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.101/Panthera_pardus', 'x'),
+                (100, 'ELEMENT_GLOBAL.2.100', 'Panthera pardus', 'G2', 'G2', 'Provisional', 'Animalia', 0, NULL, NULL,
+                    'https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.100/Panthera_pardus', 'x'),
+                (102, 'ELEMENT_GLOBAL.2.102', 'Panthera pardus orientalis', 'G4T1', 'T1', 'Standard', 'Animalia', 1, NULL, NULL,
+                    'https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.102/Panthera_pardus_orientalis', 'x'),
+                (103, 'ELEMENT_GLOBAL.2.103', 'Phascolarctos cinereus', 'GNR', 'GNR', 'Standard', 'Animalia', 0, NULL, NULL,
+                    'https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.103/Phascolarctos_cinereus', 'x'),
+                (104, 'ELEMENT_GLOBAL.2.104', 'Bettongia ogilbyi', 'G2?', 'G2', 'Standard', 'Animalia', 0, NULL, NULL,
+                    'https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.104/Bettongia_ogilbyi', 'x');
+            INSERT INTO natureserve_synonym VALUES (104, 'Bettongia penicillata');
+            INSERT INTO ecos_listing (entity_id, species_id, scientific_name_raw, scientific_name, status, entity_description,
+                listing_date, kingdom, url, imported_at) VALUES
+                (7001, 4086, 'Panthera (=Felis) pardus', 'Panthera pardus', 'Endangered', 'Wherever found', '1970-06-02', 'Animal',
+                    'https://ecos.fws.gov/ecp/species/4086', 'x'),
+                (7002, 4086, 'Panthera (=Felis) pardus', 'Panthera pardus', 'Threatened', 'Gabon,  Congo southward', '1982-01-28', 'Animal',
+                    'https://ecos.fws.gov/ecp/species/4086', 'x'),
+                (7003, 9999, 'Nonexistus fictus', 'Nonexistus fictus', 'Endangered', 'Wherever found', '2001-01-01', 'Plant',
+                    'https://ecos.fws.gov/ecp/species/9999', 'x');
+            INSERT INTO ecos_name VALUES (7001, 'Panthera pardus'), (7001, 'Felis pardus'), (7002, 'Panthera pardus'), (7002, 'Felis pardus'),
+                (7003, 'Nonexistus fictus');
             """);
     }
 

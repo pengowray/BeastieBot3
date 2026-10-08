@@ -25,6 +25,11 @@ public sealed class AboutModel : PageModel {
     public string? MddVersion { get; private set; }
     public string? AmphibiaWebDate { get; private set; }
     public string? SpratDate { get; private set; }
+    /// When the site database's copies of NatureServe Explorer and of ECOS were downloaded; null when it has none.
+    public string? NatureServeDate { get; private set; }
+    public string? EcosDate { get; private set; }
+    /// The year of NatureServeDate, for NatureServe's citation form.
+    public int? NatureServeYear { get; private set; }
     public string? BuiltDate { get; private set; }
 
     /// The newest date on which `iucn resolve-dois` checked an assessment's DOI, in Crossref's list
@@ -75,6 +80,11 @@ public sealed class AboutModel : PageModel {
             ColUrl = DoiUrl(colDoi);
         }
         SpratDate = SpratReportDate(snapshot.Get(SiteDbSchema.MetaKeys.SpratReport));
+        if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.NatureServeFetched), out var natureServe)) {
+            NatureServeDate = SiteFormat.Date(natureServe);
+            NatureServeYear = natureServe.Year;
+        }
+        EcosDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.EcosFetched), out var ecos) ? SiteFormat.Date(ecos) : null;
         if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.IucnDoiCheckedTo), out var doiChecked)) {
             DoiCheckedDate = SiteFormat.Date(doiChecked);
         }

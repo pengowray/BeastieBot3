@@ -107,10 +107,11 @@ public sealed record EpbcListingRow(long SpratTaxonId, string ListedName, string
 }
 
 /// One status of a taxon in a list other than the IUCN Red List (other_status). System: an
-/// OtherStatusSystems key. ListedName: the name the listing uses, only when it is not the taxon's
-/// own name. Population: null for a listing of the whole taxon. ListedOn: yyyy-MM-dd.
-public sealed record OtherStatusRow(string System, string Status, string? ListedName, string? Population, string Source,
-    string SourceId, string? ListedOn);
+/// OtherStatusSystems key. StatusCode: NatureServe's rounded rank. ListedName: the name the listing
+/// uses, only when it is not the taxon's own name. Population: the population or area the listing
+/// applies to, null for the whole taxon. Url: the record at the source. ListedOn: yyyy-MM-dd.
+public sealed record OtherStatusRow(string System, string Status, string? StatusCode, string? ListedName, string? Population,
+    string Source, string SourceId, string? Url, string? ListedOn);
 
 /// One search result: the taxon and the name that matched best.
 /// IsStrongExactMatch: an exact match on the taxon's scientific name, a synonym, its English name

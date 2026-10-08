@@ -161,19 +161,24 @@ public static class SiteDbSchema {
             PRIMARY KEY (taxon_id, sprat_taxon_id)
         ) WITHOUT ROWID;
 
-        -- The taxon's statuses in lists other than the IUCN Red List: Australia's EPBC Act and the
-        -- Australian state and territory lists, as SPRAT records them. One row per listing. The EPBC
-        -- Act listings are in epbc_listing too, which the status update page reads.
+        -- The taxon's statuses in lists other than the IUCN Red List, one row per listing: Australia's
+        -- EPBC Act and the Australian state and territory lists, as SPRAT records them; the US
+        -- Endangered Species Act, from ECOS; and NatureServe's global rank with the COSEWIC and SARA
+        -- statuses NatureServe records. The EPBC Act listings are in epbc_listing too, which the status
+        -- update page reads.
         CREATE TABLE other_status (
             taxon_id    INTEGER NOT NULL,
-            system      TEXT NOT NULL,                        -- OtherStatusSystems key: 'au-epbc', 'au-act', 'au-nsw', 'au-nt', 'au-qld',
-                                                              -- 'au-sa', 'au-tas', 'au-vic', 'au-wa'
+            system      TEXT NOT NULL,                        -- OtherStatusSystems key: 'au-epbc', 'au-act' ... 'au-wa', 'ca-cosewic',
+                                                              -- 'ca-sara', 'us-esa', 'natureserve-global'
             status      TEXT NOT NULL,                        -- as the list writes it, with spacing, capitals and repeated values tidied:
-                                                              -- 'Endangered', 'Rare', 'Vulnerable (Extinct in NT)'
-            listed_name TEXT,                                 -- the scientific name the listing uses, when the source gives one
-            population  TEXT,                                 -- the population the listing covers; NULL for the whole taxon
-            source      TEXT NOT NULL,                        -- OtherStatusSources: 'sprat'
-            source_id   TEXT NOT NULL,                        -- the record's id in the source: the SPRAT taxon id
+                                                              -- 'Endangered', 'Rare', 'Vulnerable (Extinct in NT)', 'G3G4', 'G5T2'
+            status_code TEXT,                                 -- natureserve-global: NatureServe's rounded rank ('G3' for G3G4, 'T2' for G5T2)
+            listed_name TEXT,                                 -- the scientific name the listing uses, when it is not the taxon's own name
+            population  TEXT,                                 -- the population or area the listing applies to; NULL for the whole taxon
+            source      TEXT NOT NULL,                        -- OtherStatusSources: 'sprat', 'ecos', 'natureserve'
+            source_id   TEXT NOT NULL,                        -- the record's id in the source: SPRAT taxon id, ECOS Listed Species ID,
+                                                              -- NatureServe element global id
+            url         TEXT,                                 -- the record's page at the source
             listed_on   TEXT                                  -- the date the listing took effect (yyyy-mm-dd), when the source gives it
         );
         CREATE INDEX other_status_taxon ON other_status(taxon_id);
@@ -436,6 +441,11 @@ public static class SiteDbSchema {
         public const string ColDoi = "col_doi";
         /// SPRAT report file name the EPBC statuses came from.
         public const string SpratReport = "sprat_report";
+        /// When `statuses natureserve-fetch` last finished a download of NatureServe Explorer ('yyyy-MM-dd'),
+        /// when the build read the status lists store.
+        public const string NatureServeFetched = "natureserve_fetched";
+        /// When `statuses ecos-import` last downloaded the ECOS list ('yyyy-MM-dd').
+        public const string EcosFetched = "ecos_fetched";
         /// The newest checked_at date ('yyyy-MM-dd') of any row of `iucn resolve-dois`'s doi_check
         /// table, whether the DOI was found in Crossref's list, found at doi.org or not found, when the
         /// build read that cache.

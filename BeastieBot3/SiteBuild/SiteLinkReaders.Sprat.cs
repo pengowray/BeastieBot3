@@ -170,15 +170,16 @@ internal static partial class SiteLinkReaders {
                 return;
             }
             var sourceId = listing.SpratTaxonId.ToString(CultureInfo.InvariantCulture);
+            var url = OtherStatusSources.SpratUrl(listing.SpratTaxonId);
             if (OtherStatusSystems.EpbcLabel(listing.Status) is { } epbcLabel) {
-                taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Epbc, epbcLabel,
+                taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Epbc, epbcLabel, null,
                     SiteBuildRules.OtherListedName(listing.ListedName, taxon.ScientificName),
-                    listing.Population, OtherStatusSources.Sprat, sourceId, statuses.EpbcListedOn));
+                    listing.Population, OtherStatusSources.Sprat, sourceId, url, statuses.EpbcListedOn));
             }
             foreach (var (system, status, stateListedName) in statuses.States) {
-                taxon.OtherStatuses.Add(new OtherStatus(system, status,
+                taxon.OtherStatuses.Add(new OtherStatus(system, status, null,
                     SiteBuildRules.OtherListedName(stateListedName ?? listing.ListedName, taxon.ScientificName),
-                    listing.Population, OtherStatusSources.Sprat, sourceId, null));
+                    listing.Population, OtherStatusSources.Sprat, sourceId, url, null));
                 stats.StateStatuses++;
             }
         }

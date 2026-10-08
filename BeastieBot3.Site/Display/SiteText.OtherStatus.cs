@@ -20,25 +20,38 @@ public static partial class SiteText {
     /// In the "In effect from" column, for a listing whose source gives no date.
     public const string OtherStatusNoDate = "not given";
 
-    /// The heading over the rows of one country.
-    public static string OtherStatusCountry(string country) => country switch {
+    /// The heading over the rows of one group: a country, or NatureServe.
+    public static string OtherStatusGroup(string group) => group switch {
         "AU" => "Australia",
-        _ => country,
+        "CA" => "Canada",
+        "US" => "United States",
+        OtherStatusSystems.NatureServeGroup => "NatureServe",
+        _ => group,
     };
 
-    /// The row label of a list. The EPBC Act's is shown as an abbreviation (EpbcAbbr, EpbcFullName).
-    public static string OtherStatusList(string system) => system switch {
-        OtherStatusSystems.Epbc => EpbcAbbr,
-        OtherStatusSystems.AustralianCapitalTerritory => "Australian Capital Territory",
-        OtherStatusSystems.NewSouthWales => "New South Wales",
-        OtherStatusSystems.NorthernTerritory => "Northern Territory",
-        OtherStatusSystems.Queensland => "Queensland",
-        OtherStatusSystems.SouthAustralia => "South Australia",
-        OtherStatusSystems.Tasmania => "Tasmania",
-        OtherStatusSystems.Victoria => "Victoria",
-        OtherStatusSystems.WesternAustralia => "Western Australia",
-        _ => system,
+    /// The row label of a list, and the full name for its hover title when the label is an abbreviation.
+    public static (string Label, string? Title) OtherStatusList(string system) => system switch {
+        OtherStatusSystems.Epbc => (EpbcAbbr, EpbcFullName),
+        OtherStatusSystems.AustralianCapitalTerritory => ("Australian Capital Territory", null),
+        OtherStatusSystems.NewSouthWales => ("New South Wales", null),
+        OtherStatusSystems.NorthernTerritory => ("Northern Territory", null),
+        OtherStatusSystems.Queensland => ("Queensland", null),
+        OtherStatusSystems.SouthAustralia => ("South Australia", null),
+        OtherStatusSystems.Tasmania => ("Tasmania", null),
+        OtherStatusSystems.Victoria => ("Victoria", null),
+        OtherStatusSystems.WesternAustralia => ("Western Australia", null),
+        OtherStatusSystems.Cosewic => ("COSEWIC", "Committee on the Status of Endangered Wildlife in Canada"),
+        OtherStatusSystems.Sara => ("SARA", "Species at Risk Act"),
+        OtherStatusSystems.Esa => ("ESA", "Endangered Species Act"),
+        OtherStatusSystems.NatureServeGlobal => ("Global rank", null),
+        _ => (system, null),
     };
+
+    /// The status cell: the status as the list writes it; for a NatureServe rank, with what its rounded rank means.
+    public static string OtherStatusText(OtherStatusRow row) =>
+        row.System == OtherStatusSystems.NatureServeGlobal && OtherStatusSystems.NatureServeRankMeaning(row.StatusCode) is { } meaning
+            ? $"{row.Status} ({meaning})"
+            : row.Status;
 
     /// In the "Applies to" column, for a listing of the whole taxon.
     public static string OtherStatusWholeTaxon(string kind) => kind switch {
@@ -51,13 +64,26 @@ public static partial class SiteText {
     /// The link to the record a status comes from.
     public static string OtherStatusSourceLink(string source) => source switch {
         OtherStatusSources.Sprat => LinkSprat,
+        OtherStatusSources.Ecos => "ECOS profile",
+        OtherStatusSources.NatureServe => "NatureServe Explorer",
         _ => source,
     };
 
-    /// Under the table when it has rows from SPRAT. reportDate: "25 June 2026", or null when unknown.
+    /// Under the tables when they have rows from SPRAT. reportDate: "25 June 2026", or null when unknown.
     public static string OtherStatusSpratNote(string? reportDate) =>
         (reportDate is null
             ? "All Australian statuses are from SPRAT, the Australian Government's Species Profile and Threats Database. "
             : $"All Australian statuses are from SPRAT, the Australian Government's Species Profile and Threats Database, downloaded on {reportDate}. ")
         + "SPRAT's state and territory statuses may differ from current state and territory lists.";
+
+    /// Under the tables when they have rows from ECOS.
+    public static string OtherStatusEcosNote(string? date) =>
+        "Endangered Species Act listings are from ECOS, the US Fish and Wildlife Service's Environmental Conservation Online System"
+        + (date is null ? "." : $", downloaded on {date}.");
+
+    /// Under the tables when they have rows from NatureServe.
+    public static string OtherStatusNatureServeNote(string? date) =>
+        "NatureServe ranks and the COSEWIC and SARA statuses are from NatureServe Explorer (CC BY 4.0)"
+        + (date is null ? ". " : $", downloaded on {date}. ")
+        + "The COSEWIC and SARA statuses are NatureServe's copy and may differ from Canada's Species at Risk Public Registry.";
 }

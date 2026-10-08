@@ -118,6 +118,22 @@
                     <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
                     <td>@Model.SpratDate</td>
                 </tr>
+                @if (Model.NatureServeDate is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.NatureServeExplorerUrl">NatureServe Explorer</a>, NatureServe</th>
+                        <td>NatureServe global conservation status ranks, and the COSEWIC and Species at Risk Act statuses of Canadian species</td>
+                        <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
+                        <td>@Model.NatureServeDate</td>
+                    </tr>
+                }
+                @if (Model.EcosDate is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.EcosUrl">Environmental Conservation Online System (ECOS)</a>, U.S. Fish and Wildlife Service</th>
+                        <td>Listings under the US Endangered Species Act</td>
+                        <td>Public domain (work of the U.S. federal government)</td>
+                        <td>@Model.EcosDate</td>
+                    </tr>
+                }
             </tbody>
         </table>
     </div>
@@ -133,6 +149,12 @@
             <li><strong>AmphibiaWeb:</strong> @Html.Raw(AboutModel.CitationHtml($"AmphibiaWeb. University of California, Berkeley, CA, USA. Names list of {Model.AmphibiaWebDate}.", SiteText.AmphibiaWebUrl))</li>
         }
         <li><strong>SPRAT:</strong> @Html.Raw(AboutModel.CitationHtml($"Species Profile and Threats Database, {SiteText.SpratLicensor}.", SiteText.SpratUrl))</li>
+        @if (Model.NatureServeDate is not null) {
+            <li><strong>NatureServe:</strong> @Html.Raw(AboutModel.CitationHtml($"NatureServe. {Model.NatureServeYear}. NatureServe Explorer [web application]. NatureServe, Arlington, Virginia. Available {SiteText.NatureServeExplorerUrl}. (Accessed: {Model.NatureServeDate}).", SiteText.NatureServeExplorerUrl))</li>
+        }
+        @if (Model.EcosDate is not null) {
+            <li><strong>ECOS:</strong> @Html.Raw(AboutModel.CitationHtml($"U.S. Fish and Wildlife Service. Environmental Conservation Online System (ECOS), listed species. Accessed {Model.EcosDate}.", SiteText.EcosUrl))</li>
+        }
     </ul>
     <p>For the citation of the IUCN Red List, see <a href="#iucn-terms">IUCN Red List Terms of Use</a>.</p>
 

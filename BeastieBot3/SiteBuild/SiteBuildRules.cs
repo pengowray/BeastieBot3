@@ -246,6 +246,17 @@ internal static class SiteBuildRules {
         return kind is SpratNameKind.Taxon or SpratNameKind.Population ? null : listed;
     }
 
+    /// Where an ECOS listing applies, for other_status.population: null for a listing of the whole
+    /// taxon ("Wherever found", or blank), else the entity description with its spacing tidied
+    /// ("Wherever found, except where listed as an experimental population", "U.S.A. (FL)").
+    public static string? EcosAppliesTo(string? entityDescription) {
+        if (NullIfBlank(entityDescription) is not { } text) {
+            return null;
+        }
+        var tidied = CollapseWhitespace(text);
+        return string.Equals(tidied.TrimEnd('.'), "Wherever found", StringComparison.OrdinalIgnoreCase) ? null : tidied;
+    }
+
     /// A SPRAT date ("25-NOV-2003") as yyyy-MM-dd; null when blank or not a date.
     public static string? SpratDate(string? text) =>
         DateTime.TryParseExact(text?.Trim(), "dd-MMM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
@@ -460,7 +471,7 @@ internal static class SiteBuildRules {
         _ => null,
     };
 
-    private static string CollapseWhitespace(string text) => Whitespace.Replace(text, " ").Trim();
+    public static string CollapseWhitespace(string text) => Whitespace.Replace(text, " ").Trim();
 
     private static readonly System.Text.RegularExpressions.Regex RankOfGroup = new(
         @"^(?:species|subspecies|genus|variety|form|subgenus) of (?:\w+ )*?(?<group>[^,;()]+?)\s*(?:[,;(]|$)",

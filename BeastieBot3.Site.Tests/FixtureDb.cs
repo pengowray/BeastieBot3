@@ -237,6 +237,17 @@ public static class FixtureDb {
         w.Taxon(PolarBear, "Ursus maritimus", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "URSIDAE", "Ursus",
             authority: "Phipps, 1774", commonEn: "Polar bear", enwiki: "Polar bear", qid: "Q33609", colId: "4QHKG", latest: PolarBearLatest,
             qidSource: "p627", p141: P141((PolarBearP141Statement, "Q278113", "normal", "Q115962546")), itemDownloaded: "2026-09-13");
+        // Statuses in the United States and Canada and NatureServe's rank, from ECOS and NatureServe.
+        w.OtherStatus(PolarBear, "us-esa", "Threatened", null, null, "ecos", "1032", "2008-05-15",
+            url: "https://ecos.fws.gov/ecp/species/4958");
+        w.OtherStatus(PolarBear, "ca-cosewic", "Special Concern", null, null, "natureserve", "102233", null,
+            url: "https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.102233/Ursus_maritimus");
+        w.OtherStatus(PolarBear, "ca-sara", "Special Concern", null, null, "natureserve", "102233", null,
+            url: "https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.102233/Ursus_maritimus");
+        w.OtherStatus(PolarBear, "natureserve-global", "G3G4", null, null, "natureserve", "102233", null, statusCode: "G3",
+            url: "https://explorer.natureserve.org/Taxon/ELEMENT_GLOBAL.2.102233/Ursus_maritimus");
+        w.Meta(SiteDbSchema.MetaKeys.NatureServeFetched, "2026-10-08");
+        w.Meta(SiteDbSchema.MetaKeys.EcosFetched, "2026-10-07");
         w.Assessment(PolarBearLatest, PolarBear, "Global", true, "VU", criteria: "A3c", criteriaVersion: "3.1", year: 2015,
             date: "2015-03-21", trend: "Unknown",
             citation: Citation(PolarBear, PolarBearLatest, 2015, "Ursus maritimus",
@@ -820,12 +831,13 @@ public static class FixtureDb {
                 taxonId, spratId, listedName, status, appliesTo, population);
 
         public void OtherStatus(long taxonId, string system, string status, string? listedName, string? population, string source,
-            string sourceId, string? listedOn) =>
+            string sourceId, string? listedOn, string? statusCode = null, string? url = null) =>
             Run("""
-                INSERT INTO other_status(taxon_id, system, status, listed_name, population, source, source_id, listed_on)
-                VALUES (@a, @b, @c, @d, @e, @f, @g, @h)
+                INSERT INTO other_status(taxon_id, system, status, status_code, listed_name, population, source, source_id, url, listed_on)
+                VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i, @j)
                 """,
-                taxonId, system, status, listedName, population, source, sourceId, listedOn);
+                taxonId, system, status, statusCode, listedName, population, source, sourceId,
+                url ?? (source == "sprat" ? OtherStatusSources.SpratUrl(long.Parse(sourceId)) : null), listedOn);
 
         public void Assessment(long id, long taxonId, string scope, bool latest, string category, bool possiblyExtinct = false,
             string? criteria = null, string? criteriaVersion = null, int? year = null, string? date = null, string? trend = null,

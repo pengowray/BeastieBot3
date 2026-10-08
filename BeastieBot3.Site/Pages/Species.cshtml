@@ -443,8 +443,8 @@
     <section class="other-statuses" id="other-statuses" aria-labelledby="other-statuses-heading">
         <h2 id="other-statuses-heading">@SiteText.HeadingOtherStatuses</h2>
         <p>@SiteText.OtherStatusesIntro</p>
-        @foreach (var country in Model.OtherStatuses.GroupBy(r => BeastieBot3.Shared.SiteData.OtherStatusSystems.Find(r.System)?.Country ?? "")) {
-            <h3>@SiteText.OtherStatusCountry(country.Key)</h3>
+        @foreach (var group in Model.OtherStatuses.GroupBy(r => BeastieBot3.Shared.SiteData.OtherStatusSystems.Find(r.System)?.Group ?? "")) {
+            <h3>@SiteText.OtherStatusGroup(group.Key)</h3>
             <div class="table-scroll">
                 <table>
                     <thead>
@@ -458,22 +458,25 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in country) {
+                        @foreach (var row in group) {
+                            var (listLabel, listTitle) = SiteText.OtherStatusList(row.System);
                             <tr>
-                                <th scope="row">@if (row.System == BeastieBot3.Shared.SiteData.OtherStatusSystems.Epbc) {<abbr title="@SiteText.EpbcFullName">@SiteText.EpbcAbbr</abbr>} else {@SiteText.OtherStatusList(row.System)}</th>
-                                <td>@row.Status</td>
+                                <th scope="row">@if (listTitle is not null) {<abbr title="@listTitle">@listLabel</abbr>} else {@listLabel}</th>
+                                <td>@SiteText.OtherStatusText(row)</td>
                                 @if (showAppliesTo) {<td>@(row.Population ?? SiteText.OtherStatusWholeTaxon(taxon.Kind))</td>}
                                 @if (showListedName) {<td>@if (row.ListedName is { } listedName) {<span class="sci-name">@Html.Raw(SpeciesModel.ListedNameHtml(listedName))</span>}</td>}
                                 @if (showListedOn) {<td>@if (row.ListedOn is { } listedOn) {@SiteFormat.Date(listedOn)} else {<span class="no-value">@SiteText.OtherStatusNoDate</span>}</td>}
-                                <td>@if (row.Source == BeastieBot3.Shared.SiteData.OtherStatusSources.Sprat && long.TryParse(row.SourceId, out var spratId)) {<a href="@SiteFormat.SpratUrl(spratId)">@SiteText.OtherStatusSourceLink(row.Source)</a>} else {@SiteText.OtherStatusSourceLink(row.Source)}</td>
+                                <td>@if (row.Url is { } sourceUrl) {<a href="@sourceUrl">@SiteText.OtherStatusSourceLink(row.Source)</a>} else {@SiteText.OtherStatusSourceLink(row.Source)}</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
         }
-        @if (Model.OtherStatuses.Any(r => r.Source == BeastieBot3.Shared.SiteData.OtherStatusSources.Sprat)) {
-            <p class="help">@SiteText.OtherStatusSpratNote(Model.SpratReportDate)</p>
+        @foreach (var source in Model.OtherStatuses.Select(r => r.Source).Distinct()) {
+            if (Model.OtherStatusNote(source) is { } note) {
+                <p class="help">@note</p>
+            }
         }
     </section>
 }

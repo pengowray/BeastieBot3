@@ -20,6 +20,8 @@ internal sealed record SiteBuildInputs {
     /// The CoL database itself; only its file name is read, for the release when there is no placement file.
     public string? ColDatabase { get; init; }
     public string? SpratDatabase { get; init; }
+    /// The status lists store (`statuses natureserve-fetch`, `statuses ecos-import`).
+    public string? StatusListsDatabase { get; init; }
     /// `iucn resolve-dois`'s cache (Datastore:IUCN_doi_cache_sqlite): DOIs found in Crossref's list
     /// of IUCN DOIs or at doi.org.
     public string? DoiCache { get; init; }
@@ -140,10 +142,10 @@ internal static class EpbcAppliesTo {
 internal sealed record EpbcListing(long SpratTaxonId, string ListedName, string? Status, string AppliesTo, string? Population);
 
 /// One status of a taxon in a list other than the IUCN Red List (other_status). System: an
-/// OtherStatusSystems key. Population: the population the listing covers, null for the whole taxon.
-/// ListedOn: yyyy-MM-dd.
-internal sealed record OtherStatus(string System, string Status, string? ListedName, string? Population, string Source,
-    string SourceId, string? ListedOn);
+/// OtherStatusSystems key. StatusCode: NatureServe's rounded rank. Population: the population or
+/// area the listing applies to, null for the whole taxon. ListedOn: yyyy-MM-dd.
+internal sealed record OtherStatus(string System, string Status, string? StatusCode, string? ListedName, string? Population,
+    string Source, string SourceId, string? Url, string? ListedOn);
 
 /// One assessment row to write. The CSV gives the latest assessments; the API headers add the
 /// earlier ones, whose trend and criteria version come from the payload.
@@ -330,6 +332,21 @@ internal sealed class SiteBuildStats {
     public int SpratBracketsNotPopulation;
     /// Australian state and territory statuses written to other_status (from the SPRAT profiles above).
     public int StateStatuses;
+    /// The status lists store: NatureServe records, and the taxa they were matched to by their
+    /// scientific name, by one of NatureServe's synonyms, or by one of IUCN's synonyms.
+    public int NatureServeRecords;
+    public int NatureServeByName;
+    public int NatureServeBySynonym;
+    public int NatureServeByIucnSynonym;
+    /// other_status rows from NatureServe: global ranks (unranked and not applicable left out), COSEWIC and SARA.
+    public int NatureServeRanks;
+    public int CosewicStatuses;
+    public int SaraStatuses;
+    /// ECOS listings, and those matched to a taxon.
+    public int EcosListings;
+    public int EcosMatched;
+    public string? NatureServeFetched;
+    public string? EcosFetched;
 
     /// Taxa only in the API cache (not in the CSV export), by kind; and their API headers flagged
     /// latest, which are stored as earlier assessments.

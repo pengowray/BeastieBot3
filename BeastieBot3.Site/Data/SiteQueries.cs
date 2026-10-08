@@ -147,7 +147,7 @@ public sealed partial class SiteQueries {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT system, status, listed_name, population, source, source_id, listed_on
+            SELECT system, status, status_code, listed_name, population, source, source_id, url, listed_on
             FROM other_status
             WHERE taxon_id = @id
             """;
@@ -155,12 +155,13 @@ public sealed partial class SiteQueries {
         using var reader = command.ExecuteReader();
         var rows = new List<OtherStatusRow>();
         while (reader.Read()) {
-            rows.Add(new OtherStatusRow(reader.GetString(0), reader.GetString(1), Text(reader, 2), Text(reader, 3), reader.GetString(4),
-                reader.GetString(5), Text(reader, 6)));
+            rows.Add(new OtherStatusRow(reader.GetString(0), reader.GetString(1), Text(reader, 2), Text(reader, 3), Text(reader, 4),
+                reader.GetString(5), reader.GetString(6), Text(reader, 7), Text(reader, 8)));
         }
         return rows
             .OrderBy(r => BeastieBot3.Shared.SiteData.OtherStatusSystems.Order(r.System))
             .ThenBy(r => r.Population is null ? 0 : 1)
+            .ThenBy(r => r.ListedOn, StringComparer.Ordinal)
             .ThenBy(r => r.Population, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.SourceId, StringComparer.Ordinal)
             .ToList();
