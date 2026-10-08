@@ -190,6 +190,9 @@ public sealed class UpdateModel : PageModel {
 
     /// The rebuilt list, when the reader asked for one.
     public RebuildResult? Rebuild { get; private set; }
+    /// The text was rebuilt: a rebuild was asked for and not refused. A refused rebuild leaves adding
+    /// the missing taxa and removing taxa as they are without one.
+    public bool Rebuilt => Rebuild is { Refusal: RebuildRefusal.None };
 
     // The rebuild's choices, named as on the group pages' list options where they mean the same:
     //   hmode   text | ranks    headings as in the wikitext, or for the ranks in h
@@ -388,8 +391,8 @@ public sealed class UpdateModel : PageModel {
                 };
             }
         }
-        var placing = Rebuild is null && AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0;
-        if (Scope is not null && Rebuild is null && (placing || Removing is { Count: > 0 })) {
+        var placing = !Rebuilt && AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0;
+        if (Scope is not null && !Rebuilt && (placing || Removing is { Count: > 0 })) {
             Placement = ListPlacement.Place(text, Result.Members ?? [], Scope,
                 new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ, Options.AddToListLines) {
                     TablesWithNewColumn = Result.Findings

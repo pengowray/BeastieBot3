@@ -208,7 +208,7 @@ public sealed class ListPlacementSectionTests {
             + Section("Anseriformes", 130, 131, 132) + Section("Columbiformes", 140, 141) + End;
         var (result, placement, _) = Run(text, now: [101], remove: [101]);
         Assert.Contains(Line(101) + "\n**Southwest subpopulation", result);
-        Assert.Equal(KeptReason.SharesLine, Assert.Single(placement.Kept).Reason);
+        Assert.Equal(KeptReason.HasLinesUnder, Assert.Single(placement.Kept).Reason);
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public sealed class ListPlacementSectionTests {
         var result = updater.Update(text);
         var scope = ListScope.Check(result.Members!, tree, new ListScopeOptions("class/Aves") { Categories = ListCategories.Find("EN") })!;
         var placement = ListPlacement.Place(text, result.Members!, scope, new ListPlacementOptions { Remove = new HashSet<long> { 100 } }, tree);
-        Assert.Equal(KeptReason.SharesLine, Assert.Single(placement.Kept).Reason);
+        Assert.Equal(KeptReason.HasLinesUnder, Assert.Single(placement.Kept).Reason);
         Assert.Contains(Line(100), updater.TextWith(ListPlacement.Insertions(text, placement), placement.Removals));
     }
 }

@@ -1523,6 +1523,20 @@ th.num {
 .update-rebuild-options p {
     margin: 0;
 }
+/* Headings for chosen ranks are always alphabetical, so the choice of heading order shows only with
+   the wikitext's own headings, and the help on headings for ranks only with them. */
+.update-rebuild-options:has(input[value="ranks"]:checked) .update-rebuild-order,
+.update-rebuild-options:not(:has(input[value="ranks"]:checked)) #rebuild-headings-help {
+    display: none;
+}
+/* The help under the rebuild button: a sentence, then one line per kind of change. */
+.update-rebuild-help p,
+.update-rebuild-help ul {
+    margin: 0.2rem 0 0;
+}
+.update-rebuild-help ul {
+    padding-left: 1.25rem;
+}
 .update-rebuild-headings {
     display: flex;
     flex-wrap: wrap;

@@ -25,20 +25,12 @@
         }
     </div>
     <p class="help" id="rebuild-headings-help">@UpdateText.RebuildHeadingsHelp</p>
-    <label>@UpdateText.RebuildOrderLabel
+    <label class="update-rebuild-order">@UpdateText.RebuildOrderLabel
         <select name="@UpdateModel.OrderField" form="update-form">
             <option value="text" selected="@(!choices.IucnOrder)">@UpdateText.RebuildOrderText</option>
             <option value="iucn" selected="@choices.IucnOrder">@UpdateText.RebuildOrderIucn</option>
         </select>
     </label>
-    <p class="help">@UpdateText.RebuildOrderHelp</p>
-    <label>@UpdateText.RebuildWordingLabel
-        <select name="@UpdateModel.WordingField" form="update-form">
-            <option value="keep" selected="@choices.KeepWording">@UpdateText.RebuildWordingKeep</option>
-            <option value="new" selected="@(!choices.KeepWording)">@UpdateText.RebuildWordingNew</option>
-        </select>
-    </label>
-    <p class="help">@UpdateText.RebuildWordingHelp</p>
     <label>@UpdateText.RebuildStyleLabel
         <select name="@UpdateModel.StyleField" form="update-form">
             <option value="" selected="@(StyleValue() == "")">@UpdateText.RebuildStyleText</option>
@@ -48,6 +40,13 @@
         </select>
     </label>
     <p class="help">@UpdateText.RebuildStyleHelp</p>
+    <label>@UpdateText.RebuildWordingLabel
+        <select name="@UpdateModel.WordingField" form="update-form">
+            <option value="keep" selected="@choices.KeepWording">@UpdateText.RebuildWordingKeep</option>
+            <option value="new" selected="@(!choices.KeepWording)">@UpdateText.RebuildWordingNew</option>
+        </select>
+    </label>
+    <p class="help">@UpdateText.RebuildWordingHelp</p>
     <label>@UpdateText.RebuildSortLabel
         <select name="@UpdateModel.SortField" form="update-form">
             <option value="" selected="@(SortValue() == "")">@UpdateText.RebuildSortText</option>

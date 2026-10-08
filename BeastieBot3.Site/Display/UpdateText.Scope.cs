@@ -82,7 +82,7 @@ public static partial class UpdateText {
     public const string AddMissingNoHeadings = "In a list without headings, a missing species with no other species of its genus listed goes among the list lines in alphabetical order. If the list is not in alphabetical order, that species goes after the last line.";
     public const string AddMissingSpeciesTables = "A missing species gets a new {{Species table/row}} in the {{Species table}} of its genus. A genus without a {{Species table}} gets a new one next to the tables of the other genera in its family.";
     public const string AddMissingTableRows = "In ordinary wikitables, a missing species gets a new row next to a species of its genus, except in tables that use rowspan or colspan.";
-    public const string AddMissingInfra = "A missing subspecies or variety goes on a new line under its species.";
+    public const string AddMissingInfra = "A missing subspecies or variety goes on a new indented line under its species' line.";
     public const string AddMissingOrder = "New lines and rows go in alphabetical order among their neighbours, by scientific name or by common name, whichever the list is sorted by.";
 
     /// The headings put in for missing taxa.
@@ -95,7 +95,7 @@ public static partial class UpdateText {
     public const string ColumnWhyNotAdded = "Why not added";
     public static string UnplacedReasonText(UnplacedReason reason) => reason switch {
         UnplacedReason.TableLayout => "The species of its genus are in a wikitable that uses rowspan or colspan.",
-        UnplacedReason.SpeciesNotOnLine => "Its species is not on a list line.",
+        UnplacedReason.SpeciesNotOnLine => "The species it belongs to is not on a list line.",
         UnplacedReason.RowLayout => "The {{Species table/row}} rows of its genus are missing a name, binomial or iucn-status parameter.",
         UnplacedReason.RemovedLine => "It would have gone next to a line that was removed from the updated wikitext.",
         _ => "No species of its genus is listed, and no heading names its order, family or other group.",
@@ -105,22 +105,30 @@ public static partial class UpdateText {
     public const string RebuildHeading = "Rebuild the whole list";
     public const string RebuildButton = "Rebuild the whole list";
     public const string RebuildOption = "Rebuild the whole list";
-    /// categories: the categories the list is of, or null for all of them.
-    public static string RebuildHelp(IReadOnlySet<string>? categories) =>
-        (categories is null
-            ? "Rebuilding adds the missing taxa and puts each taxon under the heading of its group, for example its family."
-            : $"Rebuilding adds the missing taxa, removes the taxa now in a category other than {CategoryList(categories, "or")}, and puts each taxon under the heading of its group, for example its family.")
-        + " Headings, the text under them and the wording of lines already in the list stay as written. A heading left with no taxa is removed."
-        + " The introduction and sections such as See also and References are not changed.";
-    public const string RebuildAddsMissing = "The rebuild adds the missing taxa.";
+    /// The help under the rebuild button: RebuildHelpIntro, then a list of RebuildHelpItems, each a
+    /// label in bold and its text. categories: the categories the list is of, or null for all of them.
+    public const string RebuildHelpIntro = "Rebuilds the list in the updated wikitext, with each taxon's line under the heading of its group, such as its family or order.";
+    public static IReadOnlyList<(string Label, string Text)> RebuildHelpItems(IReadOnlySet<string>? categories) => [
+        ("Added:", "the missing taxa."),
+        ("Removed:", categories is null
+            ? "any heading left with no taxa under it."
+            : $"the taxa now in a category other than {CategoryList(categories, "or")}, and any heading left with no taxa under it."),
+        ("Kept as written:", "the other headings, the text under them, and the wording of existing lines."),
+        ("Not changed:", "the introduction, and sections such as See also and References."),
+    ];
+    /// Under the table of missing taxa while rebuilding. infraLeftOut: the table has subspecies or
+    /// varieties, and the rebuild options leave them out.
+    public static string RebuildAddsMissing(bool infraLeftOut) => infraLeftOut
+        ? "Every species in this table is in the rebuilt list, in the updated wikitext. Subspecies and varieties are left out, as chosen in \"" + RebuildOptionsLegend + "\"."
+        : "Every taxon in this table is in the rebuilt list, in the updated wikitext.";
     public static string RebuildRefused(RebuildRefusal refusal, int taxa, GroupRow group) => refusal switch {
-        RebuildRefusal.NotLineList => "List not rebuilt: most of its taxa are not on * or # lines. Only lists of * or # lines can be rebuilt, not tables.",
-        RebuildRefusal.Partial => $"List not rebuilt: the wikitext may be a list of part of {GroupList.HeadingText(group)}. To rebuild it anyway, first select \"{ScopeListAnywayButton}\".",
+        RebuildRefusal.NotLineList => $"List not rebuilt: fewer than half of the Red List taxa in the wikitext are on list lines; the rest are in tables. Only lists made of list lines can be rebuilt. To add the missing taxa without rebuilding, use \"{AddMissingButton}\".",
+        RebuildRefusal.Partial => $"List not rebuilt: the wikitext may be a regional list or a list of part of {GroupList.HeadingText(group)}, and a rebuild would add every missing taxon in the whole group. To rebuild it anyway, click \"{ScopeListAnywayButton}\".",
         RebuildRefusal.TooLong => $"List not rebuilt: it would have {Count(taxa)} taxa. Lists have at most {Count(GroupList.MaxLines)} taxa, about the number of {{{{IUCN status}}}} templates one Wikipedia page can hold.",
         _ => string.Empty,
     };
     /// One line for each count that is not 0. categories: the categories the list is of, or null.
-    public static IEnumerable<string> RebuildSummary(RebuildResult r, IReadOnlySet<string>? categories) {
+    public static IEnumerable<string> RebuildSummary(RebuildResult r, IReadOnlySet<string>? categories, GroupRow group) {
         yield return $"The rebuilt list has {Taxa(r.Taxa.Count)}.";
         var added = r.Taxa.Count(t => t.Change == RebuildChange.Added);
         if (added > 0) {
@@ -135,21 +143,17 @@ public static partial class UpdateText {
         }
         if (r.DuplicateLines.Count > 0) {
             yield return r.DuplicateLines.Count == 1
-                ? "Removed 1 line that listed a taxon a second time under the same name."
-                : $"Removed {Count(r.DuplicateLines.Count)} lines that listed a taxon a second time under the same name.";
+                ? "Removed 1 duplicate line: a second line for a taxon already listed with the same name."
+                : $"Removed {Count(r.DuplicateLines.Count)} duplicate lines: second lines for taxa already listed with the same name.";
         }
         if (r.OtherLines > 0) {
+            var outside = GroupList.HeadingText(group);
             yield return r.OtherLines == 1
-                ? "Kept 1 line where it was, because it names no taxon in the comparison."
-                : $"Kept {Count(r.OtherLines)} lines where they were, because they name no taxon in the comparison.";
+                ? $"Kept 1 list line for a taxon that is not compared, such as a species IUCN has not assessed or a taxon outside {outside}."
+                : $"Kept {Count(r.OtherLines)} list lines for taxa that are not compared, such as species IUCN has not assessed and taxa outside {outside}.";
         }
     }
-    /// The headings of the wikitext left out of the rebuilt list: their taxa are under other headings,
-    /// or were removed.
-    public static string RebuildDropped(IReadOnlyList<string> headings) =>
-        (headings.Count == 1 ? "Removed 1 heading that has no taxa under it in the rebuilt list: "
-            : $"Removed {Count(headings.Count)} headings that have no taxa under them in the rebuilt list: ") + string.Join(", ", headings) + ".";
-    public static string RebuildDroppedText(string heading) => $"Text that was under the heading {heading}";
+    public static string RebuildDroppedText(string heading) => $"Text that was under the removed heading {heading}";
     public const string ColumnRebuildChange = "Change";
     public const string ColumnRebuildHeading = "Heading in rebuilt list";
     public static string RebuildChangeText(RebuiltTaxon t) => t.Change switch {
@@ -160,36 +164,36 @@ public static partial class UpdateText {
     public const string RebuildOptionsLegend = "Rebuild options";
     public const string RebuildHeadingsLabel = "Headings";
     public const string RebuildHeadingsAsText = "As in the wikitext";
-    public const string RebuildHeadingsByRank = "One per group of these ranks:";
-    public const string RebuildHeadingsHelp = "A group the wikitext already has a heading for keeps that heading and the text under it. The wikitext's other headings over lists of taxa are removed.";
-    public const string RebuildOrderLabel = "Order of headings";
+    public const string RebuildHeadingsByRank = "A heading for each group at the ticked ranks:";
+    public const string RebuildHeadingsHelp = "With ticked ranks: headings already in the wikitext for groups at these ranks are kept, with their text. Other headings above lists of taxa are removed, and their text is shown for you to copy back.";
+    /// Hidden while headings are by rank, which are always alphabetical (site.css).
+    public const string RebuildOrderLabel = "Sort headings";
     public const string RebuildOrderText = "As in the wikitext";
-    public const string RebuildOrderIucn = "Alphabetical within each group";
-    public const string RebuildOrderHelp = "Headings for chosen ranks are always alphabetical within each group.";
-    public const string RebuildWordingLabel = "Existing lines";
-    public const string RebuildWordingKeep = "Keep their wording";
-    public const string RebuildWordingNew = "Write every line again";
-    public const string RebuildWordingHelp = "Lines indented under a list line, such as ** lines, are kept as written.";
+    public const string RebuildOrderIucn = "Alphabetically within each higher-level heading";
     public const string RebuildStyleLabel = "Line style";
     public const string RebuildStyleText = "As in the wikitext";
     public const string RebuildStyleSci = "Scientific name first";
     public const string RebuildStyleCommon = "Common name first";
     public const string RebuildStyleCommonOnly = "Common name only";
-    public const string RebuildStyleHelp = "Used for added lines, and for every line when lines are written again.";
-    public const string RebuildSortLabel = "Order of lines";
+    public const string RebuildStyleHelp = "For added lines, and for every line when existing lines are rewritten.";
+    public const string RebuildWordingLabel = "Existing lines";
+    public const string RebuildWordingKeep = "Keep their wording";
+    public const string RebuildWordingNew = "Rewrite in the chosen line style";
+    public const string RebuildWordingHelp = "Lines indented under a taxon's line (** and : lines) are always kept as written.";
+    public const string RebuildSortLabel = "Sort lines under each heading";
     public const string RebuildSortText = "As in the wikitext";
     public const string RebuildSortSci = "By scientific name";
     public const string RebuildSortCommon = "By common name";
     public const string RebuildInfraLabel = "Subspecies and varieties";
-    public const string RebuildInfraText = "As in the comparison";
+    public const string RebuildInfraText = "Listed if compared, laid out as in the wikitext";
     public const string RebuildInfraNone = "Left out";
-    public const string RebuildInfraSeparate = "After the species of each heading";
-    public const string RebuildInfraUnder = "Indented under their species";
+    public const string RebuildInfraSeparate = "After the species, on their own lines under each heading";
+    public const string RebuildInfraUnder = "Indented under their species' line";
     public const string RebuildApply = "Rebuild with these options";
 
     // Taking out the taxa now in another category (ListPlacement.Removal.cs).
     public const string RemoveButton = "Remove these taxa";
-    public const string RemoveHelp = "Removes the list lines and {{Species table/row}} rows of these taxa, and any heading left with no taxa under it. After removal, untick a taxon in the table to keep it.";
+    public const string RemoveHelp = "Removes the list lines and {{Species table/row}} rows of every taxon in this table, and any heading left with no taxa under it. Afterwards, to keep a taxon, untick it and click Update statuses.";
     public static string RemoveResult(int removed, int total) => (removed, total) switch {
         (0, 1) => "Removed none of the taxa from the updated wikitext.",
         (0, _) => $"Removed none of the {Count(total)} taxa from the updated wikitext.",
@@ -201,13 +205,15 @@ public static partial class UpdateText {
     public const string ColumnRemove = "Remove";
     public static string RemoveCheckboxAccessible(string name) => $"Remove {name}";
     public static string KeptReasonText(KeptReason reason) => reason switch {
-        KeptReason.SharesLine => "Kept: its list line names another taxon that stays, or has lines indented under it that stay.",
+        KeptReason.SharesLine => "Kept: its list line also names a taxon that is not removed.",
+        KeptReason.HasLinesUnder => "Kept: its list line has lines indented under it that are not removed.",
         KeptReason.DefinesReference => "Kept: its line defines a named reference (<ref name=\"...\">) that other lines use.",
         _ => "Kept: named only in a wikitable, a taxobox or prose.",
     };
+    /// The headings taken out because no taxa are under them, by a removal or a rebuild.
     public static string RemovedHeadings(IReadOnlyList<string> headings) => headings.Count == 1
-        ? $"Removed 1 heading with no taxa left under it: {headings[0]}."
-        : $"Removed {Count(headings.Count)} headings with no taxa left under them: {string.Join(", ", headings)}.";
+        ? $"Removed 1 heading that has no taxa under it in the updated wikitext: {headings[0]}."
+        : $"Removed {Count(headings.Count)} headings that have no taxa under them in the updated wikitext: {string.Join(", ", headings)}.";
 
     public const string AddMissingPartial = "Missing species were not added, because this may be a regional list or a list of part of the group.";
 

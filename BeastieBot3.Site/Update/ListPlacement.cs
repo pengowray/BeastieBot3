@@ -45,8 +45,11 @@ public sealed record TextRemoval(TextSpan Span, TextSpan Owned);
 public enum KeptReason {
     /// It is named in a wikitable, a taxobox or running text, not on a list line or in a {{Species table/row}}.
     NotOnListLine,
-    /// Its line names other taxa, or has list lines under it that are not taken out.
+    /// Its list line also names another taxon that is not taken out.
     SharesLine,
+    /// Its list line has lines indented under it that are not taken out: another taxon's, or a line
+    /// that names no taxon ("**Southwest subpopulation").
+    HasLinesUnder,
     /// Its line defines a reference that other lines use.
     DefinesReference,
 }

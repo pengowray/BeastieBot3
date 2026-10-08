@@ -72,13 +72,13 @@ public static partial class ListPlacement {
             for (var l = line; l <= last; l++) {
                 var named = byLine.GetValueOrDefault(l) ?? [];
                 if (named.Any(o => !ids.Contains(o.Taxon.TaxonId))) {
-                    return (null, KeptReason.SharesLine);
+                    return (null, l == line ? KeptReason.SharesLine : KeptReason.HasLinesUnder);
                 }
                 // A line under it that names no taxon taken out ("**Southwest Indian Ocean
                 // subpopulation" under a species of another category in a list of NT taxa) is an
                 // item of its own.
                 if (l > line && ListStart(_lines.Text(l)) == 0 && named.Count == 0) {
-                    return (null, KeptReason.SharesLine);
+                    return (null, KeptReason.HasLinesUnder);
                 }
             }
             var end = After(last);

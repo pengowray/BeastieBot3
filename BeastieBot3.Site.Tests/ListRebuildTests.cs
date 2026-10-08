@@ -114,7 +114,7 @@ public sealed class ListRebuildTests {
             + Section("Anseriformes", 130, 131, 132) + Section("Columbiformes", 140, 141) + End;
         var result = Run(text, now: [101], remove: [101]);
         Assert.Contains(Line(101) + "\n**Southwest subpopulation", result.Text);
-        Assert.Equal(KeptReason.SharesLine, Assert.Single(result.Kept).Reason);
+        Assert.Equal(KeptReason.HasLinesUnder, Assert.Single(result.Kept).Reason);
     }
 
     [Fact]
