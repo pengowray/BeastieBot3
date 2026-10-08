@@ -147,9 +147,15 @@ internal sealed record EpbcListing(long SpratTaxonId, string ListedName, string?
 /// One status of a taxon in a list other than the IUCN Red List (other_status). System: an
 /// OtherStatusSystems key. StatusCode: NatureServe's rounded rank. Population: the population or
 /// area the listing applies to, null for the whole taxon. ListedOn: yyyy-MM-dd. Report: the
-/// publication an NZTCS status comes from.
+/// publication an NZTCS status comes from. Country, ListKey and Qualifier: other_status's columns of the
+/// same names.
 internal sealed record OtherStatus(string System, string Status, string? StatusCode, string? ListedName, string? Population,
-    string Source, string SourceId, string? Url, string? ListedOn, string? Report = null);
+    string Source, string SourceId, string? Url, string? ListedOn, string? Report = null, string? Country = null,
+    string? ListKey = null, string? Qualifier = null);
+
+/// One row of other_status_list.
+internal sealed record OtherStatusList(string ListKey, string System, string? Country, string? Region, string Name, string? Title,
+    int SortOrder, string? Publisher, string? Licence, string? LicenceUrl, string? Citation, string? Url, string? Version, string? Fetched);
 
 /// One assessment row to write. The CSV gives the latest assessments; the API headers add the
 /// earlier ones, whose trend and criteria version come from the payload.

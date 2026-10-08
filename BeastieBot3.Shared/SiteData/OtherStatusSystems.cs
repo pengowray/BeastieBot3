@@ -29,6 +29,8 @@ public static class OtherStatusSystems {
     public const string NatureServeGlobal = "natureserve-global";
 
     public const string NatureServeGroup = "natureserve";
+    /// The group of international treaties (CITES).
+    public const string InternationalGroup = "international";
 
     public static readonly IReadOnlyList<OtherStatusSystem> All = [
         new(Epbc, "AU"),
@@ -126,7 +128,9 @@ public static class OtherStatusSystems {
     };
 }
 
-public sealed record OtherStatusSystem(string Key, string Group);
+/// Group: the ISO code of the system's country, a special group (NatureServeGroup, InternationalGroup),
+/// or null for a system that spans countries, whose rows or lists give the country.
+public sealed record OtherStatusSystem(string Key, string? Group);
 
 /// The sources of other_status rows (other_status.source).
 public static class OtherStatusSources {

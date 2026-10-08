@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 25;
+    public const int Version = 26;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -184,10 +184,37 @@ public static class SiteDbSchema {
             listed_on   TEXT,                                 -- yyyy-mm-dd, when the source gives it: for SALVE, the end of the assessment; for SPRAT, the date the EPBC listing
                                                               -- took effect; for ECOS, the date the taxon or population was first listed,
                                                               -- which a later change of status leaves as it is
-            report      TEXT                                  -- nz-nztcs: the report the assessment was published in,
+            report      TEXT,                                 -- nz-nztcs: the report the assessment was published in,
                                                               -- 'Birds 2021 (Robertson et al. 2021)'
+            country     TEXT,                                 -- ISO 3166-1 code of the country whose list or rank this is, for a system that
+                                                              -- spans countries (NatureServe's national and subnational ranks); NULL when
+                                                              -- the system or the list (other_status_list.country) gives the country
+            list_key    TEXT,                                 -- other_status_list.list_key, for a system with several lists (the national red
+                                                              -- lists from GBIF, JNCC's designations); NULL when the system is one list
+            qualifier   TEXT                                  -- a short word the source gives with the status, as the site shows it:
+                                                              -- 'exotic', 'breeding', 'non-breeding'; NULL when none
         );
         CREATE INDEX other_status_taxon ON other_status(taxon_id);
+
+        -- The lists of the systems that have several (other_status.list_key): each national red list
+        -- imported from GBIF, each JNCC designation. name is the list's name as its publisher gives it,
+        -- and is the row label on the species page.
+        CREATE TABLE other_status_list (
+            list_key    TEXT PRIMARY KEY,
+            system      TEXT NOT NULL,                        -- OtherStatusSystems key
+            country     TEXT,                                 -- ISO 3166-1 code of the country whose list it is
+            region      TEXT,                                 -- the part of the country it covers ('Flanders'); NULL for the whole country
+            name        TEXT NOT NULL,                        -- 'Swedish Red List 2025', 'Wildlife and Countryside Act 1981, Schedule 5'
+            title       TEXT,                                 -- a longer description for the row label's hover title; NULL when none
+            sort_order  INTEGER NOT NULL,                     -- the list's place among the lists of its country
+            publisher   TEXT,
+            licence     TEXT,                                 -- 'CC0 1.0', 'CC BY 4.0', 'Open Government Licence v3.0'
+            licence_url TEXT,
+            citation    TEXT,                                 -- the citation the publisher asks for, or the dataset's
+            url         TEXT,                                 -- the list's page at its publisher
+            version     TEXT,                                 -- the list's year or version as the publisher gives it
+            fetched     TEXT                                  -- yyyy-mm-dd, when the status lists store downloaded it
+        ) WITHOUT ROWID;
 
         -- The taxon's IUCN Green Status of Species assessment, from the API cache's green_status table
         -- (`iucn api green-status`); the latest one when the cache has two. IUCN's justification text

@@ -29,6 +29,7 @@ internal sealed class SiteDbWriter : IDisposable {
     private readonly SqliteCommand _replacedBy;
     private readonly SqliteCommand _epbcListing;
     private readonly SqliteCommand _otherStatus;
+    private readonly SqliteCommand _otherStatusList;
     private readonly SqliteCommand _taxonLink;
     private long _nextNameId = 1;
     private bool _finished;
@@ -89,11 +90,21 @@ internal sealed class SiteDbWriter : IDisposable {
             """,
             "@taxon_id", "@sprat_taxon_id", "@listed_name", "@status", "@applies_to", "@population");
         _otherStatus = Prepare("""
-            INSERT INTO other_status (taxon_id, system, status, status_code, listed_name, population, source, source_id, url, listed_on, report)
-            VALUES (@taxon_id, @system, @status, @status_code, @listed_name, @population, @source, @source_id, @url, @listed_on, @report)
+            INSERT INTO other_status (taxon_id, system, status, status_code, listed_name, population, source, source_id, url, listed_on, report,
+                country, list_key, qualifier)
+            VALUES (@taxon_id, @system, @status, @status_code, @listed_name, @population, @source, @source_id, @url, @listed_on, @report,
+                @country, @list_key, @qualifier)
             """,
             "@taxon_id", "@system", "@status", "@status_code", "@listed_name", "@population", "@source", "@source_id", "@url", "@listed_on",
-            "@report");
+            "@report", "@country", "@list_key", "@qualifier");
+        _otherStatusList = Prepare("""
+            INSERT INTO other_status_list (list_key, system, country, region, name, title, sort_order, publisher, licence, licence_url,
+                citation, url, version, fetched)
+            VALUES (@list_key, @system, @country, @region, @name, @title, @sort_order, @publisher, @licence, @licence_url,
+                @citation, @url, @version, @fetched)
+            """,
+            "@list_key", "@system", "@country", "@region", "@name", "@title", "@sort_order", "@publisher", "@licence", "@licence_url",
+            "@citation", "@url", "@version", "@fetched");
         _taxonLink = Prepare("INSERT INTO taxon_link (taxon_id, current_taxon_id, link_kind) VALUES (@taxon_id, @current_taxon_id, @link_kind)",
             "@taxon_id", "@current_taxon_id", "@link_kind");
     }
@@ -139,8 +150,14 @@ internal sealed class SiteDbWriter : IDisposable {
 
     public void AddOtherStatus(long taxonId, OtherStatus status) {
         Bind(_otherStatus, taxonId, status.System, status.Status, status.StatusCode, status.ListedName, status.Population,
-            status.Source, status.SourceId, status.Url, status.ListedOn, status.Report);
+            status.Source, status.SourceId, status.Url, status.ListedOn, status.Report, status.Country, status.ListKey, status.Qualifier);
         _otherStatus.ExecuteNonQuery();
+    }
+
+    public void AddOtherStatusList(OtherStatusList list) {
+        Bind(_otherStatusList, list.ListKey, list.System, list.Country, list.Region, list.Name, list.Title, list.SortOrder, list.Publisher,
+            list.Licence, list.LicenceUrl, list.Citation, list.Url, list.Version, list.Fetched);
+        _otherStatusList.ExecuteNonQuery();
     }
 
     public void AddAssessment(SiteAssessment a) {
@@ -365,6 +382,7 @@ internal sealed class SiteDbWriter : IDisposable {
         _replacedBy.Dispose();
         _epbcListing.Dispose();
         _otherStatus.Dispose();
+        _otherStatusList.Dispose();
         _taxonLink.Dispose();
         if (!_finished && _transaction is not null) {
             try {

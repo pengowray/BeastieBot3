@@ -54,7 +54,9 @@ public sealed record OtherStatusSection(IReadOnlyList<OtherStatusTable> Tables, 
     /// was downloaded ("25 June 2026"), or null when unknown.
     public static OtherStatusSection Build(IReadOnlyList<OtherStatusRow> rows, string taxonKind, Func<string, string?> sourceDate) {
         var tables = rows
-            .GroupBy(r => OtherStatusSystems.Find(r.System)?.Group ?? "")
+            .GroupBy(r => r.Group)
+            .OrderBy(group => GroupOrder(group.Key))
+            .ThenBy(group => SiteText.OtherStatusGroup(group.Key), StringComparer.Ordinal)
             .Select(group => BuildTable(group.Key, group.ToList(), taxonKind))
             .ToList();
         var notes = rows.Select(r => r.Source).Distinct()
@@ -64,6 +66,15 @@ public sealed record OtherStatusSection(IReadOnlyList<OtherStatusTable> Tables, 
             .ToList();
         return new OtherStatusSection(tables, notes);
     }
+
+    // International treaties first, then the countries by name, then NatureServe's global ranks, then
+    // rows of a system the site does not know.
+    private static int GroupOrder(string group) => group switch {
+        OtherStatusSystems.InternationalGroup => 0,
+        OtherStatusSystems.NatureServeGroup => 2,
+        "" => 3,
+        _ => 1,
+    };
 
     private static OtherStatusTable BuildTable(string group, IReadOnlyList<OtherStatusRow> rows, string taxonKind) {
         var datedSources = rows.Where(r => r.ListedOn is not null).Select(r => r.Source).Distinct().ToList();
@@ -88,7 +99,7 @@ public sealed record OtherStatusSection(IReadOnlyList<OtherStatusTable> Tables, 
     }
 
     private static OtherStatusLine BuildLine(OtherStatusRow row, string taxonKind) {
-        var (label, title, isAbbreviation) = SiteText.OtherStatusList(row.System);
+        var (label, title, isAbbreviation) = row.List is { } list ? (list.Name, list.Title, false) : SiteText.OtherStatusList(row.System);
         return new OtherStatusLine(
             label,
             title,

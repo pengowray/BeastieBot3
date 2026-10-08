@@ -116,9 +116,20 @@ public sealed record EpbcListingRow(long SpratTaxonId, string ListedName, string
 /// OtherStatusSystems key. StatusCode: NatureServe's rounded rank. ListedName: the name the listing
 /// uses, only when it is not the taxon's own name. Population: the population or area the listing
 /// applies to, null for the whole taxon. Url: the record at the source. ListedOn: yyyy-MM-dd.
-/// Report: the publication an NZTCS status comes from.
+/// Report: the publication an NZTCS status comes from. Country: the country of a system that spans
+/// countries (NatureServe's national and subnational ranks). Qualifier: a short word the source gives
+/// with the status ("exotic"). List: the list, for a system with several (other_status_list).
 public sealed record OtherStatusRow(string System, string Status, string? StatusCode, string? ListedName, string? Population,
-    string Source, string SourceId, string? Url, string? ListedOn, string? Report = null);
+    string Source, string SourceId, string? Url, string? ListedOn, string? Report = null, string? Country = null,
+    string? Qualifier = null, OtherStatusListRow? List = null) {
+    /// The group the row is shown in: the system's (OtherStatusSystems), else the row's or its list's country.
+    public string Group => OtherStatusSystems.Find(System)?.Group ?? Country ?? List?.Country ?? "";
+}
+
+/// One of the lists of a system that has several (other_status_list): a national red list from GBIF,
+/// a JNCC designation. Name is the row label; Title its hover title.
+public sealed record OtherStatusListRow(string ListKey, string System, string? Country, string? Region, string Name, string? Title,
+    int SortOrder, string? Publisher, string? Licence, string? LicenceUrl, string? Citation, string? Url, string? Version, string? Fetched);
 
 /// A taxon's IUCN Green Status of Species assessment (green_status). Scores are whole percentages.
 /// PublishedYear: the year of the Red List release it first appeared in, when known. RedListYear: the
