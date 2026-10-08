@@ -47,6 +47,7 @@ public class PublicSiteStateReaderTests : IDisposable {
         WikipediaCache = P("enwiki.sqlite"),
         ColPlacement = P("col.sqlite.placement.sqlite"),
         SpratDatabase = P("sprat.sqlite"),
+        StatusLists = P("status_lists.sqlite"),
         SiteDatabase = P("site.sqlite"),
     };
 
@@ -159,5 +160,37 @@ public class PublicSiteStateReaderTests : IDisposable {
         Assert.Equal("iucn-checklist-2026-07-28.zip", s.GbifZipName);
         Assert.NotNull(s.GbifReadError);
         Assert.Equal("todo", PublicSiteProbes.GbifStep(s).Status);
+    }
+
+    // The status lists store: the source rows of finished downloads, and the NatureServe download
+    // under way with the records it has stored.
+    [Fact]
+    public void Reads_the_status_lists_store() {
+        var path = P("status_lists.sqlite");
+        var started = new DateTime(2026, 10, 8, 1, 0, 0, DateTimeKind.Utc);
+        using (var store = BeastieBot3.StatusLists.StatusListStore.Open(path)) {
+            store.UpsertSource(new BeastieBot3.StatusLists.StatusSourceInfo("ecos", "ECOS", "https://ecos.fws.gov/ecp/", "Public domain", null, null, Recent, 2478));
+            store.StartNatureServePass(new System.Collections.Generic.Dictionary<string, string?> {
+                [BeastieBot3.StatusLists.NatureServePassKeys.Started] = BeastieBot3.StatusLists.StatusListStore.Stamp(started),
+                [BeastieBot3.StatusLists.NatureServePassKeys.Total] = "113530",
+            }, BeastieBot3.StatusLists.NatureServePassKeys.PassKeys, "");
+        }
+        Exec("status_lists.sqlite", """
+            INSERT INTO natureserve_species (element_global_id, unique_id, scientific_name, infraspecies, nsx_url, fetched_at) VALUES
+                (1, 'ELEMENT_GLOBAL.2.1', 'Acris blanchardi', 0, 'https://explorer.natureserve.org/', '2026-10-08T01:05:00.0000000Z'),
+                (2, 'ELEMENT_GLOBAL.2.2', 'Acris crepitans', 0, 'https://explorer.natureserve.org/', '2026-09-01T00:00:00.0000000Z');
+            """);
+        SqliteConnection.ClearAllPools();
+
+        var s = PublicSiteStateReader.Read(Paths());
+        Assert.Equal(path, s.StatusListsPath);
+        Assert.Equal(new StatusListSourceState(Recent, 2478), s.Ecos);
+        Assert.Null(s.NatureServe);
+        Assert.Equal(started, s.NatureServePassStartedUtc);
+        Assert.Equal(1, s.NatureServePassStored);
+        Assert.Equal(113530, s.NatureServePassTotal);
+        Assert.Contains(s.Inputs, i => i.Name == PublicSiteStateReader.StatusListsInput);
+        Assert.Equal("backlog", PublicSiteProbes.NatureServeStep(s).Status);
+        Assert.Equal("ok", PublicSiteProbes.EcosStep(s with { ReadAtUtc = Recent.AddDays(1) }).Status);
     }
 }

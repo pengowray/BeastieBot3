@@ -81,10 +81,25 @@ public sealed record PublicSiteState {
     /// When the state was read, for the age of the last pass.
     public DateTime ReadAtUtc { get; init; } = DateTime.UtcNow;
 
+    // --- The status lists store (`statuses natureserve-fetch`, `statuses ecos-import`) ---
+    public string? StatusListsPath { get; init; }
+    /// The NatureServe and ECOS rows of status_source: when each last finished, and how many rows
+    /// the store holds. Null when the source has never finished.
+    public StatusListSourceState? NatureServe { get; init; }
+    public StatusListSourceState? Ecos { get; init; }
+    /// When the NatureServe download under way started; null when none is under way.
+    public DateTime? NatureServePassStartedUtc { get; init; }
+    /// How many records the download under way has stored, and how many NatureServe said it has.
+    public long NatureServePassStored { get; init; }
+    public long? NatureServePassTotal { get; init; }
+
     /// When each input of `site build-db` last changed, in the order the build reads them.
     /// Inputs that do not exist are left out, as the build leaves them out.
     public IReadOnlyList<SiteInputChange> Inputs { get; init; } = Array.Empty<SiteInputChange>();
 }
+
+/// <summary>When a status list source last finished downloading, and how many rows the store holds.</summary>
+public sealed record StatusListSourceState(DateTime FetchedAtUtc, long Rows);
 
 /// <summary>
 /// What the last `wikipedia fetch-group-titles` run left to do, and the time it saw on the IUCN Red
@@ -104,6 +119,7 @@ public sealed record PublicSitePaths {
     public string? WikipediaCache { get; init; }
     public string? ColPlacement { get; init; }
     public string? SpratDatabase { get; init; }
+    public string? StatusLists { get; init; }
     public string? SiteDatabase { get; init; }
 
     // The same defaults `site build-db` uses when it is given no options.
@@ -119,6 +135,7 @@ public sealed record PublicSitePaths {
             WikipediaCache = Full(Try(paths.GetWikipediaCachePath)),
             ColPlacement = col is null ? null : TaxonPlacementStore.SidecarPath(col),
             SpratDatabase = Full(Try(paths.GetSpratDatabasePath)),
+            StatusLists = Full(Try(paths.GetStatusListsPath)),
             SiteDatabase = Full(Try(paths.GetSiteDatabasePath)),
         };
     }
@@ -144,6 +161,7 @@ public static class PublicSiteStateReader {
     public const string WikipediaInput = "Wikipedia cache";
     public const string ColPlacementInput = "Catalogue of Life placement";
     public const string SpratInput = "SPRAT (EPBC) database";
+    public const string StatusListsInput = "Status lists store";
 
     /// The state for the workflow page, with the DOI step's count. That count comes from a
     /// background task (SiteDoiCountReader), so this overload is for the poll only; tests read
@@ -175,6 +193,7 @@ public static class PublicSiteStateReader {
         Add(WikipediaInput, SqliteChangedAt(p.WikipediaCache));
         Add(ColPlacementInput, SqliteChangedAt(p.ColPlacement));
         Add(SpratInput, SqliteChangedAt(p.SpratDatabase));
+        Add(StatusListsInput, SqliteChangedAt(p.StatusLists));
 
         var state = new PublicSiteState {
             IucnExists = iucn.Exists,
@@ -194,6 +213,7 @@ public static class PublicSiteStateReader {
             Inputs = inputs,
         };
         state = ReadSweep(state, p.WikidataCache);
+        state = ReadStatusLists(state, p.StatusLists);
         return state.SiteExists ? ReadSite(state, p.SiteDatabase!) : state;
     }
 
@@ -223,6 +243,56 @@ public static class PublicSiteStateReader {
             }
         } catch (Exception) {
             // No sync table yet: the sweep has never run.
+        }
+        return state;
+    }
+
+    // ---- the status lists store ----
+
+    // Two source rows, two keys of the sync table and, while a NatureServe download is under way, a
+    // count over the indexed fetched_at column. Read without StatusListStore.Open, which would run
+    // its schema work on every poll.
+    private static PublicSiteState ReadStatusLists(PublicSiteState state, string? path) {
+        state = state with { StatusListsPath = path };
+        if (!Exists(path)) return state;
+        try {
+            using var conn = OpenReadOnly(path!);
+            using (var cmd = conn.CreateCommand()) {
+                cmd.CommandText = "SELECT source, fetched_at, row_count FROM status_source WHERE source IN (@natureserve, @ecos)";
+                cmd.Parameters.AddWithValue("@natureserve", StatusLists.StatusSources.NatureServe);
+                cmd.Parameters.AddWithValue("@ecos", StatusLists.StatusSources.Ecos);
+                cmd.CommandTimeout = 5;
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read()) {
+                    if (reader.IsDBNull(1) || StoredUtc.Parse(reader.GetString(1)) is not { } fetched) continue;
+                    var source = new StatusListSourceState(fetched, reader.IsDBNull(2) ? 0 : reader.GetInt64(2));
+                    state = reader.GetString(0) == StatusLists.StatusSources.NatureServe
+                        ? state with { NatureServe = source }
+                        : state with { Ecos = source };
+                }
+            }
+            using (var cmd = conn.CreateCommand()) {
+                cmd.CommandText = "SELECT key, value FROM status_sync_state WHERE key IN (@started, @total)";
+                cmd.Parameters.AddWithValue("@started", StatusLists.NatureServePassKeys.Started);
+                cmd.Parameters.AddWithValue("@total", StatusLists.NatureServePassKeys.Total);
+                cmd.CommandTimeout = 5;
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read()) {
+                    var value = reader.IsDBNull(1) ? null : reader.GetString(1);
+                    state = reader.GetString(0) == StatusLists.NatureServePassKeys.Started
+                        ? state with { NatureServePassStartedUtc = StoredUtc.Parse(value) }
+                        : state with { NatureServePassTotal = long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var total) ? total : null };
+                }
+            }
+            if (state.NatureServePassStartedUtc is { } started) {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(*) FROM natureserve_species WHERE fetched_at >= @since";
+                cmd.Parameters.AddWithValue("@since", StatusLists.StatusListStore.Stamp(started));
+                cmd.CommandTimeout = 5;
+                state = state with { NatureServePassStored = Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) };
+            }
+        } catch (Exception) {
+            // No status tables yet: neither command has finished on this store.
         }
         return state;
     }

@@ -140,7 +140,7 @@ public class FlowCatalogueTests {
         Assert.Equal(new[] { "site-sqlite" }, steps["site-build-db"].OutputSourceIds);
         Assert.Equal(new[] { "site-sqlite" }, steps["site-deploy-db"].InputSourceIds);
 
-        var optional = new[] { "gbif-checklist", "iucn-doi-cache" };
+        var optional = new[] { "gbif-checklist", "iucn-doi-cache", "status-lists" };
         var asInput = FlowCatalogue.All.SelectMany(f => f.Steps)
             .Where(s => s.InputSourceIds.Any(optional.Contains))
             .Select(s => s.Id)
@@ -159,6 +159,7 @@ public class FlowCatalogueTests {
     [InlineData(PublicSiteStateReader.WikidataInput, "wikidata-cache")]
     [InlineData(PublicSiteStateReader.WikipediaInput, "wikipedia-cache")]
     [InlineData(PublicSiteStateReader.SpratInput, "sprat-sqlite")]
+    [InlineData(PublicSiteStateReader.StatusListsInput, "status-lists")]
     public void Public_site_input_names_match_their_data_source_names(string inputName, string sourceId) {
         Assert.Equal(inputName, DataSourceCatalogue.All.Single(d => d.Id == sourceId).Name);
     }
