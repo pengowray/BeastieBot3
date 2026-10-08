@@ -185,6 +185,11 @@ public sealed class UpdateModel : PageModel {
     public const string RemoveShownField = "rmshown";
     /// The button that takes out every taxon now in another category.
     public const string RemoveAllField = "rmall";
+    /// Rebuild the list (ListRebuild) instead of putting the missing taxa in.
+    public const string RebuildField = "rebuild";
+
+    /// The rebuilt list, when the reader asked for one.
+    public RebuildResult? Rebuild { get; private set; }
 
     /// The taxa now in another category the reader chose to take out; null when the reader has not
     /// asked to take any out.
@@ -283,12 +288,16 @@ public sealed class UpdateModel : PageModel {
         AreaMode = Enum.TryParse<AreaMode>(form[AreaModeField].LastOrDefault(), out var mode) && Enum.IsDefined(mode) ? mode : AreaMode.Native;
         ShowEpbc = On(EpbcField);
         Region = KnownRegion(form[RegionField].LastOrDefault());
-        IReadOnlySet<long>? removing = On(RemoveAllField) ? null
+        // A rebuild first leaves out every taxon now in another category, as the button does.
+        IReadOnlySet<long>? removing = On(RemoveAllField) || (On(RebuildField) && form[RemoveShownField].LastOrDefault() != TextKey(text)) ? null
             : form[RemoveShownField].LastOrDefault() == TextKey(text)
             ? form[RemoveField].Select(v => long.TryParse(v, out var id) ? id : 0).Where(id => id > 0).ToHashSet()
             : new HashSet<long>();
+        var rebuild = On(RebuildField);
         Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField), removing,
-            removeAsked: On(RemoveAllField) || form[RemoveShownField].LastOrDefault() == TextKey(text));
+            removeAsked: On(RemoveAllField) || form[RemoveShownField].LastOrDefault() == TextKey(text)
+                || (rebuild && form[RemoveShownField].LastOrDefault() != TextKey(text)),
+            rebuild: rebuild);
         return Page();
     }
 
@@ -296,7 +305,7 @@ public sealed class UpdateModel : PageModel {
     // now in another category to take out, null for all of them; removeAsked: the reader has asked to
     // take some out (the button, or the checkboxes shown for this text).
     private void Run(string text, string? scope, bool listAnyway, bool extraSpecies, bool addMissing,
-        IReadOnlySet<long>? removing = null, bool removeAsked = false) {
+        IReadOnlySet<long>? removing = null, bool removeAsked = false, bool rebuild = false) {
         using var lookup = _queries.OpenStatusLookup(Region);
         var updater = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options);
         Result = updater.Update(text);
@@ -310,8 +319,23 @@ public sealed class UpdateModel : PageModel {
         if (removeAsked && Scope is not null) {
             Removing = removing ?? Scope.OtherCategory.Select(m => m.Taxon.TaxonId).ToHashSet();
         }
-        var placing = AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0;
-        if (Scope is not null && (placing || Removing is { Count: > 0 })) {
+        var placementOptions = new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ, Options.AddToListLines) {
+            Remove = Removing ?? new HashSet<long>(),
+        };
+        if (rebuild && Scope is not null) {
+            // The rebuilt list has the missing taxa; the taxa now in another category are left out
+            // unless the reader unticks them.
+            Rebuild = ListRebuild.Rebuild(text, updater, Result.Members ?? [], Scope, placementOptions, scopeLookup);
+            if (Rebuild.Refusal == RebuildRefusal.None) {
+                Result = Result with {
+                    Text = Rebuild.Text,
+                    MissingAdded = Rebuild.Taxa.Count(t => t.Change == RebuildChange.Added),
+                    TaxaRemoved = Rebuild.Removed.Count,
+                };
+            }
+        }
+        var placing = Rebuild is null && AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0;
+        if (Scope is not null && Rebuild is null && (placing || Removing is { Count: > 0 })) {
             Placement = ListPlacement.Place(text, Result.Members ?? [], Scope,
                 new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ, Options.AddToListLines) {
                     TablesWithNewColumn = Result.Findings

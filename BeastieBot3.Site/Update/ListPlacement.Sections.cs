@@ -12,17 +12,17 @@ namespace BeastieBot3.Site.Update;
 // species"), or among the section's own lines when they are of several groups of that rank, or in a
 // new section for its group, in the form of the section next to it.
 public static partial class ListPlacement {
-    private sealed partial class Placer {
+    internal sealed partial class Placer {
         // The new sections waiting for NewSections: the section they go in and their group, by taxon id.
         private readonly Dictionary<long, (ListSection Parent, GroupRow Group)> _pendingSections = [];
 
         // The members on list lines, those taken out in this run included: they still show what a
         // section lists.
         private List<ListMember>? _lineMembers;
-        private List<ListMember> LineMembers => _lineMembers ??= [.. Listed(ListMemberSource.ListLine)];
+        internal List<ListMember> LineMembers => _lineMembers ??= [.. Listed(ListMemberSource.ListLine)];
 
         private ListSections? _sections;
-        private ListSections Sections => _sections ??= new ListSections(_text, _scanner, _lines, LineMembers, _scope.Scope, _lookup);
+        internal ListSections Sections => _sections ??= new ListSections(_text, _scanner, _lines, LineMembers, _scope.Scope, _lookup);
 
         private IReadOnlyList<GroupRow> PathOf(int node) => Sections.PathOf(node);
 

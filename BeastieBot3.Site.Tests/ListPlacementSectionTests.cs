@@ -9,7 +9,8 @@ namespace BeastieBot3.Site.Tests;
 public sealed class ListPlacementSectionTests {
     // Galliformes: Phasianidae (Pavo 100-102, Lophura 110-111), Cracidae (Crax 120-121);
     // Anseriformes: Anatidae (Anas 130-132); Columbiformes: Columbidae (Columba 140-141). All EN.
-    private static FakeScopeLookup Birds() {
+    // vu: the taxa that are VU, the others EN.
+    internal static FakeScopeLookup Birds(params long[] vu) {
         var tree = new FakeScopeLookup()
             .Group(1, null, "kingdom", "Animalia")
             .Group(2, 1, "class", "Aves")
@@ -24,8 +25,10 @@ public sealed class ListPlacementSectionTests {
             .Group(23, 14, "genus", "Anas")
             .Group(15, 2, "order", "Columbiformes", common: "pigeons and doves")
             .Group(16, 15, "family", "Columbidae")
-            .Group(24, 16, "genus", "Columba")
-            .Species(20, 100, 3, "EN").Species(21, 110, 2, "EN").Species(22, 120, 2, "EN").Species(23, 130, 3, "EN").Species(24, 140, 2, "EN");
+            .Group(24, 16, "genus", "Columba");
+        foreach (var (id, _, node) in Taxa) {
+            tree.Species(node, id, 1, vu.Contains(id) ? "VU" : "EN");
+        }
         foreach (var id in new long[] { 100, 101, 102, 110, 111, 120, 121, 130, 131, 132, 140, 141 }) {
             tree.Common(id, $"Bird {id}");
         }
@@ -37,7 +40,7 @@ public sealed class ListPlacementSectionTests {
         (120, "Crax", 22), (121, "Crax", 22), (130, "Anas", 23), (131, "Anas", 23), (132, "Anas", 23), (140, "Columba", 24), (141, "Columba", 24)];
 
     // now: taxa whose latest category is VU, not EN.
-    private static FakeStatusLookup Statuses(params long[] now) {
+    internal static FakeStatusLookup Statuses(params long[] now) {
         var lookup = new FakeStatusLookup();
         foreach (var (id, genus, node) in Taxa) {
             lookup.Taxon(id, $"{genus} {FakeScopeLookup.Epithet(id)}", now.Contains(id) ? "VU" : "EN", 2020, id * 10, node: node);
@@ -45,10 +48,10 @@ public sealed class ListPlacementSectionTests {
         return lookup;
     }
 
-    private static string Name(long id) => $"{Taxa.Single(t => t.Id == id).Genus} {FakeScopeLookup.Epithet(id)}";
+    internal static string Name(long id) => $"{Taxa.Single(t => t.Id == id).Genus} {FakeScopeLookup.Epithet(id)}";
 
     // A line of the list: "*[[Pavo spbaa|Bird 100]]".
-    private static string Line(long id) => $"*[[{Name(id)}|Bird {id}]]";
+    internal static string Line(long id) => $"*[[{Name(id)}|Bird {id}]]";
 
     // Compared with class Aves, EN only; remove: the taxa to take out.
     private static (string Text, ListPlacementResult Placement, ListScopeResult Scope) Run(string text, long[]? now = null, long[]? remove = null,
@@ -62,10 +65,10 @@ public sealed class ListPlacementSectionTests {
         return (updater.TextWith(ListPlacement.Insertions(text, placement), placement.Removals), placement, scope);
     }
 
-    private static string Section(string title, params long[] ids) =>
+    internal static string Section(string title, params long[] ids) =>
         $"==[[{title}]]==\n{{{{columns-list|colwidth=30em|\n{string.Join("\n", ids.Select(Line))}\n}}}}\n\n";
 
-    private const string End = "== See also ==\n* [[List of birds]]\n";
+    internal const string End = "== See also ==\n* [[List of birds]]\n";
 
     [Fact]
     public void ASpeciesWithNoGenusMateGoesAmongTheLinesOfItsOrder() {

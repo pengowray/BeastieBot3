@@ -12,7 +12,7 @@ public static partial class ListPlacement {
     /// header names.
     private sealed record GenusTableText(WikiTemplate Header, IReadOnlyList<WikiTemplate> Rows, WikiTemplate? End, string Genus);
 
-    private sealed partial class Placer {
+    internal sealed partial class Placer {
         private List<GenusTableText>? _genusTables;
 
         private List<GenusTableText> GenusTables() {

@@ -73,6 +73,8 @@ public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? P
     IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc = null, bool CategoriesFromTitle = false,
     BeastieBot3.Shared.Wikitext.AreaNames? Areas = null) {
     public IReadOnlySet<long>? Removing { get; init; }
+    /// The rebuilt list, when the reader asked for one (ListRebuild).
+    public RebuildResult? Rebuild { get; init; }
     public ListForms Forms { get; init; } = new(false, false, false, false);
     public string TextKey { get; init; } = string.Empty;
 
@@ -240,7 +242,7 @@ public static partial class ListPlacement {
         StatusUpdater.NewStatusTemplate(GroupList.StatusCode(taxon), taxon.TaxonId, taxon.AssessmentId, taxon.YearPublished,
             options.AddIds, options.AddYear);
 
-    private sealed partial class Placer {
+    internal sealed partial class Placer {
         private readonly string _text;
         private readonly WikitextScanner _scanner;
         private readonly TextLines _lines;
@@ -349,14 +351,14 @@ public static partial class ListPlacement {
 
         // A line that links its scientific name with its common name as the label:
         // "*[[Anas bernieri|Bernier's teal]]".
-        private bool LinksScientificName(ListMember member) =>
+        internal bool LinksScientificName(ListMember member) =>
             LeadingCommon().Match(ListPart(_lines.Text(member.Line))) is { Success: true } m && m.Groups["label"].Success
             && string.Equals(m.Groups["target"].Value.Trim().Replace('_', ' '), member.Written, StringComparison.OrdinalIgnoreCase);
 
         // Where a new line goes after a list line: at its end, past a reference or template that runs
         // on to the next lines ("<ref>{{cite web\n |title=x}}</ref>"), and before the "}}" of a
         // list layout template that ends on the line ("* ''Panthera tigris''}}").
-        private int After(int line) {
+        internal int After(int line) {
             var at = _lines.End(line);
             for (var guard = 0; guard < 100 && _scanner.ContainerAt(at, StatusUpdater.ListWrappers) is { } open; guard++) {
                 at = _lines.End(_scanner.LineOf(open.End - 1));
@@ -378,7 +380,7 @@ public static partial class ListPlacement {
             return start < 0 ? int.MaxValue : Markers(text[start..]);
         }
 
-        private static string ListPart(string line) => ListStart(line) is >= 0 and var i ? line[i..] : line;
+        internal static string ListPart(string line) => ListStart(line) is >= 0 and var i ? line[i..] : line;
 
         // A subspecies or variety under its species' line: after the lines already under it, one
         // marker deeper, with the genus and species abbreviated ("** ''P. l. persica''").
@@ -412,14 +414,15 @@ public static partial class ListPlacement {
 
     // The new line: the neighbour's bullet markers and the space after them, the names in the
     // neighbour's style, and {{IUCN status}} when the neighbour has one. linkScientific: the
-    // neighbour links its scientific name with its common name as the label, and so does the new line.
+    // neighbour links its scientific name with its common name as the label, and so does the new line
+    // ("[[Anas bernieri|Bernier's teal]]", "[[Telmatobius hockingi|Hocking's water frog]] (''Telmatobius hockingi'')").
     internal static string NewLine(string neighbour, ListTaxonRow taxon, SpeciesListStyle fallback, bool withStatus, ListPlacementOptions options,
         bool linkScientific = false) {
         var prefix = Prefix().Match(neighbour);
         var style = StyleOf(neighbour[prefix.Length..]) ?? fallback;
         var line = SpeciesListLine.Format(GroupList.Entry(taxon), new SpeciesListLineOptions { Style = style, IncludeStatusTemplate = false });
-        line = linkScientific && style == SpeciesListStyle.CommonNameOnly && taxon.CommonNameEn is { } common
-            ? $"[[{taxon.ScientificName}|{common}]]"
+        line = linkScientific && taxon.CommonNameEn is { } common && style != SpeciesListStyle.ScientificNameFirst && taxon.Kind == TaxonKinds.Species
+            ? style == SpeciesListStyle.CommonNameOnly ? $"[[{taxon.ScientificName}|{common}]]" : $"[[{taxon.ScientificName}|{common}]] (''{taxon.ScientificName}'')"
             : ListScope.UnlinkLists(line["* ".Length..]);
         if (withStatus && taxon.Category is not null) {
             line += " " + StatusTemplate(taxon, options);
@@ -429,7 +432,7 @@ public static partial class ListPlacement {
 
     // Scientific name first when the line starts with italics, common name first when an italic name
     // comes later, common name only when the line has no italics.
-    private static SpeciesListStyle? StyleOf(string afterMarkers) {
+    internal static SpeciesListStyle? StyleOf(string afterMarkers) {
         var text = afterMarkers.TrimStart();
         if (text.StartsWith("''", StringComparison.Ordinal) || text.StartsWith("{{dagger}}''", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("†''", StringComparison.Ordinal)) {
@@ -443,7 +446,7 @@ public static partial class ListPlacement {
 
     // The common name a list line starts with: the text of its first link, when the line starts with
     // a link that is not in italics ("*[[Lepilemur ruficaudatus|Red-tailed sportive lemur]]").
-    private static string? CommonOnLine(string line) =>
+    internal static string? CommonOnLine(string line) =>
         LeadingCommon().Match(line) is { Success: true } m ? m.Groups["label"].Success ? m.Groups["label"].Value : m.Groups["target"].Value : null;
 
     [GeneratedRegex(@"^[*#]+ ?")]
@@ -455,7 +458,7 @@ public static partial class ListPlacement {
     // The first scientific name of a line in the scientific name first style:
     // "*''[[Carex gynandra]]'' <small>Schwein.</small>", "* †''Acer alaskense''".
     [GeneratedRegex(@"^[*#]+\s*(?:†|\{\{dagger\}\})?\s*'{2,5}(?:\[\[(?:[^|\]\n]*\|)?)?(?<name>\p{Lu}[\p{Ll}-]+ (?:× ?)?[\p{Ll}-]+)")]
-    private static partial Regex LeadingName();
+    internal static partial Regex LeadingName();
 
     [GeneratedRegex(@"^[*#]+\s*\[\[(?<target>[^|\]\n]+)(?:\|(?<label>[^\]\n]+))?\]\]")]
     private static partial Regex LeadingCommon();

@@ -195,6 +195,7 @@
         @if (Model.Scope is { } scope) {
             @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories, Model.ShowEpbc ? Model.Epbc : null, Model.CategoriesFromTitle, Model.Areas) {
                 Removing = Model.Removing,
+                Rebuild = Model.Rebuild,
                 Forms = Model.Forms,
                 TextKey = UpdateModel.TextKey(Model.Input),
             })

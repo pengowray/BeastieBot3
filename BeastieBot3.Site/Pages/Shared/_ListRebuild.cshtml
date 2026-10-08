@@ -1,0 +1,47 @@
+@model BeastieBot3.Site.Update.ListScopeView
+@using BeastieBot3.Site.Update
+@* The rebuilt list (ListRebuild): what changed, and the choice to turn it off. Shown at the top of
+   the comparison, since the updated wikitext above is the rebuilt list. *@
+@{
+    var rebuild = Model.Rebuild!;
+}
+<div class="update-rebuild">
+    <h4>@UpdateText.RebuildHeading</h4>
+    <p class="update-scope-add">
+        <label><input type="checkbox" name="@UpdateModel.RebuildField" value="1" form="update-form" checked> @UpdateText.RebuildOption</label>
+    </p>
+    @if (rebuild.Refusal != RebuildRefusal.None) {
+        <p>@UpdateText.RebuildRefused(rebuild.Refusal, rebuild.LineCount)</p>
+    } else {
+        <p>@UpdateText.RebuildSummary(rebuild)</p>
+        @if (rebuild.NewHeadings.Count > 0) {
+            <p>@UpdateText.NewHeadings(rebuild.NewHeadings)</p>
+        }
+        @if (rebuild.Dropped.Count > 0) {
+            <p>@UpdateText.RebuildDropped(rebuild.Dropped.Select(d => d.Heading).ToList())</p>
+            @foreach (var d in rebuild.Dropped.Where(d => d.Text.Length > 0)) {
+                <div class="wikitext-box">
+                    <p class="help">@UpdateText.RebuildDroppedText(d.Heading)</p>
+                    <textarea class="update-readonly" readonly rows="3" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="@UpdateText.RebuildDroppedText(d.Heading)">@("\n" + d.Text)</textarea>
+                </div>
+            }
+        }
+        var changed = rebuild.Taxa.Where(t => t.Change != RebuildChange.Kept).ToList();
+        @if (changed.Count > 0) {
+            <div class="table-scroll">
+                <table class="update-report">
+                    <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnRebuildChange</th><th scope="col">@UpdateText.ColumnHeading</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in changed) {
+                            <tr>
+                                <td>@if (t.Taxon.TaxonId > 0) {<a href="/species/@t.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(t.Taxon.ScientificName))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(t.Taxon.ScientificName))}</td>
+                                <td>@UpdateText.RebuildChangeText(t)</td>
+                                <td>@(t.Heading is { } h ? t.NewHeading ? UpdateText.NewHeadingValue(h) : h : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
