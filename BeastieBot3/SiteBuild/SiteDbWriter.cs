@@ -91,12 +91,12 @@ internal sealed class SiteDbWriter : IDisposable {
             "@taxon_id", "@sprat_taxon_id", "@listed_name", "@status", "@applies_to", "@population");
         _otherStatus = Prepare("""
             INSERT INTO other_status (taxon_id, system, status, status_code, listed_name, population, source, source_id, url, listed_on, report,
-                country, list_key, qualifier)
+                country, list_key, qualifier, listed_under)
             VALUES (@taxon_id, @system, @status, @status_code, @listed_name, @population, @source, @source_id, @url, @listed_on, @report,
-                @country, @list_key, @qualifier)
+                @country, @list_key, @qualifier, @listed_under)
             """,
             "@taxon_id", "@system", "@status", "@status_code", "@listed_name", "@population", "@source", "@source_id", "@url", "@listed_on",
-            "@report", "@country", "@list_key", "@qualifier");
+            "@report", "@country", "@list_key", "@qualifier", "@listed_under");
         _otherStatusList = Prepare("""
             INSERT INTO other_status_list (list_key, system, country, region, name, title, sort_order, publisher, licence, licence_url,
                 citation, url, version, fetched)
@@ -150,7 +150,8 @@ internal sealed class SiteDbWriter : IDisposable {
 
     public void AddOtherStatus(long taxonId, OtherStatus status) {
         Bind(_otherStatus, taxonId, status.System, status.Status, status.StatusCode, status.ListedName, status.Population,
-            status.Source, status.SourceId, status.Url, status.ListedOn, status.Report, status.Country, status.ListKey, status.Qualifier);
+            status.Source, status.SourceId, status.Url, status.ListedOn, status.Report, status.Country, status.ListKey, status.Qualifier,
+            status.ListedUnder);
         _otherStatus.ExecuteNonQuery();
     }
 

@@ -23,6 +23,11 @@ internal static partial class SiteLinkReaders {
         using var connection = OpenReadOnly(path);
         var index = new StatusListNameIndex(taxa.Values);
         string? natureServe = null, ecos = null, nztcs = null;
+        if (DelimitedTableImporter.GetTableColumns(connection, "cites_listing") is not null) {
+            ReadCites(connection, index, taxa.Values, stats, cancellationToken);
+        } else {
+            stats.Warnings.Add($"The status lists store {path} has no CITES listings: run statuses cites-import.");
+        }
         if (DelimitedTableImporter.GetTableColumns(connection, "jncc_designation") is not null) {
             lists.AddRange(ReadJncc(connection, index, stats, cancellationToken));
         } else {

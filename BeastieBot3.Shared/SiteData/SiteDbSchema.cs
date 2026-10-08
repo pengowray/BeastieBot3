@@ -191,8 +191,10 @@ public static class SiteDbSchema {
                                                               -- the system or the list (other_status_list.country) gives the country
             list_key    TEXT,                                 -- other_status_list.list_key, for a system with several lists (the national red
                                                               -- lists from GBIF, JNCC's designations); NULL when the system is one list
-            qualifier   TEXT                                  -- a short word the source gives with the status, as the site shows it:
+            qualifier   TEXT,                                 -- a short word the source gives with the status, as the site shows it:
                                                               -- 'exotic', 'breeding', 'non-breeding'; NULL when none
+            listed_under TEXT                                 -- cites: the higher taxon whose listing covers the taxon, rank and name as the site
+                                                              -- shows them ('family Trochilidae'); NULL for the taxon's own listing
         );
         CREATE INDEX other_status_taxon ON other_status(taxon_id);
 
@@ -568,6 +570,10 @@ public static class SiteDbSchema {
         public const string NztcsFetched = "nztcs_fetched";
         /// When `statuses salve-import` last downloaded SALVE's assessments ('yyyy-MM-dd').
         public const string SalveFetched = "salve_fetched";
+        /// When `statuses cites-import` last downloaded the Checklist of CITES Species ('yyyy-MM-dd'), and
+        /// the citation the Checklist asks for, with that access date.
+        public const string CitesFetched = "cites_fetched";
+        public const string CitesCitation = "cites_citation";
         /// When `iucn api green-status` last downloaded the Green Status assessments ('yyyy-MM-dd'), for
         /// the access date of their citations.
         public const string GreenStatusFetched = "green_status_fetched";

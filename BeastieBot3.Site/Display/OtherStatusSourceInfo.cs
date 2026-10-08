@@ -90,7 +90,18 @@ public sealed record OtherStatusSourceInfo(
     // "2026-06-09" as "9 June 2026"; null when not a date.
     private static string? DateText(string? isoDate) => isoDate is null ? null : SiteFormat.Date(isoDate);
 
-    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve, Jncc];
+    /// The Checklist of CITES Species, with the citation it asks for. The note's date is the download
+    /// date, as "8 October 2026".
+    public static readonly OtherStatusSourceInfo Cites = new(OtherStatusSources.Cites, SiteText.OtherStatusCitesRecordLink,
+        OtherStatusDateHeading.InEffectFrom, DateHeadingRule.AllDatedRows,
+        (date, _) => [
+            new(SiteText.OtherStatusCitesSubject),
+            new(SiteText.OtherStatusCitesLink, SiteText.CitesChecklistUrl),
+            new(SiteText.OtherStatusCitesRest(DateOnly.TryParseExact(date, "d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var accessed) ? accessed : null)),
+        ]);
+
+    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve, Jncc, Cites];
 
     /// The source with this key, or null for a source the site does not know.
     public static OtherStatusSourceInfo? Find(string source) => All.FirstOrDefault(s => s.Key == source);

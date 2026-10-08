@@ -121,7 +121,7 @@ public sealed record EpbcListingRow(long SpratTaxonId, string ListedName, string
 /// with the status ("exotic"). List: the list, for a system with several (other_status_list).
 public sealed record OtherStatusRow(string System, string Status, string? StatusCode, string? ListedName, string? Population,
     string Source, string SourceId, string? Url, string? ListedOn, string? Report = null, string? Country = null,
-    string? Qualifier = null, OtherStatusListRow? List = null) {
+    string? Qualifier = null, OtherStatusListRow? List = null, string? ListedUnder = null) {
     /// The group the row is shown in: the system's (OtherStatusSystems), else the row's or its list's country.
     public string Group => OtherStatusSystems.Find(System)?.Group ?? Country ?? List?.Country ?? "";
 }

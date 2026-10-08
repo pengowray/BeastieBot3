@@ -539,6 +539,8 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.EcosFetched, _stats.EcosFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.NztcsFetched, _stats.NztcsFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.SalveFetched, _stats.SalveFetched);
+        writer.SetMeta(SiteDbSchema.MetaKeys.CitesFetched, _stats.CitesFetched);
+        writer.SetMeta(SiteDbSchema.MetaKeys.CitesCitation, _stats.CitesCitation);
         writer.SetMeta(SiteDbSchema.MetaKeys.GreenStatusFetched, _stats.GreenStatusFetched);
         if (_stats.SummaryTables is { } summaryTables) {
             // Tables lists each table's files in release order.

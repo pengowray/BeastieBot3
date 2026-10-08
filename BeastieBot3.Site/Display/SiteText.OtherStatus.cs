@@ -33,6 +33,7 @@ public static partial class SiteText {
         "BR" => "Brazil",
         "CA" => "Canada",
         "GB" => "United Kingdom",
+        OtherStatusSystems.InternationalGroup => "International",
         "NZ" => "New Zealand",
         "US" => "United States",
         OtherStatusSystems.NatureServeGroup => "Global",
@@ -56,6 +57,7 @@ public static partial class SiteText {
         OtherStatusSystems.Sara => ("Species at Risk Act", "Canada's Species at Risk Act, the federal law", false),
         OtherStatusSystems.Nztcs => ("NZTCS", "New Zealand Threat Classification System", true),
         OtherStatusSystems.Esa => ("Endangered Species Act", null, false),
+        OtherStatusSystems.Cites => ("CITES", "Convention on International Trade in Endangered Species of Wild Fauna and Flora", true),
         OtherStatusSystems.NatureServeGlobal => ("NatureServe", "NatureServe's global conservation status rank", false),
         OtherStatusSystems.NatureServeNational => ("NatureServe", "NatureServe's national conservation status rank", false),
         _ => (system, null, false),
@@ -198,6 +200,22 @@ public static partial class SiteText {
     public static string OtherStatusSalveRest(string? date) =>
         (date is null ? "." : $", downloaded on {date}.")
         + " Brazil's official list of threatened species (Portaria MMA 148/2022) can differ.";
+
+    /// The line under a CITES appendix when the listing covers the taxon as part of a higher taxon
+    /// ("family Trochilidae").
+    public static string OtherStatusListedUnder(string higherTaxon) => $"as part of {higherTaxon}";
+
+    /// The text of a CITES row's link to the taxon's page on Species+.
+    public const string OtherStatusCitesRecordLink = "Species+";
+    /// The note under the tables when they have CITES rows, in parts around the link to the Checklist,
+    /// with the citation the Checklist asks for. accessed: the date this site downloaded it.
+    public const string OtherStatusCitesSubject = "CITES listings are from the ";
+    public const string OtherStatusCitesLink = "Checklist of CITES Species";
+    public const string CitesChecklistUrl = "https://checklist.cites.org/";
+    public static string OtherStatusCitesRest(DateOnly? accessed) =>
+        accessed is { } date
+            ? $", compiled by UNEP-WCMC, downloaded on {SiteFormat.Date(date)}. Citation: UNEP-WCMC (Comps.) {date.Year}. The Checklist of CITES Species Website. CITES Secretariat, Geneva, Switzerland. Compiled by UNEP-WCMC, Cambridge, UK. Available at: http://checklist.cites.org. [Accessed {date.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture)}]."
+            : ", compiled by UNEP-WCMC.";
 
     /// The text of a JNCC row's link to JNCC's page of the designations.
     public const string OtherStatusJnccRecordLink = "JNCC";

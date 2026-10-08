@@ -171,7 +171,7 @@ public sealed partial class SiteQueries {
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT s.system, s.status, s.status_code, s.listed_name, s.population, s.source, s.source_id, s.url, s.listed_on, s.report,
-                   s.country, s.qualifier,
+                   s.country, s.qualifier, s.listed_under,
                    l.list_key, l.system, l.country, l.region, l.name, l.title, l.sort_order, l.publisher, l.licence, l.licence_url,
                    l.citation, l.url, l.version, l.fetched
             FROM other_status s
@@ -182,12 +182,12 @@ public sealed partial class SiteQueries {
         using var reader = command.ExecuteReader();
         var rows = new List<OtherStatusRow>();
         while (reader.Read()) {
-            var list = reader.IsDBNull(12) ? null : new OtherStatusListRow(reader.GetString(12), reader.GetString(13), Text(reader, 14),
-                Text(reader, 15), reader.GetString(16), Text(reader, 17), reader.GetInt32(18), Text(reader, 19), Text(reader, 20),
-                Text(reader, 21), Text(reader, 22), Text(reader, 23), Text(reader, 24), Text(reader, 25));
+            var list = reader.IsDBNull(13) ? null : new OtherStatusListRow(reader.GetString(13), reader.GetString(14), Text(reader, 15),
+                Text(reader, 16), reader.GetString(17), Text(reader, 18), reader.GetInt32(19), Text(reader, 20), Text(reader, 21),
+                Text(reader, 22), Text(reader, 23), Text(reader, 24), Text(reader, 25), Text(reader, 26));
             rows.Add(new OtherStatusRow(reader.GetString(0), reader.GetString(1), Text(reader, 2), Text(reader, 3), Text(reader, 4),
                 reader.GetString(5), reader.GetString(6), Text(reader, 7), Text(reader, 8), Text(reader, 9), Text(reader, 10),
-                Text(reader, 11), list));
+                Text(reader, 11), list, Text(reader, 12)));
         }
         return rows
             .OrderBy(r => BeastieBot3.Shared.SiteData.OtherStatusSystems.Order(r.System))

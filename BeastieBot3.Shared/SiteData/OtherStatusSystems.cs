@@ -25,6 +25,9 @@ public static class OtherStatusSystems {
     public const string Nztcs = "nz-nztcs";
     /// The United States Endangered Species Act.
     public const string Esa = "us-esa";
+    /// The appendices of CITES, the Convention on International Trade in Endangered Species of Wild Fauna
+    /// and Flora, from the Checklist of CITES Species.
+    public const string Cites = "cites";
     /// JNCC's Conservation Designations for UK Taxa: the UK, Great Britain and UK country red lists, laws
     /// and priority lists, one list per other_status_list row (list_key).
     public const string Jncc = "gb-jncc";
@@ -41,6 +44,7 @@ public static class OtherStatusSystems {
     public const string InternationalGroup = "international";
 
     public static readonly IReadOnlyList<OtherStatusSystem> All = [
+        new(Cites, InternationalGroup),
         new(Epbc, "AU"),
         new(AustralianCapitalTerritory, "AU"),
         new(NewSouthWales, "AU"),
@@ -221,6 +225,9 @@ public static class OtherStatusSources {
     public const string Salve = "salve";
     /// JNCC's Conservation Designations for UK Taxa; source_id is the taxon version key (UK Species Inventory).
     public const string Jncc = "jncc";
+    /// The Checklist of CITES Species (UNEP-WCMC); source_id is the Species+ taxon concept id of the
+    /// taxon whose listing it is (the higher taxon's, for a listing that covers the taxon as part of it).
+    public const string Cites = "cites";
 
     /// A taxon's SPRAT profile.
     public static string SpratUrl(long spratTaxonId) =>

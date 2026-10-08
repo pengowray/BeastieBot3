@@ -151,7 +151,7 @@ internal sealed record EpbcListing(long SpratTaxonId, string ListedName, string?
 /// same names.
 internal sealed record OtherStatus(string System, string Status, string? StatusCode, string? ListedName, string? Population,
     string Source, string SourceId, string? Url, string? ListedOn, string? Report = null, string? Country = null,
-    string? ListKey = null, string? Qualifier = null);
+    string? ListKey = null, string? Qualifier = null, string? ListedUnder = null);
 
 /// One row of other_status_list.
 internal sealed record OtherStatusList(string ListKey, string System, string? Country, string? Region, string Name, string? Title,
@@ -354,6 +354,12 @@ internal sealed class SiteBuildStats {
     public int NatureServeRanks;
     public int NatureServeNationalRanks;
     public int JnccDesignations;
+    public int CitesTaxa;
+    public int CitesMatched;
+    public int CitesByHigherTaxon;
+    public int CitesRows;
+    public string? CitesFetched;
+    public string? CitesCitation;
     public int JnccMatched;
     public int JnccRows;
     public int NatureServeSubnationalRanks;
