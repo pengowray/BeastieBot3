@@ -117,6 +117,7 @@ public sealed class UpdateModel : PageModel {
     public const string AddStatusColumnsField = "addcols";
     public const string AtLineEndField = "addend";
     public const string AddReferencesField = "addrefs";
+    public const string AddSummaryField = "addsummary";
     public const string ColumnHeaderField = "colhead";
     public const string ColumnTablesField = "cols";
     /// Sent with the table checkboxes, so that a form with none of them ticked means no tables. Its
@@ -248,6 +249,7 @@ public sealed class UpdateModel : PageModel {
             AddStatusColumns = On(AddStatusColumnsField),
             StatusAtLineEnd = On(AtLineEndField),
             AddReferences = On(AddReferencesField),
+            AddStatusSummary = On(AddSummaryField),
             ColumnHeader = form[ColumnHeaderField].LastOrDefault() is { } header && ColumnHeaders.Contains(header) ? header : null,
             ColumnTables = form[ColumnTablesShownField].LastOrDefault() == TextKey(text)
                 ? form[ColumnTablesField].Select(v => int.TryParse(v, out var line) ? line : -1).Where(l => l > 0).ToHashSet()
@@ -297,6 +299,8 @@ public sealed class UpdateModel : PageModel {
                 };
             }
         }
+        // Last, so the counts include the statuses changed and the taxa added above.
+        Result = IucnStatusesSummary.Apply(text, Result, Options.AddStatusSummary);
         if (ShowEpbc) {
             var ids = Result.Findings.Select(f => f.Taxon?.TaxonId).OfType<long>()
                 .Concat(Scope?.OtherCategory.Concat(Scope.Outside).Select(m => m.Taxon.TaxonId) ?? [])

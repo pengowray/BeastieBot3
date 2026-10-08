@@ -26,6 +26,7 @@ public static partial class UpdateText {
         StatusItemKind.TableRowAdded => "Table row",
         StatusItemKind.SpeciesTableRow => "Species table row",
         StatusItemKind.Citation => "{{cite iucn}}",
+        StatusItemKind.StatusSummary => "{{IUCN statuses}} box",
         _ => "Taxobox",
     };
 
@@ -91,6 +92,14 @@ public static partial class UpdateText {
             StatusNoteKind.ColumnLayout => ColumnLayout(note),
             StatusNoteKind.EmptyCellAdded => "Added an empty status cell.",
             StatusNoteKind.ColumnNotChosen => "Status column not added: the checkbox for this table is not ticked.",
+            StatusNoteKind.SummaryCountedFrom when note.Detail == "rows" => $"Counted from the {Count((int)(note.Id ?? 0))} {{{{Species table/row}}}} templates in the text, after the updates.",
+            StatusNoteKind.SummaryCountedFrom => $"Counted from the {Count((int)(note.Id ?? 0))} {{{{IUCN status}}}} templates in the text, after the updates.",
+            StatusNoteKind.SummaryChanged => $"Counts changed: {note.Detail}.",
+            StatusNoteKind.SummaryUncounted => $"Not counted: {Count((int)(note.Id ?? 0))} with a status the box has no count for.",
+            StatusNoteKind.SummaryAdded when note.Detail is { } heading => $"Added under the \"{heading}\" heading.",
+            StatusNoteKind.SummaryAdded => "Added before the first species table.",
+            StatusNoteKind.SummaryTwoOrMore => "Not changed: the text has two or more {{IUCN statuses}} boxes.",
+            StatusNoteKind.SummaryNothingToCount => "Not changed: the text has no {{Species table/row}} or {{IUCN status}} templates to count.",
             _ => note.Kind.ToString(),
         };
     }

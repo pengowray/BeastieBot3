@@ -22,7 +22,12 @@ public static partial class EditSummary {
         var added = 0;
         var columns = 0;
         var columnStatuses = 0;
+        string? summary = null;
         foreach (var finding in result.Findings.Where(f => f.Outcome == StatusOutcome.Updated)) {
+            if (finding.Kind == StatusItemKind.StatusSummary) {
+                summary = finding.Before.Length == 0 ? UpdateText.EditSummaryStatusesAdded : UpdateText.EditSummaryStatusesUpdated;
+                continue;
+            }
             if (finding.Kind == StatusItemKind.Citation) {
                 citations++;
                 continue;
@@ -49,7 +54,7 @@ public static partial class EditSummary {
                 otherItems++;
             }
         }
-        return UpdateText.EditSummary(version, changes, otherItems, citations, added, columns, columnStatuses, result.MissingAdded);
+        return UpdateText.EditSummary(version, changes, otherItems, citations, added, columns, columnStatuses, result.MissingAdded, summary);
     }
 
     /// The status code in an item's text: {{IUCN status|EN|...}}, "| status = EN",

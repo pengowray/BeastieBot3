@@ -68,6 +68,9 @@
             if (!Model.Options.AddStatusColumns && result.TablesWithoutStatus is > 0 and var tables) {
                 offers.Add((tables, UpdateText.OfferStatusColumns(tables), UpdateModel.AddStatusColumnsField, UpdateText.OfferStatusColumnsButton(tables)));
             }
+            if (!Model.Options.AddStatusSummary && result.SummaryMissing) {
+                offers.Add((1, UpdateText.OfferSummary, UpdateModel.AddSummaryField, UpdateText.OfferSummaryButton));
+            }
             if (!Model.Options.UpdateCitations && result.CountNotes(StatusNoteKind.CitationOlder) is > 0 and var cites) {
                 offers.Add((cites, UpdateText.OfferCitations(cites), UpdateModel.CitationsField, UpdateText.OfferCitationsButton));
             }
@@ -214,6 +217,7 @@
         <label><input type="checkbox" name="@UpdateModel.CitationsField" value="1" checked="@Model.Options.UpdateCitations"> @UpdateText.OptionCitations</label>
         <label><input type="checkbox" name="@UpdateModel.CiteQField" value="1" checked="@Model.Options.CiteQ"> @UpdateText.OptionCiteQ</label>
         <label><input type="checkbox" name="@UpdateModel.CommonNamesField" value="1" checked="@Model.Options.MatchCommonNames"> @UpdateText.OptionCommonNames</label>
+        <label><input type="checkbox" name="@UpdateModel.AddSummaryField" value="1" checked="@Model.Options.AddStatusSummary"> @UpdateText.OptionAddSummary</label>
         <label><input type="checkbox" name="@UpdateModel.EpbcField" value="1" checked="@Model.ShowEpbc"> @UpdateText.OptionEpbc</label>
     </fieldset>
     <fieldset class="update-options" aria-describedby="update-add-help">

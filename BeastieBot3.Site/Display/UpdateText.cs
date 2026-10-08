@@ -57,6 +57,7 @@ public static partial class UpdateText {
     public const string OptionAddReferencesHelp = "Reuses a named reference in the wikitext that already cites the latest assessment. Otherwise adds a new <ref> with {{cite iucn}}, or with {{cite Q}} when the {{cite Q}} option is ticked.";
     public const string OptionColumnHeader = "Heading for the added status column:";
     public const string ColumnChosen = "Add a status column to this table";
+    public const string OptionAddSummary = "Add an {{IUCN statuses}} box with the number of species in each category, to a list of species table rows that has none";
 
     public const string AddOptionsHelp = "The template goes after the scientific name and any authority in brackets, on list lines (* or #) that name one IUCN taxon. A column is added only to tables with one header row at the top, the same number of cells in every row, and no rowspan or colspan.";
 
@@ -85,6 +86,8 @@ public static partial class UpdateText {
     public static string OfferStatusColumns(int n) =>
         n == 1 ? "1 table lists IUCN taxa and has no status column." : $"{Count(n)} tables list IUCN taxa and have no status column.";
     public static string OfferStatusColumnsButton(int n) => n == 1 ? "Add status column" : "Add status columns";
+    public const string OfferSummary = "This list of species table rows has no {{IUCN statuses}} box.";
+    public const string OfferSummaryButton = "Add the box";
 
     public const string ResultHeading = "Result";
 
@@ -92,6 +95,8 @@ public static partial class UpdateText {
     public const string CopyEditSummaryAccessible = "Copy edit summary";
     public const string EditSummaryHelp = "A starting point for the edit summary on Wikipedia. Check it before you save.";
     public const string EditSummaryCredit = "assisted by Beastie Bot Species Status";
+    public const string EditSummaryStatusesUpdated = "{{IUCN statuses}} counts updated";
+    public const string EditSummaryStatusesAdded = "{{IUCN statuses}} added";
 
     public const string OutputLabel = "Updated wikitext (read only)";
     public const string CopyOutputAccessible = "Copy updated wikitext";

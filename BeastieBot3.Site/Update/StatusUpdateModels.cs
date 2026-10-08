@@ -64,6 +64,9 @@ public sealed record StatusUpdateOptions {
     public string? ColumnHeader { get; init; }
     /// The tables that get a status column, by the line of their header row in the text; null for all.
     public IReadOnlySet<int>? ColumnTables { get; init; }
+    /// Add an {{IUCN statuses}} box with the counts to a text that has species table rows and no box
+    /// (IucnStatusesSummary). Off: StatusUpdateResult.SummaryMissing says one could be added.
+    public bool AddStatusSummary { get; init; }
 }
 
 public enum StatusItemKind {
@@ -86,6 +89,9 @@ public enum StatusItemKind {
     TableColumnAdded,
     /// A row of a table that got a status column: the new cell.
     TableRowAdded,
+    /// {{IUCN statuses}}, the box of counts by category (IucnStatusesSummary); Before is empty when
+    /// the box was added.
+    StatusSummary,
 }
 
 public enum StatusOutcome { Updated, Current, NotUpdated }
@@ -188,6 +194,19 @@ public enum StatusNoteKind {
     EmptyCellAdded,
     /// No status column was added: the reader left the table out (StatusUpdateOptions.ColumnTables).
     ColumnNotChosen,
+    /// {{IUCN statuses}}: what the counts were made from (Detail: "rows" for {{Species table/row}},
+    /// "templates" for {{IUCN status}}; Id: how many).
+    SummaryCountedFrom,
+    /// {{IUCN statuses}}: the counts that changed (Detail: "en 6 → 7, ne 50 → 45").
+    SummaryChanged,
+    /// {{IUCN statuses}}: rows or templates (Id) with a code the box has no count for, left out.
+    SummaryUncounted,
+    /// {{IUCN statuses}} was added after the heading (Detail), or before the first species table when null.
+    SummaryAdded,
+    /// The text has two or more {{IUCN statuses}}, so none was changed.
+    SummaryTwoOrMore,
+    /// The text has nothing to count, so the {{IUCN statuses}} was not changed.
+    SummaryNothingToCount,
 }
 
 public sealed record StatusNote(StatusNoteKind Kind, string? Detail = null, long? Id = null);
@@ -214,6 +233,9 @@ public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding
     IReadOnlyList<ListMember>? Members = null) {
     /// How many missing taxa ListPlacement put into Text.
     public int MissingAdded { get; init; }
+
+    /// The text has species table rows and no {{IUCN statuses}}, and StatusUpdateOptions.AddStatusSummary is off.
+    public bool SummaryMissing { get; init; }
 
     /// How many items have a note of this kind: used to offer an option that would change them.
     public int CountNotes(StatusNoteKind kind) => Findings.Count(f => f.Notes.Any(n => n.Kind == kind));
