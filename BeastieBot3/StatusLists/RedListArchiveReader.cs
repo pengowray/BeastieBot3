@@ -65,6 +65,10 @@ internal sealed record RedListParse(IReadOnlyList<RedListTaxonRow> Taxa, IReadOn
 }
 
 internal static partial class RedListArchiveReader {
+    /// Stored with each dataset. Increase it when what the reader stores changes (canonical names,
+    /// rows left out), so the next run reads every kept archive again without downloading it.
+    public const int Version = 2;
+
     public static RedListParse Read(string zipPath, RedListDataset dataset) {
         using var zip = ZipFile.OpenRead(zipPath);
         return Read(zip, dataset);
@@ -156,6 +160,8 @@ internal static partial class RedListArchiveReader {
         if (authorship is { Length: > 0 } author && name.Length > author.Length && name.EndsWith(author, StringComparison.Ordinal)) {
             name = name[..^author.Length].Trim();
         }
+        // "Tritomaria quinquedentata(Huds.) Buch": a bracket with no space before it.
+        name = BracketAfterLetter().Replace(name, " (");
         if (name.Contains('×') || name.Contains(" x ", StringComparison.Ordinal) || name.StartsWith("x ", StringComparison.Ordinal)) {
             // A nothospecies ("Mentha × gracilis") keeps its name; a formula of two parents does not.
             return Nothospecies().Match(name) is { Success: true } hybrid
@@ -180,9 +186,12 @@ internal static partial class RedListArchiveReader {
         };
     }
 
-    // "Mentha × gracilis", "Salix x rubens Schrank": a genus, the hybrid sign and one epithet, and no
-    // second hybrid sign after it.
-    [GeneratedRegex(@"^(?<genus>[A-Z][a-z-]+)\s*(?:×|x(?=\s))\s*(?<epithet>[a-z-]{2,})(?![^×]*×)(?!\s+[a-z])")]
+    // "Mentha × gracilis", "Salix x rubens Schrank", "Geum ×heldreichii hort. ex Bergmans": a genus,
+    // the hybrid sign and one whole epithet, with no second hybrid sign and no rank marker after it.
+    [GeneratedRegex(@"(?<=\p{L})\(")]
+    private static partial Regex BracketAfterLetter();
+
+    [GeneratedRegex(@"^(?<genus>[A-Z][a-z-]+)\s*(?:×|x(?=\s))\s*(?<epithet>[a-z-]{2,})(?=\s|$)(?![^×]*×)(?!\s+(?:subsp|ssp|var|f|nothosubsp|nothovar)\.)")]
     private static partial Regex Nothospecies();
 
     internal enum RankKind { Unknown, Genus, Species, Infraspecific, Other }

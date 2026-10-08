@@ -221,7 +221,8 @@ internal sealed partial class StatusListStore : SqliteStore {
             imported_at      TEXT NOT NULL,       -- UTC "O": when its rows were last replaced
             row_count        INTEGER NOT NULL,    -- rows in red_list_taxon
             taxon_count      INTEGER NOT NULL,    -- distinct taxa in red_list_taxon
-            synonym_count    INTEGER NOT NULL     -- rows in red_list_synonym
+            synonym_count    INTEGER NOT NULL,    -- rows in red_list_synonym
+            reader_version   INTEGER NOT NULL     -- RedListArchiveReader.Version that read the rows; a newer one reads the archive again
         ) WITHOUT ROWID;
         CREATE TABLE IF NOT EXISTS red_list_taxon (
             dataset_key         TEXT NOT NULL REFERENCES red_list_dataset(dataset_key) ON DELETE CASCADE,

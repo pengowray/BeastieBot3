@@ -13,8 +13,10 @@ using Spectre.Console.Cli;
 //   3. skip the download when the registry's pubDate and the archive URL are those of the last
 //      import and its archive is still in the folder (RedListPlan.NeedsDownload);
 //   4. download the archive into <status lists folder>/red-lists/<key>-<yyyy-MM-dd>.zip (through a
-//      .part file); when its SHA-256 is the last import's, delete the new copy and keep the rows;
-//   5. read it (RedListArchiveReader) and replace the dataset's rows in one transaction.
+//      .part file); when its SHA-256 is the last import's, delete the new copy and keep the old one;
+//   5. read the archive (RedListArchiveReader) and replace the dataset's rows in one transaction,
+//      unless it is the archive last imported and was read by the same RedListArchiveReader.Version
+//      (RedListPlan.NeedsImport); a new reader version reads the kept archive again without a download.
 // A full run (no --dataset, no --limit) also deletes stored datasets the YAML no longer lists.
 // --status prints what is stored and sends no requests.
 
@@ -156,22 +158,35 @@ internal sealed class RedListsImportCommand : AsyncCommand<RedListsImportCommand
         var previous = store.GetRedListDataset(dataset.Key);
         var previousFile = previous is null ? null : Path.Combine(folder, previous.ArchiveFile);
 
-        if (!RedListPlan.NeedsDownload(previous, registry.PubDate, url, previousFile is not null && File.Exists(previousFile), force)) {
-            store.MarkRedListChecked(dataset.Key, now, registry.PubDate);
-            return $"unchanged: GBIF publication date {registry.PubDate}, imported {previous!.ImportedAtUtc:yyyy-MM-dd}";
+        var previousFileExists = previousFile is not null && File.Exists(previousFile);
+        string fileName, file, sha256;
+        long size;
+        if (!RedListPlan.NeedsDownload(previous, registry.PubDate, url, previousFileExists, force)) {
+            if (!RedListPlan.NeedsImport(previous, previous!.ArchiveSha256, force)) {
+                store.MarkRedListChecked(dataset.Key, now, registry.PubDate);
+                return $"unchanged: GBIF publication date {registry.PubDate}, imported {previous.ImportedAtUtc:yyyy-MM-dd}";
+            }
+            // Unchanged on GBIF, but stored by an older reader: read the kept archive again.
+            (fileName, file, sha256, size) = (previous.ArchiveFile, previousFile!, previous.ArchiveSha256, previous.ArchiveSize);
+            AnsiConsole.MarkupLineInterpolated($"[grey]{dataset.Key}: reading the kept archive again[/] {fileName}");
+        } else {
+            await Task.Delay(RequestGap, cancellationToken).ConfigureAwait(false);
+            fileName = $"{dataset.Key}-{now:yyyy-MM-dd}.zip";
+            file = Path.Combine(folder, fileName);
+            AnsiConsole.MarkupLineInterpolated($"[grey]{dataset.Key}: downloading[/] {url}");
+            (sha256, size) = await DownloadAsync(http, url, file + ".part", cancellationToken).ConfigureAwait(false);
+            if (previous is not null && previous.ArchiveSha256 == sha256 && previousFileExists) {
+                // The same archive as the kept one: keep the old copy, not a second one.
+                File.Delete(file + ".part");
+                (fileName, file) = (previous.ArchiveFile, previousFile!);
+                if (!RedListPlan.NeedsImport(previous, sha256, force)) {
+                    store.MarkRedListChecked(dataset.Key, now, registry.PubDate);
+                    return $"unchanged: the archive is the one imported {previous.ImportedAtUtc:yyyy-MM-dd}";
+                }
+            } else {
+                File.Move(file + ".part", file, overwrite: true);
+            }
         }
-
-        await Task.Delay(RequestGap, cancellationToken).ConfigureAwait(false);
-        var fileName = $"{dataset.Key}-{now:yyyy-MM-dd}.zip";
-        var file = Path.Combine(folder, fileName);
-        AnsiConsole.MarkupLineInterpolated($"[grey]{dataset.Key}: downloading[/] {url}");
-        var (sha256, size) = await DownloadAsync(http, url, file + ".part", cancellationToken).ConfigureAwait(false);
-        if (!force && previous is not null && previous.ArchiveSha256 == sha256 && previousFile is not null && File.Exists(previousFile)) {
-            File.Delete(file + ".part");
-            store.MarkRedListChecked(dataset.Key, now, registry.PubDate);
-            return $"unchanged: the archive is the one imported {previous.ImportedAtUtc:yyyy-MM-dd}";
-        }
-        File.Move(file + ".part", file, overwrite: true);
 
         var parse = RedListArchiveReader.Read(file, dataset);
         if (parse.Taxa.Count == 0) {
@@ -180,7 +195,7 @@ internal sealed class RedListsImportCommand : AsyncCommand<RedListsImportCommand
         var record = new RedListDatasetRecord(dataset.Key, dataset.GbifKey, registry.Title.Length > 0 ? registry.Title : dataset.Name, dataset.Name,
             dataset.NameEn, dataset.Year, dataset.Publisher, dataset.Country, dataset.Region, dataset.RegionCode, licence, dataset.Citation,
             registry.Citation, registry.Doi, registry.PubDate, url, fileName, sha256, size, dataset.Notes, now, now, parse.Taxa.Count,
-            parse.TaxaWithStatus, parse.Synonyms.Count);
+            parse.TaxaWithStatus, parse.Synonyms.Count, RedListArchiveReader.Version);
         store.ReplaceRedList(record, parse);
 
         var codes = string.Join(", ", parse.Taxa.GroupBy(t => t.ThreatStatus).OrderByDescending(g => g.Count())
@@ -227,18 +242,18 @@ internal sealed class RedListsImportCommand : AsyncCommand<RedListsImportCommand
         var stored = store is not null && store.HasRedListTables()
             ? store.RedListDatasets().ToDictionary(d => d.Key, StringComparer.Ordinal)
             : new Dictionary<string, RedListDatasetRecord>();
-        var table = new Table().Border(TableBorder.Rounded).AddColumn("List").AddColumn("Country").AddColumn("Name").AddColumn("Licence")
-            .AddColumn("Imported").AddColumn(new TableColumn("Statuses").RightAligned()).AddColumn(new TableColumn("Synonyms").RightAligned())
-            .AddColumn("GBIF date");
+        // Narrow enough for an 80-column terminal: the key names the list, and --dataset takes it.
+        var table = new Table().Border(TableBorder.Rounded).AddColumn("List").AddColumn("Country").AddColumn("Year").AddColumn("Licence")
+            .AddColumn("Imported").AddColumn(new TableColumn("Statuses").RightAligned()).AddColumn(new TableColumn("Synonyms").RightAligned());
         foreach (var dataset in manifest) {
-            var country = dataset.Region is { } region ? $"{dataset.Country} ({region})" : dataset.Country;
-            var name = dataset.Year is { } year ? $"{dataset.NameEn ?? dataset.Name} ({year})" : dataset.NameEn ?? dataset.Name;
+            var country = dataset.RegionCode ?? dataset.Country;
+            var year = dataset.Year?.ToString(CultureInfo.InvariantCulture) ?? "";
             if (stored.TryGetValue(dataset.Key, out var record)) {
-                table.AddRow(Markup.Escape(dataset.Key), Markup.Escape(country), Markup.Escape(name), Markup.Escape(record.Licence),
+                table.AddRow(Markup.Escape(dataset.Key), country, year, Markup.Escape(record.Licence),
                     record.ImportedAtUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), record.RowCount.ToString("N0", CultureInfo.InvariantCulture),
-                    record.SynonymCount.ToString("N0", CultureInfo.InvariantCulture), Markup.Escape(record.PubDate ?? ""));
+                    record.SynonymCount.ToString("N0", CultureInfo.InvariantCulture));
             } else {
-                table.AddRow(Markup.Escape(dataset.Key), Markup.Escape(country), Markup.Escape(name), Markup.Escape(dataset.Licence), "not yet", "", "", "");
+                table.AddRow(Markup.Escape(dataset.Key), country, year, Markup.Escape(dataset.Licence), "not yet", "", "");
             }
         }
         AnsiConsole.Write(table);
@@ -263,4 +278,13 @@ internal static class RedListPlan {
         || !string.Equals(previous.ArchiveUrl, archiveUrl, StringComparison.Ordinal)
         || registryPubDate is null
         || !string.Equals(previous.PubDate, registryPubDate, StringComparison.Ordinal);
+
+    /// Whether an archive with this SHA-256 is read into the store: always with --force, for a
+    /// dataset never imported, for a different archive, or when the stored rows were read by an
+    /// older RedListArchiveReader.Version.
+    public static bool NeedsImport(RedListDatasetRecord? previous, string sha256, bool force) =>
+        force
+        || previous is null
+        || !string.Equals(previous.ArchiveSha256, sha256, StringComparison.Ordinal)
+        || previous.ReaderVersion != RedListArchiveReader.Version;
 }

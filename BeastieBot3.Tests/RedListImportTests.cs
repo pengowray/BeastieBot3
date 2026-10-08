@@ -202,11 +202,16 @@ public sealed class RedListImportTests {
     [InlineData("Abies alba Mill.", null, null, "Abies alba")]
     [InlineData("Mentha × gracilis", null, "species", "Mentha × gracilis")]
     [InlineData("Salix x rubens Schrank", null, null, "Salix × rubens")]
+    [InlineData("Geum ×heldreichii hort. ex Bergmans", null, null, "Geum × heldreichii")]
+    [InlineData("Salix × rubens nothosubsp. basfordiana", null, null, null)]
     [InlineData("Elytrigia repens × Hordeum secalinum", null, "HYBRID", null)]
     [InlineData("Phocoena phocoena (Baltic population)", null, "unranked", null)]
     [InlineData("Sphagnum sect. Sphagnum", null, "SECTION", null)]
     [InlineData("Hamatocaulis vernicosus, southern cryptic species", null, null, null)]
     [InlineData("Atelopus", null, "genus", "Atelopus")]
+    [InlineData("Tritomaria quinquedentata(Huds.) Buch", null, "Species", "Tritomaria quinquedentata")]
+    [InlineData("Oenothera biennis-Gruppe", null, null, null)]
+    [InlineData("Rubus sect. Rubus", null, null, null)]
     public void Canonical_name(string name, string? authorship, string? rank, string? canonical) =>
         Assert.Equal(canonical, RedListArchiveReader.CanonicalName(name, authorship, rank));
 
@@ -245,7 +250,7 @@ public sealed class RedListImportTests {
     private static RedListDatasetRecord Record(RedListParse parse, string key = "xx-test", string? pubDate = "2026-04-30", string sha = "aa") =>
         new(key, "00000000-0000-0000-0000-000000000001", "GBIF title", "Test list", "Test list in English", 2026, "Publisher", "XX", null, null,
             "CC0 1.0", "Citation", "GBIF citation", "10.1/x", pubDate, "https://example.org/archive.zip", key + "-2026-10-09.zip", sha, 1234,
-            null, Now, Now, parse.Taxa.Count, parse.TaxaWithStatus, parse.Synonyms.Count);
+            null, Now, Now, parse.Taxa.Count, parse.TaxaWithStatus, parse.Synonyms.Count, RedListArchiveReader.Version);
 
     [Fact]
     public void Archive_is_downloaded_again_only_when_something_changed() {
@@ -258,6 +263,16 @@ public sealed class RedListImportTests {
         Assert.True(RedListPlan.NeedsDownload(previous, "2026-04-30", url, previousFileExists: false, force: false));
         Assert.True(RedListPlan.NeedsDownload(previous, "2026-04-30", "https://example.org/other.zip", previousFileExists: true, force: false));
         Assert.True(RedListPlan.NeedsDownload(null, "2026-04-30", url, previousFileExists: false, force: false));
+    }
+
+    [Fact]
+    public void Archive_is_read_again_when_it_or_the_reader_changed() {
+        var previous = Record(Parse(), sha: "aa");
+        Assert.False(RedListPlan.NeedsImport(previous, "aa", force: false));
+        Assert.True(RedListPlan.NeedsImport(previous, "aa", force: true));
+        Assert.True(RedListPlan.NeedsImport(previous, "bb", force: false));
+        Assert.True(RedListPlan.NeedsImport(previous with { ReaderVersion = RedListArchiveReader.Version - 1 }, "aa", force: false));
+        Assert.True(RedListPlan.NeedsImport(null, "aa", force: false));
     }
 
     // ---- the store ----
@@ -277,7 +292,7 @@ public sealed class RedListImportTests {
         Assert.Equal(1 + 4, store.CountRedListTaxa());
         var stored = Assert.IsType<RedListDatasetRecord>(store.GetRedListDataset("xx-test"));
         Assert.Equal(("bb", 1L, 1L, 0L), (stored.ArchiveSha256, stored.RowCount, stored.TaxonCount, stored.SynonymCount));
-        Assert.Equal(new[] { ("LC", "LC", 1L) }, store.RedListStatusCounts("xx-test"));
+        Assert.Equal(new (string, string?, long)[] { ("LC", "LC", 1L) }, store.RedListStatusCounts("xx-test"));
 
         var source = Assert.Single(store.Sources(), s => s.Source == "redlist:xx-test");
         Assert.Equal(("Test list in English", "https://www.gbif.org/dataset/00000000-0000-0000-0000-000000000001", "CC0 1.0", 1L),

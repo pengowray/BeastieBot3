@@ -33,13 +33,14 @@ internal sealed record RedListDatasetRecord(
     DateTime ImportedAtUtc,
     long RowCount,
     long TaxonCount,
-    long SynonymCount);
+    long SynonymCount,
+    int ReaderVersion);
 
 internal sealed partial class StatusListStore {
     private const string DatasetColumns = """
         dataset_key, gbif_dataset_key, title, list_name, list_name_en, list_year, publisher, country_code, region, region_code, licence,
         citation, gbif_citation, doi, pub_date, archive_url, archive_file, archive_sha256, archive_size, notes, fetched_at, imported_at,
-        row_count, taxon_count, synonym_count
+        row_count, taxon_count, synonym_count, reader_version
         """;
 
     public long CountRedListTaxa() => Scalar("SELECT COUNT(*) FROM red_list_taxon");
@@ -180,7 +181,7 @@ internal sealed partial class StatusListStore {
         command.CommandText = $"""
             INSERT INTO red_list_dataset({DatasetColumns})
             VALUES (@key, @gbif, @title, @name, @name_en, @year, @publisher, @country, @region, @region_code, @licence, @citation,
-                @gbif_citation, @doi, @pub, @url, @file, @sha, @size, @notes, @fetched, @imported, @rows, @taxa, @synonyms)
+                @gbif_citation, @doi, @pub, @url, @file, @sha, @size, @notes, @fetched, @imported, @rows, @taxa, @synonyms, @reader)
             ON CONFLICT(dataset_key) DO UPDATE SET gbif_dataset_key = excluded.gbif_dataset_key, title = excluded.title,
                 list_name = excluded.list_name, list_name_en = excluded.list_name_en, list_year = excluded.list_year,
                 publisher = excluded.publisher, country_code = excluded.country_code, region = excluded.region,
@@ -188,7 +189,7 @@ internal sealed partial class StatusListStore {
                 gbif_citation = excluded.gbif_citation, doi = excluded.doi, pub_date = excluded.pub_date, archive_url = excluded.archive_url,
                 archive_file = excluded.archive_file, archive_sha256 = excluded.archive_sha256, archive_size = excluded.archive_size,
                 notes = excluded.notes, fetched_at = excluded.fetched_at, imported_at = excluded.imported_at, row_count = excluded.row_count,
-                taxon_count = excluded.taxon_count, synonym_count = excluded.synonym_count
+                taxon_count = excluded.taxon_count, synonym_count = excluded.synonym_count, reader_version = excluded.reader_version
             """;
         static object Value(object? v) => v ?? DBNull.Value;
         command.Parameters.AddWithValue("@key", d.Key);
@@ -216,6 +217,7 @@ internal sealed partial class StatusListStore {
         command.Parameters.AddWithValue("@rows", d.RowCount);
         command.Parameters.AddWithValue("@taxa", d.TaxonCount);
         command.Parameters.AddWithValue("@synonyms", d.SynonymCount);
+        command.Parameters.AddWithValue("@reader", d.ReaderVersion);
         command.ExecuteNonQuery();
     }
 
@@ -234,7 +236,7 @@ internal sealed partial class StatusListStore {
                 reader.GetString(11), Text(12), Text(13), Text(14), reader.GetString(15), reader.GetString(16), reader.GetString(17),
                 reader.GetInt64(18), Text(19), Infrastructure.StoredUtc.Parse(reader.GetString(20)) ?? DateTime.MinValue,
                 Infrastructure.StoredUtc.Parse(reader.GetString(21)) ?? DateTime.MinValue, reader.GetInt64(22), reader.GetInt64(23),
-                reader.GetInt64(24)));
+                reader.GetInt64(24), reader.GetInt32(25)));
         }
         return list;
     }
