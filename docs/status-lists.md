@@ -8,10 +8,11 @@ The status lists store holds conservation statuses from systems other than the I
 - SALVE (salve.icmbio.gov.br), ICMBio's system for the national assessments of the extinction risk of Brazil's fauna: the current assessment of each species and subspecies (`statuses salve-import`).
 - JNCC's Conservation Designations for UK Taxa (Joint Nature Conservation Committee, Open Government Licence v3.0): one row per taxon and designation, for the GB and England red lists, Birds of Conservation Concern, Nationally Rare and Scarce, the UK and country priority species lists, the Wildlife and Countryside Act and other UK legislation, and the international conventions and EU directives as they apply to UK taxa (`statuses jncc-import`).
 - The Checklist of CITES Species (checklist.cites.org, compiled by UNEP-WCMC for the CITES Secretariat): the current CITES Appendix listings of every taxon in the Appendices, with the listings each taxon inherits from a higher taxon (`statuses cites-import`).
+- The Red List of Japan's Ministry of the Environment (環境省, Public Data License 1.0): one row per taxon or threatened local population, from the 5th Red List (birds, reptiles, amphibians, vascular plants, bryophytes, algae, lichens, fungi) and the Red List 2020 (mammals, brackish and freshwater fishes, insects, molluscs, other invertebrates) (`statuses japan-import`).
 
 Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a comment on every column.
 
-The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-import` and `cites-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete), as `<stem>-<yyyy-MM-dd>.<extension>` or, when the spec has `FindFileName`, under the name the source gives its file. It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. A spec's `SourceForFile` changes the `status_source` row for the file imported (JNCC uses it for the file's URL and the year in its attribution). The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs` and `StatusListStore.Jncc.cs`.
+The six imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-import`, `cites-import` and `japan-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete), as `<stem>-<yyyy-MM-dd>.<extension>` or, when the spec has `FindFileName`, under the name the source gives its file. A source of several files (`ImportsFolder`: Japan's nine files) is kept as a folder, `<stem>-<yyyy-MM-dd>`, and its command names a kept folder with `--dir`. It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. A spec's `SourceForFile` changes the `status_source` row for the file imported (JNCC uses it for the file's URL and the year in its attribution). The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs`, `StatusListStore.Jncc.cs`, `StatusListStore.Cites.cs` and `StatusListStore.Japan.cs`.
 
 ## Files
 
@@ -24,7 +25,7 @@ The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-
 
 | Table | One row per |
 | --- | --- |
-| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, `jncc`, `cites`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
+| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, `jncc`, `cites`, `japan`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
 | `status_sync_state` | key of the NatureServe download's progress (`natureserve_pass_*`, `natureserve_completed*`) |
 | `natureserve_species` | NatureServe record (`element_global_id`): a species, subspecies, variety or population |
 | `natureserve_synonym` | synonym NatureServe lists for a record |
@@ -40,6 +41,7 @@ The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-
 | `cites_listing` | current CITES listing of a taxon (`taxon_concept_id`, `listing_change_id`): its own, or inherited from a higher taxon |
 | `cites_note` | long note of the CITES listings (a full note, the text of an annotation such as #4), stored once and referred to by id |
 | `cites_synonym` | synonym the Checklist gives for a taxon, with and without its author |
+| `japan_listing` | taxon or threatened local population in the latest Red List of Japan's Ministry of the Environment for its group (`row_id`, the row's place in the import) |
 
 ## NatureServe Explorer: `statuses natureserve-fetch`
 
@@ -477,6 +479,143 @@ A full download took 44 requests and 14 minutes on 2026-10-08, and no request ha
 ### The endpoint may change
 
 The command uses the endpoint that the Checklist's web app uses, not a published API, so UNEP-WCMC can change its parameters or its answers without notice. The download fails, and the store is not changed, when a page is not JSON, when `total_cnt` changes during the download, or when the rows do not have `total_cnt` different taxon ids. A renamed field would show only as missing values, so compare the counts that the command prints after a run with the counts above.
+
+## Japan's Red List: `statuses japan-import`
+
+The Ministry of the Environment of Japan (環境省) publishes the national Red List for thirteen groups. It is revising the list group by group: the 5th Red List (環境省第５次レッドリスト) has replaced the Red List 2020 (環境省レッドリスト2020) for eight groups so far, and the Red List 2020 is still the latest list for the other five. The command stores the latest list of each group, one row per taxon or threatened local population, in `japan_listing`.
+
+Code: `JapanImportCommand.cs`, `JapanRedList.cs` (the groups, their files and the category codes), `JapanRedListCsv.cs`, `JapanRedList2020Pdf.cs`, `StatusListStore.Japan.cs`.
+
+### Sources
+
+| Group (`group_key`) | Japanese name | Latest list | File | Rows |
+| --- | --- | --- | --- | ---: |
+| Mammals (`mammals`) | 哺乳類 | Red List 2020 | `900515981.pdf` | 89 |
+| Birds (`birds`) | 鳥類 | 5th Red List, 2026 | `redlist2026_birds.csv` | 170 |
+| Reptiles (`reptiles`) | 爬虫類 | 5th Red List, 2026 | `redlist2026_reptiles.csv` | 63 |
+| Amphibians (`amphibians`) | 両生類 | 5th Red List, 2026 | `redlist2026_amphibian.csv` | 77 |
+| Brackish and freshwater fishes (`fishes`) | 汽水・淡水魚類 | Red List 2020 | `900515981.pdf` | 260 |
+| Insects (`insects`) | 昆虫類 | Red List 2020 | `900515981.pdf` | 877 |
+| Molluscs (`molluscs`) | 貝類 | Red List 2020 | `900515981.pdf` | 1,190 |
+| Other invertebrates (`other-invertebrates`) | その他無脊椎動物 | Red List 2020 | `900515981.pdf` | 152 |
+| Vascular plants (`vascular-plants`) | 維管束植物 | 5th Red List, 2025 | `redlist2025_ikansoku.csv` | 2,222 |
+| Bryophytes (`bryophytes`) | 蘚苔類 | 5th Red List, 2025 | `redlist2025_sentairui.csv` | 289 |
+| Algae (`algae`) | 藻類 | 5th Red List, 2025 | `redlist2025_sorui.csv` | 178 |
+| Lichens (`lichens`) | 地衣類 | 5th Red List, 2025 | `redlist2025_chiirui.csv` | 153 |
+| Fungi (`fungi`) | 菌類 | 5th Red List, 2025 | `redlist2025_kinrui.csv` | 110 |
+
+- The 5th Red List's CSV files are at `https://ikilog.biodic.go.jp/rdbdata/files/redlist2026/<file>` (birds, reptiles, amphibians) and `.../redlist2025/<file>` (the other five), on the site of the Ministry's Biodiversity Center of Japan. The e-Gov data portal lists them as the dataset "レッドリスト/レッドデータブック_第５次レッドリスト" (https://data.e-gov.go.jp/data/dataset/env_20260420_1111, added 2026-04-20). On 2026-10-08 the ikilog site showed a maintenance page, but every file URL answered with the file (HTTP 200, `text/csv`).
+- The Red List 2020 is only a PDF: https://www.env.go.jp/content/900515981.pdf (131 pages, "別添資料３" of the Ministry's announcement of the Red List 2020). It has every group of 2020; the import keeps its rows of the five groups that the 5th Red List does not cover yet. The Ministry's Red List page is https://www.env.go.jp/nature/kisho/hozen/redlist/index.html. Its press releases for the 5th Red List link PDF versions of the lists (with list numbers such as VP0001 for the plants), which the import does not use.
+- When the Ministry publishes the 5th Red List of the other groups, add their CSV files to `JapanRedList.Groups` and the PDF stops being needed.
+
+### Terms and citation
+
+The Ministry's terms of use (https://www.env.go.jp/mail.html, "利用規約・免責事項・著作権") apply the Public Data License (Version 1.0) (PDL1.0, https://www.digital.go.jp/resources/open_data/public_data_license_v1.0), Japan's government open data licence, which is compatible with CC BY 4.0. PDL1.0 asks for the source to be named (the Ministry's example: 出典：「○○動向調査」（環境省）（URL）) and, when the content is edited, for a separate statement that it was edited and by whom, without presenting the edited version as the government's (example: 「○○動向調査」（環境省）（URL）を加工して作成). The e-Gov portal's API gave no licence for the dataset on 2026-10-09 (`license_id` empty), so the licence stored is the Ministry's.
+
+The `japan` row of `status_source` has the title "Red List of the Ministry of the Environment, Japan (環境省レッドリスト)", the URL of the Ministry's Red List page, the licence "Public Data License (Version 1.0) (PDL1.0)", the folder imported as `version`, and this citation, which the site shows with the download date (each row's `list_version` and `list_year` say which edition the row comes from):
+
+> Source: Red List 2020 (環境省レッドリスト2020) and 5th Red List (環境省第５次レッドリスト), Ministry of the Environment, Japan. The lists are used under the Public Data License (Version 1.0). Beastie Bot Species Status edited them: it converted the categories to letter codes and matched the names to species on this site. 出典：「環境省レッドリスト2020」（環境省）（https://www.env.go.jp/content/900515981.pdf）及び「環境省第５次レッドリスト」（環境省）（https://ikilog.biodic.go.jp/）を加工してBeastie Bot Species Statusが作成
+
+### The download
+
+The command downloads the eight CSV files and the PDF, one request each, 1 second apart, into a folder `japan-redlist-<yyyy-MM-dd>` in the status lists folder, under the names in their URLs (1.2 MB in all). A file that is already in the folder is read again and not downloaded again, so a run that stopped on a failed download carries on from the next file. A failed download names the URL and the HTTP status, and an answer that is a web page (`text/html`, as a site under maintenance may give) is refused, never saved under the file's name. When a file has moved, save it by hand in the folder under the name in the table above and run the command with `--dir <folder>`.
+
+`--dir` imports a kept folder. The import needs all nine files, because it replaces every stored row of Japan's Red List; a folder without one of them is refused, and the store is not changed.
+
+### The CSV files
+
+The files do not share an encoding: the files of April 2026 for vascular plants, bryophytes, algae and fungi are Shift_JIS, and those for birds, reptiles, amphibians and lichens are UTF-8 with a byte order mark. `JapanRedListCsv.Decode` reads a file as UTF-8 when it starts with a byte order mark or is valid UTF-8, else as Shift_JIS (code page 932, from .NET's `CodePagesEncodingProvider`).
+
+Two layouts:
+
+- Birds, reptiles and amphibians: 178 columns under three heading rows. The first row numbers the columns. The second names the block each column is in: `5thRL`, then `RL2020`, `RL2019`, `RL2018`, `RL2017`, `RL2015`, `4thRL`, `3rdRL`, `2ndRL` and `1stRL` (the names and categories each earlier list gave), then habitat (生息・生育環境区分), region (国土地域区分) and threat (存続を脅かす要因) blocks of 0/1 flags and free text. The third has the column names. The reader takes the columns of the `5thRL` block only: 掲載No. (`list_number`, BI0001), 分科会名 (the committee, 爬虫類・両生類 for both reptiles and amphibians, so the group comes from the file), カテゴリーJPN (`category_ja`), カテゴリーENG (EX, EW, CR, EN, VU, NT, DD, LP), 目名 and 科名 (order and family, `higher_taxa`), 和名, 学名 and 判定基準 (`criteria`: IUCN-style criteria such as B2ab, or the Ministry's numbered qualitative criteria ①②③④). The two category columns must give the same category.
+- Vascular plants, bryophytes, algae, lichens and fungi: one heading row, カテゴリー (with the code in brackets: 絶滅危惧ⅠＡ類（CR）), 分類群 (the group), 和名 and 学名.
+
+"－" (full-width hyphen-minus) and "―" (horizontal bar) mean "none" in every column.
+
+### The Red List 2020 PDF
+
+`JapanRedList2020Pdf` reads the PDF with PdfPig through `PdfLines` (the summary tables' line reader), which gives each line's words with their x positions. A group starts with its title ("【哺乳類】環境省レッドリスト2020"), and a category with a heading that states the number of rows under it ("●絶滅危惧IA類（CR） 12種", or "26集団", populations, under LP; "―" when there are none). Each page has a running header ("別添資料３", "【哺乳類】") and a footer ("5 / 131 ページ"), which are skipped. Each row has these columns:
+
+- insects: the order (コウチュウ目), then the Japanese name;
+- other invertebrates: the phylum, class and order (節足動物門 甲殻綱 エビ目), then the Japanese name;
+- the other groups: the Japanese name;
+- then the scientific name without authors, subspecies as trinomials ("Prionailurus bengalensis euptilurus"), undescribed species with "sp." and a letter or number ("Assiminea sp. D", "Pungitius sp. 1").
+
+The scientific name's column starts where the heading's count starts (0.2 to 0.5 points to its left), so every word that starts at or after that x, less 3 points, is part of the scientific name. A row whose scientific name has Japanese letters in it, does not start with a letter or is missing, or that has no Japanese name, is not stored and the command lists it. Words before the name that end in 門, 綱 or 目 are the classification (`higher_taxa`). pdftotext's `-layout` mode puts two names on the line above or below their row (オキナワキムラグモ（広義）, アユミコケムシ); PdfLines puts them on their row.
+
+On 2026-10-08 the parser read 5,811 rows under the 103 category headings of all thirteen groups, the number the headings state, and 2,568 rows under the 41 headings of the five groups the import keeps (mammals 89, fishes 260, insects 877, molluscs 1,190, other invertebrates 152), again the number the headings state. No line was left unread. After every import the command prints the two numbers for the five groups it keeps, and a line for each of their headings where the numbers differ. Spot checks: the LP row "房総半島のシロバネカワトンボ（f. edai）を含むアサヒナカワトンボ" (a Japanese name with Latin letters in it) is one row of Mnais pruinosa; the PDF itself misprints "Haemaphysalis pentalagi" as "Haemaphy salispentalagi" (page 62, stored as printed) and, in the birds section that the import does not keep, "Histrionicus histrionicus" as "Histrionicus histrionicu".
+
+### Categories
+
+| `category` | Japanese (as the lists write it) | Meaning |
+| --- | --- | --- |
+| EX | 絶滅 | Extinct |
+| EW | 野生絶滅 | Extinct in the Wild |
+| CR | 絶滅危惧IA類 | Critically Endangered (threatened category IA) |
+| EN | 絶滅危惧IB類 | Endangered (threatened category IB) |
+| CR+EN | 絶滅危惧I類 | Threatened category I, not split into IA and IB: Critically Endangered or Endangered |
+| VU | 絶滅危惧II類 | Vulnerable (threatened category II) |
+| NT | 準絶滅危惧 | Near Threatened |
+| DD | 情報不足 | Data Deficient |
+| LP | 絶滅のおそれのある地域個体群 | Threatened local population: a population of the taxon in one region of Japan, not the whole taxon |
+
+`JapanRedListCategory.Code` reads every form the lists write: the plant CSVs use Roman numerals and a full-width letter (絶滅危惧ⅠＡ類（CR）, but 絶滅危惧ⅠB類（EN）), the animal CSVs ASCII (絶滅危惧IA類) with the code in a column of its own, and the PDF's headings ASCII with the code in brackets (絶滅危惧I類（CR+EN）, 情報不足 （DD）). It normalises the text (NFKC, spaces removed), and when a Japanese name and a code in brackets are both given they must agree. `category_ja` keeps the category as written.
+
+The 5th Red List splits 絶滅危惧I類 into IA and IB for every taxon. The Red List 2020 does not for some groups: molluscs have CR 39, EN 28 and CR+EN 234; other invertebrates EN 2 and CR+EN 20 (and in the groups the import takes from the CSV files instead, bryophytes, algae, lichens and fungi used CR+EN in 2020).
+
+### Columns of `japan_listing`
+
+| Column | What it holds |
+| --- | --- |
+| `row_id` | the row's place in the import: the groups in the Ministry's order (mammals first, fungi last), then the rows in their file's order; it changes when a list changes |
+| `group_key`, `group_en`, `group_ja` | the group: key, English name, Japanese name as the list writes it |
+| `kingdom` | IUCN's spelling, from the group: ANIMALIA; PLANTAE (vascular plants, bryophytes); FUNGI (lichens, fungi); NULL for algae, which IUCN puts in more than one kingdom |
+| `list_version`, `list_year` | 'Red List 2020' and 2020, or '5th Red List' and 2025 or 2026 |
+| `category`, `category_ja` | the code (table above) and the category as written |
+| `japanese_name` | 和名 as written; for an LP row, the place and the name (九州地方のカワネズミ) |
+| `scientific_name` | 学名 as written, without authors; full-width letters and punctuation made ASCII (NFKC: "Utricularia ｘ japonica" is stored as "Utricularia x japonica") and spaces collapsed; letters with diacritics kept ("Cladonia koyaënsis") |
+| `population` | LP rows: the place, `japanese_name` before its last の (九州地方; 本州の太平洋側湖沼系群 for 本州の太平洋側湖沼系群のニシン) |
+| `higher_taxa` | as written: order and family in the animal CSVs (カモ目 カモ科), the order for Red List 2020 insects (コウチュウ目), phylum, class and order for Red List 2020 other invertebrates (節足動物門 甲殻綱 エビ目); NULL for the other groups |
+| `criteria` | 判定基準 of the animal CSVs as written (B2ab, A2 C1, ①②, "A2 ＋付加的事情"); NULL for the other groups |
+| `list_number` | 掲載No. of the animal CSVs (BI0001, RE0044, AM0001); NULL for the other groups |
+| `source_file`, `source_url` | the file the row was read from and its URL |
+| `source_page`, `source_line` | PDF rows: the page and the line's number on it (top to bottom, header included); CSV rows: no page, and the row's number in the file (heading rows included) |
+
+The import of 2026-10-08: 5,830 rows, 5,772 taxa and 58 threatened local populations.
+
+| Group | EX | EW | CR | EN | CR+EN | VU | NT | DD | LP | Rows |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Mammals (2020) | 7 | 0 | 12 | 13 | 0 | 9 | 17 | 5 | 26 | 89 |
+| Birds (2026) | 14 | 0 | 23 | 39 | 0 | 46 | 30 | 18 | 0 | 170 |
+| Reptiles (2026) | 0 | 0 | 6 | 13 | 0 | 17 | 18 | 7 | 2 | 63 |
+| Amphibians (2026) | 0 | 0 | 7 | 31 | 0 | 22 | 15 | 2 | 0 | 77 |
+| Brackish and freshwater fishes (2020) | 3 | 1 | 71 | 54 | 0 | 44 | 35 | 37 | 15 | 260 |
+| Insects (2020) | 4 | 0 | 75 | 107 | 0 | 185 | 351 | 153 | 2 | 877 |
+| Molluscs (2020) | 19 | 0 | 39 | 28 | 234 | 328 | 440 | 89 | 13 | 1,190 |
+| Other invertebrates (2020) | 1 | 0 | 0 | 2 | 20 | 43 | 42 | 44 | 0 | 152 |
+| Vascular plants (2025) | 26 | 10 | 539 | 526 | 0 | 700 | 377 | 44 | 0 | 2,222 |
+| Bryophytes (2025) | 4 | 0 | 25 | 73 | 0 | 71 | 41 | 75 | 0 | 289 |
+| Algae (2025) | 4 | 1 | 22 | 40 | 0 | 17 | 26 | 68 | 0 | 178 |
+| Lichens (2025) | 3 | 0 | 6 | 28 | 0 | 3 | 14 | 99 | 0 | 153 |
+| Fungi (2025) | 20 | 0 | 2 | 8 | 0 | 3 | 8 | 69 | 0 | 110 |
+| All | 105 | 12 | 827 | 962 | 254 | 1,488 | 1,414 | 710 | 58 | 5,830 |
+
+Names: 507 rows are animal trinomials (subspecies without a rank word), 611 have "var.", "subsp." or "f.", 11 are hybrids with "x", and 142 are undescribed or unnamed taxa with "sp." or "gen. & sp." ("Marginellidae gen. &. sp.", "Stereophaedusa sp. (Sm)"). Scientific names do not repeat, except among LP rows: the 58 LP rows name 44 taxa (mammals: 26 populations of 12 taxa, such as five populations of Ursus thibetanus japonicus), and in the 2026-10-08 lists no taxon with an LP row also has a row for the whole taxon.
+
+### What is not stored
+
+- the habitat, region and threat columns of the animal CSVs, and their free text;
+- the earlier lists' names and categories in the animal CSVs (Red List 2020 back to the 1st Red List);
+- the Red List 2020's rows of the groups the 5th Red List now covers, and the authors in its plant sections;
+- 分科会名 and 分類群 (the group comes from the file);
+- the Red Data Books (the Ministry's descriptions of each taxon).
+
+### Showing it on the site
+
+- `category` is a code; the Japanese category is in `category_ja`, and the English meanings are in the table above. Show CR+EN as Critically Endangered or Endangered, not as one of the two.
+- An LP row is a threatened local population, not a status of the whole taxon: show it as a threatened local population in the place `population` names (in Japanese; the list gives no English name for the place), of the taxon in `scientific_name`.
+- `list_version` and `list_year` say which edition a row comes from: the Red List 2020 groups are five or six years older than the 5th Red List groups.
 
 ## Web UI
 

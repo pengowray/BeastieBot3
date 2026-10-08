@@ -13,8 +13,9 @@ using CsvHelper.Configuration;
 //     habitat columns, the region columns and the threat columns are left out;
 //   - vascular plants, bryophytes, algae, lichens and fungi (redlist2025_*.csv): one heading row,
 //     カテゴリー ("絶滅危惧ⅠＡ類（CR）"), 分類群 (the group), 和名 and 学名.
-// The files do not share an encoding: five are Shift_JIS, three are UTF-8 with a byte order mark
-// (lichens, birds, reptiles and amphibians in April 2026), so each is decoded by what it holds.
+// The files do not share an encoding: in April 2026 the vascular plant, bryophyte, algae and fungi
+// files were Shift_JIS, and the bird, reptile, amphibian and lichen files UTF-8 with a byte order
+// mark, so each is decoded by what it holds.
 
 namespace BeastieBot3.StatusLists;
 
