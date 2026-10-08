@@ -175,6 +175,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
             + "Available https://explorer.natureserve.org/. (Accessed: 8 October 2026).", text);
         Assert.Contains("Public domain (work of the U.S. federal government)", text);
         Assert.Contains("NZTCS: Department of Conservation. New Zealand Threat Classification System database. Accessed 8 October 2026.", text);
+        Assert.Contains("SALVE: ICMBio, 2026. Sistema de Avaliação do Risco de Extinção da Biodiversidade – SALVE. Disponível em: https://salve.icmbio.gov.br/. Acesso em: 08 de out. de 2026.", text);
         // The source code.
         Assert.Contains("<a href=\"https://github.com/pengowray/BeastieBot3\">pengowray/BeastieBot3</a>", html);
         Assert.Contains("U.S. Fish and Wildlife Service. Environmental Conservation Online System (ECOS), listed species. Accessed 7 October 2026.", text);

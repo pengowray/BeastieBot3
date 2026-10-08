@@ -81,13 +81,14 @@ public sealed record PublicSiteState {
     /// When the state was read, for the age of the last pass.
     public DateTime ReadAtUtc { get; init; } = DateTime.UtcNow;
 
-    // --- The status lists store (`statuses natureserve-fetch`, `statuses ecos-import`, `statuses nztcs-import`) ---
+    // --- The status lists store (`statuses natureserve-fetch`, `statuses ecos-import`, `statuses nztcs-import`, `statuses salve-import`) ---
     public string? StatusListsPath { get; init; }
-    /// The NatureServe, ECOS and NZTCS rows of status_source: when each last finished, and how many rows
+    /// The NatureServe, ECOS, NZTCS and SALVE rows of status_source: when each last finished, and how many rows
     /// the store holds. Null when the source has never finished.
     public StatusListSourceState? NatureServe { get; init; }
     public StatusListSourceState? Ecos { get; init; }
     public StatusListSourceState? Nztcs { get; init; }
+    public StatusListSourceState? Salve { get; init; }
     /// When the NatureServe download under way started; null when none is under way.
     public DateTime? NatureServePassStartedUtc { get; init; }
     /// How many records the download under way has stored, and how many NatureServe said it has.
@@ -259,10 +260,11 @@ public static class PublicSiteStateReader {
         try {
             using var conn = OpenReadOnly(path!);
             using (var cmd = conn.CreateCommand()) {
-                cmd.CommandText = "SELECT source, fetched_at, row_count FROM status_source WHERE source IN (@natureserve, @ecos, @nztcs)";
+                cmd.CommandText = "SELECT source, fetched_at, row_count FROM status_source WHERE source IN (@natureserve, @ecos, @nztcs, @salve)";
                 cmd.Parameters.AddWithValue("@natureserve", StatusLists.StatusSources.NatureServe);
                 cmd.Parameters.AddWithValue("@ecos", StatusLists.StatusSources.Ecos);
                 cmd.Parameters.AddWithValue("@nztcs", StatusLists.StatusSources.Nztcs);
+                cmd.Parameters.AddWithValue("@salve", StatusLists.StatusSources.Salve);
                 cmd.CommandTimeout = 5;
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read()) {
@@ -271,6 +273,7 @@ public static class PublicSiteStateReader {
                     state = reader.GetString(0) switch {
                         StatusLists.StatusSources.NatureServe => state with { NatureServe = source },
                         StatusLists.StatusSources.Ecos => state with { Ecos = source },
+                        StatusLists.StatusSources.Salve => state with { Salve = source },
                         _ => state with { Nztcs = source },
                     };
                 }

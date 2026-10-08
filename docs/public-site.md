@@ -228,6 +228,11 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   gives what the rounded rank means and which part of the rank that is
   (`SiteText.NatureServeRankMeaning`): "Vulnerable (rounded rank G3)" for G3G4, "Imperiled
   (subspecies rank T2)" for G5T2.
+- `br-salve` rows: each current SALVE assessment goes to the animal taxon with its name, else the
+  one animal taxon whose IUCN synonyms include it; one per taxon. `status` is the category in
+  English (`OtherStatusSystems.SalveLabel`; CR with SALVE's flag is "Critically Endangered (Possibly
+  Extinct)"), `status_code` the code, `listed_on` the end of the assessment (the Brazil table heads
+  it "Assessed"), `url` the assessment's DOI, else the PDF of its sheet.
 - `nz-nztcs` rows: each current NZTCS assessment with a scientific name and a status other than
   "Not assessed" goes to the one taxon with that name in any kingdom (NZTCS gives none), else the
   one taxon whose IUCN synonyms include it; one assessment per taxon. `status` is the category and

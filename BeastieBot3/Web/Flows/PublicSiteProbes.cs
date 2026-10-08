@@ -24,6 +24,7 @@ public static class PublicSiteProbes {
     public const string NatureServe = "site-natureserve";
     public const string Ecos = "site-ecos";
     public const string Nztcs = "site-nztcs";
+    public const string Salve = "site-salve";
 
     /// The age after which the workflow asks for a new pass of `wikidata sweep-taxa`; the step's
     /// command passes the same number as --refresh-days.
@@ -33,7 +34,7 @@ public static class PublicSiteProbes {
     /// NatureServe step's command passes the same number as --refresh-days.
     public const int StatusListsRefreshDays = 30;
 
-    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs;
+    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs or Salve;
 
     public static FlowProbeResult? Evaluate(string probe, PublicSiteState s) => probe switch {
         Gbif => GbifStep(s),
@@ -44,6 +45,7 @@ public static class PublicSiteProbes {
         NatureServe => NatureServeStep(s),
         Ecos => EcosStep(s),
         Nztcs => NztcsStep(s),
+        Salve => SalveStep(s),
         _ => null,
     };
 
@@ -172,7 +174,7 @@ public static class PublicSiteProbes {
             : new FlowProbeResult("ok", $"The last pass finished {completed:yyyy-MM-dd}.");
     }
 
-    // ---- `statuses natureserve-fetch`, `statuses ecos-import` and `statuses nztcs-import` ----
+    // ---- `statuses natureserve-fetch`, `ecos-import`, `nztcs-import` and `salve-import` ----
 
     private const string NoStatusListsPath = "No path set for the status lists store: add datastore_dir or status_lists_sqlite under [Datastore] in paths.ini.";
 
@@ -212,6 +214,19 @@ public static class PublicSiteProbes {
             return new FlowProbeResult("todo", NoStatusListsPath);
         }
         if (s.Nztcs is not { } done) {
+            return new FlowProbeResult("todo", "Not downloaded yet.");
+        }
+        var days = (int)Math.Floor((s.ReadAtUtc - done.FetchedAtUtc).TotalDays);
+        return days > StatusListsRefreshDays
+            ? new FlowProbeResult("todo", $"{done.Rows:n0} assessments, downloaded {done.FetchedAtUtc:yyyy-MM-dd}, {days} days ago.")
+            : new FlowProbeResult("ok", $"{done.Rows:n0} assessments, downloaded {done.FetchedAtUtc:yyyy-MM-dd}.");
+    }
+
+    internal static FlowProbeResult SalveStep(PublicSiteState s) {
+        if (s.StatusListsPath is null) {
+            return new FlowProbeResult("todo", NoStatusListsPath);
+        }
+        if (s.Salve is not { } done) {
             return new FlowProbeResult("todo", "Not downloaded yet.");
         }
         var days = (int)Math.Floor((s.ReadAtUtc - done.FetchedAtUtc).TotalDays);

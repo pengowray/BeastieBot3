@@ -203,6 +203,7 @@ public static partial class SiteText {
     public const string NatureServeExplorerUrl = "https://explorer.natureserve.org/";
     public const string EcosUrl = "https://ecos.fws.gov/ecp/";
     public const string NztcsUrl = "https://nztcs.org.nz/";
+    public const string SalveUrl = "https://salve.icmbio.gov.br/";
     public const string SourceCodeUrl = "https://github.com/pengowray/BeastieBot3";
     public const string CrossrefUrl = "https://www.crossref.org/documentation/retrieve-metadata/rest-api/";
     /// Crossref's licensing statement: bibliographic metadata is facts, in the public domain (CC0).

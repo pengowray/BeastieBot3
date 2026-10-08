@@ -17,6 +17,8 @@ public static partial class SiteText {
     public const string ColOtherListedOn = "In effect from";
     /// In place of ColOtherListedOn in a table with ECOS rows: ECOS gives the date of the first listing.
     public const string ColOtherFirstListed = "First listed";
+    /// In place of ColOtherListedOn in a table whose dates are all SALVE's: the end of the assessment.
+    public const string ColOtherAssessed = "Assessed";
     public const string ColOtherFirstListedTitle = "ECOS gives the date the species or population was first listed. The status may have changed since then.";
     public const string ColOtherSource = "Source";
     /// The column of the publication an NZTCS status comes from.
@@ -28,6 +30,7 @@ public static partial class SiteText {
     /// The heading over the rows of one group: a country, or NatureServe's global ranks.
     public static string OtherStatusGroup(string group) => group switch {
         "AU" => "Australia",
+        "BR" => "Brazil",
         "CA" => "Canada",
         "NZ" => "New Zealand",
         "US" => "United States",
@@ -47,6 +50,7 @@ public static partial class SiteText {
         OtherStatusSystems.Tasmania => ("Tasmania", null, false),
         OtherStatusSystems.Victoria => ("Victoria", null, false),
         OtherStatusSystems.WesternAustralia => ("Western Australia", null, false),
+        OtherStatusSystems.Salve => ("ICMBio", "Chico Mendes Institute for Biodiversity Conservation, which assesses the extinction risk of Brazil's fauna", true),
         OtherStatusSystems.Cosewic => ("COSEWIC", "Committee on the Status of Endangered Wildlife in Canada, an independent committee that assesses species", true),
         OtherStatusSystems.Sara => ("Species at Risk Act", "Canada's Species at Risk Act, the federal law", false),
         OtherStatusSystems.Nztcs => ("NZTCS", "New Zealand Threat Classification System", true),
@@ -113,6 +117,7 @@ public static partial class SiteText {
         OtherStatusSources.Ecos => "ECOS profile",
         OtherStatusSources.NatureServe => "NatureServe Explorer",
         OtherStatusSources.Nztcs => "NZTCS assessment",
+        OtherStatusSources.Salve => "SALVE assessment",
         _ => source,
     };
 
@@ -142,6 +147,12 @@ public static partial class SiteText {
     public const string OtherStatusNztcsSubject = "New Zealand statuses are from the ";
     public const string OtherStatusNztcsLink = "New Zealand Threat Classification System database";
     public static string OtherStatusNztcsDate(string? date) => date is null ? "." : $", downloaded on {date}.";
+
+    /// The note under the tables when they have SALVE rows, in two parts around the link to SALVE.
+    public const string OtherStatusSalveSubject = "Brazilian statuses are ICMBio's national assessments of Brazil's fauna, from ";
+    public static string OtherStatusSalveRest(string? date) =>
+        (date is null ? "." : $", downloaded on {date}.")
+        + " Brazil's official list of threatened species (Portaria MMA 148/2022) can differ.";
 
     public const string OtherStatusNatureServeCanadaCopy =
         "NatureServe's copy of the Canadian statuses may differ from Canada's Species at Risk Public Registry.";

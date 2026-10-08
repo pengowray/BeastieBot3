@@ -148,6 +148,8 @@ public sealed class SpeciesModel : PageModel {
                 return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.EcosFetched), out var ecos) ? SiteFormat.Date(ecos) : null;
             case OtherStatusSources.NatureServe:
                 return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.NatureServeFetched), out var ns) ? SiteFormat.Date(ns) : null;
+            case OtherStatusSources.Salve:
+                return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.SalveFetched), out var br) ? SiteFormat.Date(br) : null;
             case OtherStatusSources.Nztcs:
                 return SiteFormat.TryParseDate(snapshot?.Get(SiteDbSchema.MetaKeys.NztcsFetched), out var nz) ? SiteFormat.Date(nz) : null;
             default:

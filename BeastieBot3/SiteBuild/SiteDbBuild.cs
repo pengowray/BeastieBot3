@@ -195,7 +195,8 @@ internal sealed class SiteDbBuild {
             return $"{natureServeMatched:N0} taxa matched to NatureServe records ({_stats.NatureServeRanks:N0} global ranks, "
                 + $"{_stats.CosewicStatuses:N0} COSEWIC, {_stats.SaraStatuses:N0} SARA), "
                 + $"{_stats.EcosMatched:N0} of {_stats.EcosListings:N0} ECOS listings matched, "
-                + $"{_stats.NztcsMatched:N0} of {_stats.NztcsAssessments:N0} NZTCS assessments matched";
+                + $"{_stats.NztcsMatched:N0} of {_stats.NztcsAssessments:N0} NZTCS assessments matched, "
+                + $"{_stats.SalveMatched:N0} of {_stats.SalveAssessments:N0} SALVE assessments matched";
         });
 
         // 8. Parents, the tree of groups and list links, then taxa, names, meta.
@@ -506,6 +507,7 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.NatureServeFetched, _stats.NatureServeFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.EcosFetched, _stats.EcosFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.NztcsFetched, _stats.NztcsFetched);
+        writer.SetMeta(SiteDbSchema.MetaKeys.SalveFetched, _stats.SalveFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.IucnDoiCheckedTo, _stats.DoiCheckedTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.WikidataItemModel, _inputs.WikidataItemModel.ToJson());
         _stats.WikidataItemModelSource = _inputs.WikidataItemModelSource;

@@ -203,12 +203,13 @@ public static class DataSourceCatalogue {
             Id = "status-lists",
             Name = "Status lists store",
             Kind = "sqlite",
-            Description = "Conservation statuses from systems other than the IUCN Red List: NatureServe ranks with the US ESA, COSEWIC and SARA statuses (`statuses natureserve-fetch`), the US Endangered Species Act listings in ECOS (`statuses ecos-import`), and the New Zealand Threat Classification System assessments (`statuses nztcs-import`).",
+            Description = "Conservation statuses from systems other than the IUCN Red List: NatureServe ranks with the US ESA, COSEWIC and SARA statuses (`statuses natureserve-fetch`), the US Endangered Species Act listings in ECOS (`statuses ecos-import`), the New Zealand Threat Classification System assessments (`statuses nztcs-import`), and ICMBio's national assessments of Brazil's fauna from SALVE (`statuses salve-import`).",
             ResolvePath = p => p.GetStatusListsPath(),
             Metrics = new[] {
                 new MetricSpec { Label = "NatureServe records", Sql = "SELECT COUNT(*) FROM natureserve_species" },
                 new MetricSpec { Label = "ECOS listings",       Sql = "SELECT COUNT(*) FROM ecos_listing" },
                 new MetricSpec { Label = "NZTCS assessments",   Sql = "SELECT COUNT(*) FROM nztcs_assessment" },
+                new MetricSpec { Label = "SALVE assessments",   Sql = "SELECT COUNT(*) FROM salve_assessment" },
             },
         },
         new DataSourceDescriptor {

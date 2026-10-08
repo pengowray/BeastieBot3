@@ -249,6 +249,7 @@ public static class FixtureDb {
         w.Meta(SiteDbSchema.MetaKeys.NatureServeFetched, "2026-10-08");
         w.Meta(SiteDbSchema.MetaKeys.EcosFetched, "2026-10-07");
         w.Meta(SiteDbSchema.MetaKeys.NztcsFetched, "2026-10-08");
+        w.Meta(SiteDbSchema.MetaKeys.SalveFetched, "2026-10-08");
         w.Assessment(PolarBearLatest, PolarBear, "Global", true, "VU", criteria: "A3c", criteriaVersion: "3.1", year: 2015,
             date: "2015-03-21", trend: "Unknown",
             citation: Citation(PolarBear, PolarBearLatest, 2015, "Ursus maritimus",
@@ -284,7 +285,9 @@ public static class FixtureDb {
         w.Taxon(HouseSparrow, "Passer domesticus", "species", "ANIMALIA", "CHORDATA", "AVES", "PASSERIFORMES", "PASSERIDAE", "Passer",
             authority: "(Linnaeus, 1758)", commonEn: "House sparrow", enwiki: "House sparrow", qid: "Q28922", latest: HouseSparrowLatest,
             qidSource: "p627");
-        // Introduced in New Zealand, as the NZTCS records it.
+        // Introduced in Brazil and New Zealand: SALVE's "Not Applicable", and the NZTCS's status.
+        w.OtherStatus(HouseSparrow, "br-salve", "Not Applicable", null, null, "salve", "ficha77", "2018-10-01", statusCode: "NA",
+            url: "https://doi.org/10.37002/salve.ficha.77.1");
         w.OtherStatus(HouseSparrow, "nz-nztcs", "Introduced and Naturalised", null, null, "nztcs", "70001", null,
             url: "https://nztcs.org.nz/assessments/70001", report: "Birds 2021 (Robertson et al. 2021)");
         w.Assessment(HouseSparrowLatest, HouseSparrow, "Global", true, "LC", criteriaVersion: "3.1", year: 2019, date: "2018-08-07", trend: "Decreasing",

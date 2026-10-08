@@ -14,7 +14,9 @@ using Microsoft.Data.Sqlite;
 //                         subspecies or population);
 //   ecos_name             every name the ECOS scientific name gives, brackets read (EcosScientificName);
 //   nztcs_assessment      one row per current New Zealand Threat Classification System assessment
-//                         (StatusListStore.Nztcs.cs).
+//                         (StatusListStore.Nztcs.cs);
+//   salve_assessment      one row per current SALVE assessment of a species or subspecies of Brazil's
+//                         fauna (StatusListStore.Salve.cs).
 //
 // Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text.
 
@@ -24,6 +26,7 @@ internal static class StatusSources {
     public const string NatureServe = "natureserve";
     public const string Ecos = "ecos";
     public const string Nztcs = "nztcs";
+    public const string Salve = "salve";
 }
 
 internal sealed record StatusSourceInfo(
@@ -120,7 +123,7 @@ internal sealed partial class StatusListStore : SqliteStore {
 
     internal const string Ddl = """
         CREATE TABLE IF NOT EXISTS status_source (
-            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs'
+            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve'
             title       TEXT NOT NULL,
             url         TEXT NOT NULL,
             licence     TEXT NOT NULL,
@@ -221,6 +224,22 @@ internal sealed partial class StatusListStore : SqliteStore {
             imported_at     TEXT NOT NULL         -- UTC "O"
         );
         CREATE INDEX IF NOT EXISTS nztcs_assessment_name ON nztcs_assessment(scientific_name);
+        CREATE TABLE IF NOT EXISTS salve_assessment (
+            ficha_id        TEXT PRIMARY KEY,     -- SALVE's id of the species sheet (id_ficha)
+            scientific_name TEXT NOT NULL,        -- the current name, without its authority: "Aaptos glutinans"
+            authority       TEXT,
+            common_name     TEXT,                 -- in Portuguese
+            taxon_group     TEXT,                 -- SALVE's group: "Invertebrados Marinhos", "Aves"
+            category        TEXT NOT NULL,        -- EX, EW, RE, CR, EN, VU, NT, LC, DD, NA
+            possibly_extinct INTEGER NOT NULL,    -- 1 when SALVE flags a CR assessment possibly extinct
+            criteria        TEXT,                 -- "B1ab(iii)"
+            assessed_on     TEXT,                 -- yyyy-MM-dd, the end of the assessment
+            doi             TEXT,                 -- the assessment's DOI: 10.37002/salve.ficha.32866.2
+            taxon_level     TEXT,                 -- ESPECIE, SUBESPECIE
+            published       INTEGER NOT NULL,     -- 1 when the sheet is published (PUBLICADA)
+            imported_at     TEXT NOT NULL         -- UTC "O"
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS salve_assessment_name ON salve_assessment(scientific_name);
         """;
 
     protected override void EnsureSchema() {

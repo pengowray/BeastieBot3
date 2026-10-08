@@ -1098,9 +1098,19 @@ public static class FlowCatalogue {
                     Note = "The download is about 40 requests of 1,000 rows and takes under a minute. Each run keeps the downloaded rows in the status-lists folder in the datastore folder, with the date in the file name, and replaces all the stored NZTCS assessments.",
                 },
                 new FlowStep {
+                    Id = "site-salve",
+                    Title = "Download Brazil's national fauna assessments (SALVE)",
+                    Description = "`statuses salve-import` downloads the current national assessments of Brazil's fauna from SALVE (salve.icmbio.gov.br, ICMBio; about 15,400 species and subspecies; public, with the source cited) and stores them in the status lists store.",
+                    Commands = new[] { "statuses salve-import" },
+                    OutputSourceIds = new[] { "status-lists" },
+                    Probe = PublicSiteProbes.Salve,
+                    Group = "2 · Build the site database",
+                    Note = "The download is about 31 requests of 500 rows and takes about a minute. Each run keeps the downloaded rows in the status-lists folder in the datastore folder, with the date in the file name, and replaces all the stored SALVE assessments.",
+                },
+                new FlowStep {
                     Id = "site-build-db",
                     Title = "Build the site database",
-                    Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement, the SPRAT (EPBC) database and the status lists store (NatureServe, ECOS and NZTCS). It writes the new database to a separate file and replaces the old one only when the build finishes.",
+                    Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement, the SPRAT (EPBC) database and the status lists store (NatureServe, ECOS, NZTCS and SALVE). It writes the new database to a separate file and replaces the old one only when the build finishes.",
                     Commands = new[] { "site build-db" },
                     // Only the required inputs: a missing input blocks the step, and the build
                     // leaves out the others (GBIF checklist, DOI cache, ...) when they are missing.

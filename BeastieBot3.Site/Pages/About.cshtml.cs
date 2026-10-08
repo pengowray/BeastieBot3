@@ -29,6 +29,10 @@ public sealed class AboutModel : PageModel {
     public string? NatureServeDate { get; private set; }
     public string? EcosDate { get; private set; }
     public string? NztcsDate { get; private set; }
+    public string? SalveDate { get; private set; }
+    /// The date SALVE's citation form wants: "08 de out. de 2026".
+    public string? SalveAccessed { get; private set; }
+    public int? SalveYear { get; private set; }
     /// The year of NatureServeDate, for NatureServe's citation form.
     public int? NatureServeYear { get; private set; }
     public string? BuiltDate { get; private set; }
@@ -87,6 +91,12 @@ public sealed class AboutModel : PageModel {
         }
         EcosDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.EcosFetched), out var ecos) ? SiteFormat.Date(ecos) : null;
         NztcsDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.NztcsFetched), out var nztcs) ? SiteFormat.Date(nztcs) : null;
+        if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.SalveFetched), out var salve)) {
+            SalveDate = SiteFormat.Date(salve);
+            SalveYear = salve.Year;
+            string[] months = ["jan.", "fev.", "mar.", "abr.", "maio", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez."];
+            SalveAccessed = $"{salve.Day:00} de {months[salve.Month - 1]} de {salve.Year}";
+        }
         if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.IucnDoiCheckedTo), out var doiChecked)) {
             DoiCheckedDate = SiteFormat.Date(doiChecked);
         }

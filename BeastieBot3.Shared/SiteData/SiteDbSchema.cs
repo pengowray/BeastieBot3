@@ -164,22 +164,24 @@ public static class SiteDbSchema {
         -- The taxon's statuses in lists other than the IUCN Red List, one row per listing: Australia's
         -- EPBC Act and the Australian state and territory lists, as SPRAT records them; the US
         -- Endangered Species Act, from ECOS; and NatureServe's global rank with the COSEWIC and SARA
-        -- statuses NatureServe records; and the New Zealand Threat Classification System. The EPBC Act
+        -- statuses NatureServe records; the New Zealand Threat Classification System; and ICMBio's
+        -- national assessments of Brazil's fauna (SALVE). The EPBC Act
         -- listings are in epbc_listing too, which the status update page reads.
         CREATE TABLE other_status (
             taxon_id    INTEGER NOT NULL,
-            system      TEXT NOT NULL,                        -- OtherStatusSystems key: 'au-epbc', 'au-act' ... 'au-wa', 'ca-cosewic',
+            system      TEXT NOT NULL,                        -- OtherStatusSystems key: 'au-epbc', 'au-act' ... 'au-wa', 'br-salve', 'ca-cosewic',
                                                               -- 'ca-sara', 'nz-nztcs', 'us-esa', 'natureserve-global'
             status      TEXT NOT NULL,                        -- as the list writes it, with spacing, capitals and repeated values tidied:
                                                               -- 'Endangered', 'Rare', 'Vulnerable (Extinct in NT)', 'G3G4', 'G5T2'
-            status_code TEXT,                                 -- natureserve-global: NatureServe's rounded rank ('G3' for G3G4, 'T2' for G5T2)
+            status_code TEXT,                                 -- natureserve-global: NatureServe's rounded rank ('G3' for G3G4, 'T2' for G5T2);
+                                                              -- br-salve: the category code ('EN', 'CR(PE)')
             listed_name TEXT,                                 -- the scientific name the listing uses, when it is not the taxon's own name
             population  TEXT,                                 -- the population or area the listing applies to; NULL for the whole taxon
-            source      TEXT NOT NULL,                        -- OtherStatusSources: 'sprat', 'ecos', 'natureserve', 'nztcs'
+            source      TEXT NOT NULL,                        -- OtherStatusSources: 'sprat', 'ecos', 'natureserve', 'nztcs', 'salve'
             source_id   TEXT NOT NULL,                        -- the record's id in the source: SPRAT taxon id, ECOS Listed Species ID,
-                                                              -- NatureServe element global id, NZTCS assessment id
+                                                              -- NatureServe element global id, NZTCS assessment id, SALVE sheet id
             url         TEXT,                                 -- the record's page at the source
-            listed_on   TEXT,                                 -- yyyy-mm-dd, when the source gives it: for SPRAT, the date the EPBC listing
+            listed_on   TEXT,                                 -- yyyy-mm-dd, when the source gives it: for SALVE, the end of the assessment; for SPRAT, the date the EPBC listing
                                                               -- took effect; for ECOS, the date the taxon or population was first listed,
                                                               -- which a later change of status leaves as it is
             report      TEXT                                  -- nz-nztcs: the report the assessment was published in,
@@ -452,6 +454,8 @@ public static class SiteDbSchema {
         public const string EcosFetched = "ecos_fetched";
         /// When `statuses nztcs-import` last downloaded the NZTCS assessments ('yyyy-MM-dd').
         public const string NztcsFetched = "nztcs_fetched";
+        /// When `statuses salve-import` last downloaded SALVE's assessments ('yyyy-MM-dd').
+        public const string SalveFetched = "salve_fetched";
         /// The newest checked_at date ('yyyy-MM-dd') of any row of `iucn resolve-dois`'s doi_check
         /// table, whether the DOI was found in Crossref's list, found at doi.org or not found, when the
         /// build read that cache.

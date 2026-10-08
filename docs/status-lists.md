@@ -5,6 +5,7 @@ The status lists store holds conservation statuses from systems other than the I
 - NatureServe Explorer: the NatureServe global rank (G rank), the national ranks in the United States and Canada, and the US Endangered Species Act, COSEWIC and SARA statuses that NatureServe records (`statuses natureserve-fetch`).
 - ECOS, the US Fish and Wildlife Service's Environmental Conservation Online System: the list of species, subspecies and populations listed under the US Endangered Species Act (`statuses ecos-import`).
 - The New Zealand Threat Classification System database (nztcs.org.nz, Department of Conservation, CC BY 4.0): the current assessments (`statuses nztcs-import`).
+- SALVE (salve.icmbio.gov.br), ICMBio's system for the national assessments of the extinction risk of Brazil's fauna: the current assessment of each species and subspecies (`statuses salve-import`).
 
 Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a comment on every column.
 
@@ -19,7 +20,7 @@ Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a co
 
 | Table | One row per |
 | --- | --- |
-| `status_source` | source (`natureserve`, `ecos`, `nztcs`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
+| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
 | `status_sync_state` | key of the NatureServe download's progress (`natureserve_pass_*`, `natureserve_completed*`) |
 | `natureserve_species` | NatureServe record (`element_global_id`): a species, subspecies, variety or population |
 | `natureserve_synonym` | synonym NatureServe lists for a record |
@@ -27,6 +28,7 @@ Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a co
 | `ecos_listing` | ESA listing (`entity_id`, the ECOS Listed Species ID) |
 | `ecos_name` | name an ECOS listing's scientific name gives, the main name included |
 | `nztcs_assessment` | current NZTCS assessment (`assessment_id`), with the scientific name `NztcsApi.ChooseName` gives |
+| `salve_assessment` | current SALVE assessment of a species or subspecies (`ficha_id`, SALVE's sheet id) |
 
 ## NatureServe Explorer: `statuses natureserve-fetch`
 
@@ -143,6 +145,27 @@ lawryi*. `NztcsApi.ChooseName` decides the name stored:
 Nothing narrative is stored: the species records' notes, descriptions and habitat fields are not
 downloaded (the species search returns only id, name and authority), and the assessments' text
 fields are left out.
+
+## SALVE: `statuses salve-import`
+
+SALVE's public search, `GET /salve-api/public/search`, gives one row per species or subspecies
+with its current assessment: the name as HTML (`<i>Aaptos glutinans</i>&nbsp;<span>Moraes,
+2011</span>`), the category code, a "possibly extinct" flag, the criteria, the end date of the
+assessment and its DOI (10.37002/salve.ficha...). With no filter it answers 500, so the command
+asks for every category id of `/salve-api/public/selectOptions` (`categoriaIds=127,...,136`, EX to
+NA). Pages are at most 500 rows (`paginationPageSize`), numbered from 1 (`paginationPageNumber`);
+with a filter the answer has no total, so the command reads pages until one is short. On
+2026-10-08: 15,409 rows in 31 pages (LC 12,170, DD 1,194, VU 508, EN 508, NT 443, CR 361 of them 57
+possibly extinct, NA 215, EX 6, RE 3, EW 1), 14,366 with a DOI. The rows are kept in
+`salve-<date>.json`.
+
+ICMBio's data policy for the assessments (Instrução Normativa 05/2017) makes them public once the
+category is validated and asks that authorship and source be cited; the site cites SALVE in its
+own form ("ICMBio, 2026. Sistema de Avaliação do Risco de Extinção da Biodiversidade – SALVE...")
+and links each assessment's DOI. Precise localities can be restricted under that policy; the store
+holds no places, states or biomes. SALVE's numbers do not always match the official list of
+threatened species (Portaria MMA 148/2022), as SALVE's own home page says. SALVE covers animals
+only: no bulk source for the national assessments of Brazil's plants (CNCFlora) was found.
 
 ## Web UI
 

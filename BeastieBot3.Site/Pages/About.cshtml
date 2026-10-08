@@ -24,7 +24,7 @@
         <li>for a species or subspecies, QuickStatements commands that bring the IUCN conservation status on its Wikidata item up to date</li>
         <li>its earlier global assessments, and its latest assessment in each region</li>
         <li>common names and synonyms</li>
-        <li>its status in other conservation lists that include it: Australia's EPBC Act and state and territory lists (as SPRAT records them), the US Endangered Species Act, Canada's COSEWIC and Species at Risk Act, NatureServe's global rank, and the New Zealand Threat Classification System</li>
+        <li>its status in other conservation lists that include it: Australia's EPBC Act and state and territory lists (as SPRAT records them), Brazil's national assessments of its fauna (ICMBio), the US Endangered Species Act, Canada's COSEWIC and Species at Risk Act, NatureServe's global rank, and the New Zealand Threat Classification System</li>
         <li>links to the assessment on the IUCN Red List website, the English Wikipedia article, the Wikidata item and the Catalogue of Life page, and for Australian species the SPRAT profile</li>
     </ul>
     <p>Some taxa with no current assessment also have pages: old IUCN ids of taxa that now have another id, and taxa that IUCN no longer assesses. These pages show the taxon's earlier assessments, with wikitext for each.</p>
@@ -127,6 +127,14 @@
                         <td>@Model.NatureServeDate</td>
                     </tr>
                 }
+                @if (Model.SalveDate is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.SalveUrl">SALVE (Sistema de Avaliação do Risco de Extinção da Biodiversidade)</a>, ICMBio</th>
+                        <td>National assessments of the extinction risk of Brazil's fauna</td>
+                        <td>Public data; ICMBio asks that the source be cited</td>
+                        <td>@Model.SalveDate</td>
+                    </tr>
+                }
                 @if (Model.NztcsDate is not null) {
                     <tr>
                         <th scope="row"><a href="@SiteText.NztcsUrl">New Zealand Threat Classification System (NZTCS) database</a>, Department of Conservation</th>
@@ -160,6 +168,9 @@
         <li><strong>SPRAT:</strong> @Html.Raw(AboutModel.CitationHtml($"Species Profile and Threats Database, {SiteText.SpratLicensor}.", SiteText.SpratUrl))</li>
         @if (Model.NatureServeDate is not null) {
             <li><strong>NatureServe:</strong> @Html.Raw(AboutModel.CitationHtml($"NatureServe. {Model.NatureServeYear}. NatureServe Explorer [web application]. NatureServe, Arlington, Virginia. Available {SiteText.NatureServeExplorerUrl}. (Accessed: {Model.NatureServeDate}).", SiteText.NatureServeExplorerUrl))</li>
+        }
+        @if (Model.SalveDate is not null) {
+            <li><strong>SALVE:</strong> @Html.Raw(AboutModel.CitationHtml($"ICMBio, {Model.SalveYear}. Sistema de Avaliação do Risco de Extinção da Biodiversidade – SALVE. Disponível em: {SiteText.SalveUrl}. Acesso em: {Model.SalveAccessed}.", SiteText.SalveUrl))</li>
         }
         @if (Model.NztcsDate is not null) {
             <li><strong>NZTCS:</strong> @Html.Raw(AboutModel.CitationHtml($"Department of Conservation. New Zealand Threat Classification System database. Accessed {Model.NztcsDate}.", SiteText.NztcsUrl))</li>

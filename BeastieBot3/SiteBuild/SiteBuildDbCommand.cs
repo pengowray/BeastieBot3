@@ -330,6 +330,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("ECOS listings matched to a taxon", s.EcosMatched);
         Row("NZTCS assessments with a scientific name and a status", s.NztcsAssessments);
         Row("NZTCS assessments matched to a taxon", s.NztcsMatched);
+        Row("SALVE assessments (Brazil's fauna) with a known category", s.SalveAssessments);
+        Row("SALVE assessments matched to a taxon", s.SalveMatched);
 
         Section("Groups (higher taxa)");
         Row("Groups", s.TreeNodes);

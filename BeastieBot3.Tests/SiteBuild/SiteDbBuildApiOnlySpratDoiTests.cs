@@ -144,6 +144,7 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
             """);
 
         Assert.Equal(new[] {
+            new object?[] { "br-salve", "Critically Endangered (Possibly Extinct)", "CR(PE)", null, null, "salve", "abc1", "2022-08-19" },
             new object?[] { "ca-cosewic", "Extirpated", null, null, null, "natureserve", "101", null },
             new object?[] { "ca-sara", "Extirpated", null, null, null, "natureserve", "101", null },
             new object?[] { "natureserve-global", "G4G5", "G4", null, null, "natureserve", "101", null },
@@ -154,7 +155,13 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
         Assert.Equal("Mammals 2024 (Example et al. 2024)", Scalar(db, "SELECT report FROM other_status WHERE source_id = '5001'"));
         Assert.Equal("https://nztcs.org.nz/assessments/5001", Scalar(db, "SELECT url FROM other_status WHERE source_id = '5001'"));
         Assert.Equal("2026-10-08", Scalar(db, "SELECT value FROM meta WHERE key = 'nztcs_fetched'"));
-        Assert.Equal(new[] { new object?[] { "natureserve-global", "G4T1", "T1", null, null, "natureserve", "102", null } }, Of(AmurLeopard));
+        Assert.Equal(new[] {
+            new object?[] { "br-salve", "Not Applicable", "NA", null, null, "salve", "abc2", null },
+            new object?[] { "natureserve-global", "G4T1", "T1", null, null, "natureserve", "102", null },
+        }, Of(AmurLeopard));
+        Assert.Equal("https://doi.org/10.37002/salve.ficha.1.2", Scalar(db, "SELECT url FROM other_status WHERE source_id = 'abc1'"));
+        Assert.Equal("https://salve.icmbio.gov.br/salve-api/public/fichaPdf/abc2", Scalar(db, "SELECT url FROM other_status WHERE source_id = 'abc2'"));
+        Assert.Equal("2026-10-08", Scalar(db, "SELECT value FROM meta WHERE key = 'salve_fetched'"));
         Assert.Equal(new[] { new object?[] { "natureserve-global", "G2?", "G2", "Bettongia ogilbyi", null, "natureserve", "104", null } },
             Of(Woylie));
         Assert.Empty(Of(Koala));
@@ -425,7 +432,11 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
             INSERT INTO status_source (source, title, url, licence, fetched_at, row_count) VALUES
                 ('natureserve', 'NatureServe Explorer', 'https://explorer.natureserve.org/', 'CC BY 4.0', '2026-10-08T01:04:00.0000000Z', 5),
                 ('ecos', 'ECOS', 'https://ecos.fws.gov/', 'Public domain', '2026-10-07T23:30:00.0000000Z', 3),
-                ('nztcs', 'NZTCS', 'https://nztcs.org.nz/', 'CC BY 4.0', '2026-10-08T03:00:00.0000000Z', 3);
+                ('nztcs', 'NZTCS', 'https://nztcs.org.nz/', 'CC BY 4.0', '2026-10-08T03:00:00.0000000Z', 3),
+                ('salve', 'SALVE', 'https://salve.icmbio.gov.br/', 'Public', '2026-10-08T03:20:00.0000000Z', 2);
+            INSERT INTO salve_assessment (ficha_id, scientific_name, category, possibly_extinct, assessed_on, doi, published, imported_at) VALUES
+                ('abc1', 'Panthera pardus', 'CR', 1, '2022-08-19', '10.37002/salve.ficha.1.2', 1, 'x'),
+                ('abc2', 'Panthera pardus orientalis', 'NA', 0, NULL, NULL, 0, 'x');
             INSERT INTO nztcs_assessment (assessment_id, species_id, scientific_name, assessment_name, category, status, report_name, imported_at) VALUES
                 (5001, 501, 'Panthera pardus', 'Panthera pardus (Linnaeus, 1758)', 'Introduced and Naturalised', 'Introduced and Naturalised',
                     'Mammals 2024 (Example et al. 2024)', 'x'),

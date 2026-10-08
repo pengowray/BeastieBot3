@@ -15,6 +15,8 @@ public static class OtherStatusSystems {
     public const string Tasmania = "au-tas";
     public const string Victoria = "au-vic";
     public const string WesternAustralia = "au-wa";
+    /// ICMBio's national assessments of Brazil's fauna (SALVE).
+    public const string Salve = "br-salve";
     /// The Committee on the Status of Endangered Wildlife in Canada.
     public const string Cosewic = "ca-cosewic";
     /// Canada's Species at Risk Act, Schedule 1.
@@ -38,6 +40,7 @@ public static class OtherStatusSystems {
         new(Tasmania, "AU"),
         new(Victoria, "AU"),
         new(WesternAustralia, "AU"),
+        new(Salve, "BR"),
         new(Cosewic, "CA"),
         new(Sara, "CA"),
         new(Nztcs, "NZ"),
@@ -93,6 +96,22 @@ public static class OtherStatusSystems {
         };
     }
 
+    /// A SALVE category in English; CR with SALVE's possibly extinct flag is "Critically Endangered
+    /// (Possibly Extinct)". Null for an unknown code.
+    public static string? SalveLabel(string? code, bool possiblyExtinct) => code?.Trim().ToUpperInvariant() switch {
+        "EX" => "Extinct",
+        "EW" => "Extinct in the Wild",
+        "RE" => "Regionally Extinct",
+        "CR" => possiblyExtinct ? "Critically Endangered (Possibly Extinct)" : "Critically Endangered",
+        "EN" => "Endangered",
+        "VU" => "Vulnerable",
+        "NT" => "Near Threatened",
+        "LC" => "Least Concern",
+        "DD" => "Data Deficient",
+        "NA" => "Not Applicable",
+        _ => null,
+    };
+
     /// COSEWIC's status for one of the codes NatureServe gives (cosewicCode); null for an unknown code.
     public static string? CosewicLabel(string? code) => code?.Trim() switch {
         "E" => "Endangered",
@@ -119,6 +138,8 @@ public static class OtherStatusSources {
     public const string NatureServe = "natureserve";
     /// The New Zealand Threat Classification System database; source_id is the NZTCS assessment id.
     public const string Nztcs = "nztcs";
+    /// SALVE, ICMBio's assessments of Brazil's fauna; source_id is SALVE's sheet id (id_ficha).
+    public const string Salve = "salve";
 
     /// A taxon's SPRAT profile.
     public static string SpratUrl(long spratTaxonId) =>

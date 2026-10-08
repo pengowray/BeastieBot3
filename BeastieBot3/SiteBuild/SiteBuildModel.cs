@@ -350,6 +350,10 @@ internal sealed class SiteBuildStats {
     public int NztcsAssessments;
     public int NztcsMatched;
     public string? NztcsFetched;
+    /// Current SALVE assessments, and those matched to a taxon.
+    public int SalveAssessments;
+    public int SalveMatched;
+    public string? SalveFetched;
     public string? NatureServeFetched;
     public string? EcosFetched;
 
