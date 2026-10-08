@@ -1,0 +1,88 @@
+# IUCN's summary statistics tables that `iucn summary-tables` downloads and reads.
+#
+# Table 7, "Species changing IUCN Red List Status", lists every species whose category changed since
+# the last release of the year before, with the reason for each change: G (genuine change in the
+# species' status), N (non-genuine change: new information, taxonomy, criteria, ...) or E (the
+# previous listing was an error, from 2014). The IUCN Red List API and CSV export do not have the
+# reason, so these tables are its only public source. Each release's table includes the changes of
+# the earlier releases of the same year; when two tables give one change different reasons, the
+# table later in this file is used.
+#
+# Table 9, "Possibly Extinct and Possibly Extinct in the Wild Species" (2014-1 to 2020-2), lists every
+# Critically Endangered species tagged Possibly Extinct (PE) or Possibly Extinct in the Wild (PEW),
+# the year of its first such assessment, and the date last recorded in the wild.
+#
+# IUCN's summary statistics page (https://www.iucnredlist.org/resources/summary-statistics) links the
+# current Table 7 and a zip of the end-of-year Table 7s from 2007. The other files were found through
+# the Internet Archive's list of files on IUCN's servers; files that IUCN no longer serves have an
+# archive_url, which is used when url does not return a PDF.
+#
+# The command also tries the file names IUCN has used for the releases after the last Table 7 here
+# ("2026-2_RL_Table7.pdf", "2026-2_RL_Table_7.pdf", ...), so a new release's table is found without
+# a change to this file. Add it here anyway, in release order.
+#
+# Fields: table (7 or 9), release (as IUCN writes it, "2024-2"), url, archive_url (optional), note
+# (optional, why there are two files for one release).
+
+files:
+  - { table: 7, release: "2007", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2007RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2008", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2008RL_Stats_Table_7.pdf", note: "Genuine changes only" }
+  - { table: 7, release: "2009-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2009RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2010-3", url: "http://www.iucnredlist.org/documents/summarystatistics/2010_3RL_Stats_Table_7.pdf", archive_url: "https://web.archive.org/web/2015id_/http://www.iucnredlist.org/documents/summarystatistics/2010_3RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2010-4", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2010_4RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2011-1", url: "http://www.iucnredlist.org/documents/summarystatistics/2011_1_RL_Stats_Table_7.pdf", archive_url: "https://web.archive.org/web/2015id_/http://www.iucnredlist.org/documents/summarystatistics/2011_1_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2011-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2011_2_RL_Stats_Table7.pdf" }
+  - { table: 7, release: "2012-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2012_2_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2013-1", url: "http://www.iucnredlist.org/documents/summarystatistics/2013_1_RL_Stats_Table_7.pdf", archive_url: "https://web.archive.org/web/2013id_/http://www.iucnredlist.org/documents/summarystatistics/2013_1_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2013-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2013_2_RL_Stats_Table7_edited.pdf" }
+  - { table: 7, release: "2014-1", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2014_1_Summary_Stats_Page_Documents/2014_1_RL_Stats_Table7.pdf" }
+  - { table: 7, release: "2014-2", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2014_2_Summary_StatsPage_Documents/2014_2_RL_Stats_Table7.pdf" }
+  - { table: 7, release: "2014-3", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2014_3_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2015-2", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2015_2_Summary_Stats_Page_Documents/2015_2_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2015-4", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2015_4_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2016-1", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2016-1_Summary_Stats_Page_Documents/2016_1_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2016-2", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2016-2_Summary_Stats_Page_Documents/2016_2_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2016-3", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2016_3_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2017-1", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2017-1_Summary_Stats_Page_Documents/2017_1_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2017-2", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2017-2_Summary_Stats_Page_Documents/2017_2_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2017-3", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2017_3_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2018-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2018_1_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2018-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2018_2_RL_Stats_Table_7_new.pdf" }
+  - { table: 7, release: "2019-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2019_1_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2019-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2019_2_RL_Table_7_v2.pdf" }
+  - { table: 7, release: "2019-3", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2019_3_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2020-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2020_1_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2020-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2020-2_RL_Stats_Table7.pdf" }
+  - { table: 7, release: "2020-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2020-2_RL_Stats_Table7_corrected.pdf", note: "Corrected version" }
+  - { table: 7, release: "2020-3", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2020-3_RL_Stats_Table7.pdf" }
+  - { table: 7, release: "2021-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2021-1_RL_Stats_Table7.pdf" }
+  - { table: 7, release: "2021-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2021-2_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2021-3", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2021-3_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2022-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2022-1_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2022-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2022-2_RL_Stats_Table_7.pdf" }
+  - { table: 7, release: "2023-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2023-1_RL_Table_7.pdf" }
+  - { table: 7, release: "2024-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2024-1_RL_Table_7.pdf" }
+  - { table: 7, release: "2024-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2024-1_RL_Table_7_corrected_20240916.pdf", note: "Corrected on 16 September 2024" }
+  - { table: 7, release: "2024-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2024-2_RL_Table_7.pdf" }
+  - { table: 7, release: "2025-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2025-1_RL_Table_7.pdf" }
+  - { table: 7, release: "2025-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2025-2_RL_Table7.pdf" }
+  - { table: 7, release: "2026-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2026-1_RL_Table7.pdf" }
+
+  - { table: 9, release: "2014-1", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2014_1_Summary_Stats_Page_Documents/2014_1_RL_Stats_Table9.pdf" }
+  - { table: 9, release: "2014-2", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2014_2_Summary_StatsPage_Documents/2014_2_RL_Stats_Table9.pdf" }
+  - { table: 9, release: "2014-3", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2014_3_Summary_Stats_Page_Documents/2014_3_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2015-2", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2015_2_Summary_Stats_Page_Documents/2015_2_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2015-4", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2015-4_Summary_Stats_Page_Documents/2015_4_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2016-1", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2016-1_Summary_Stats_Page_Documents/2016_1_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2016-2", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2016-2_Summary_Stats_Page_Documents/2016_2_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2016-3", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2016-3_Summary_Stats_Page_Documents/2016_3_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2017-1", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2017-1_Summary_Stats_Page_Documents/2017_1_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2017-2", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2017-2_Summary_Stats_Page_Documents/2017_2_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2017-3", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2017-3_Summary_Stats_Page_Documents/2017_3_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2018-1", url: "https://cmsdocs.s3.amazonaws.com/summarystats/2018-1_Summary_Stats_Page_Documents/2018_1_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2018-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2018_2_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2019-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2019_1_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2019-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2019_2_RL_Table_9.pdf" }
+  - { table: 9, release: "2019-3", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2019_3_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2020-1", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2020_1_RL_Stats_Table_9.pdf" }
+  - { table: 9, release: "2020-2", url: "https://nc.iucnredlist.org/redlist/content/attachment_files/2020-2_RL_Stats_Table9.pdf" }

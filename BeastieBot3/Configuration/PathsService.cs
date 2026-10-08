@@ -88,6 +88,24 @@ namespace BeastieBot3.Configuration;
             return string.IsNullOrWhiteSpace(datasets) ? null : Path.Combine(datasets, "gbif-iucn");
         }
 
+        // IUCN's summary statistics tables 7 and 9 as PDFs (`iucn summary-tables`). Defaults to an
+        // iucn-summary-tables folder in the datasets folder.
+        public string? GetIucnSummaryTablesDir() {
+            var configured = _reader.Get("Datasets:IUCN_summary_tables_dir");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datasets = GetDatasetsDir();
+            return string.IsNullOrWhiteSpace(datasets) ? null : Path.Combine(datasets, "iucn-summary-tables");
+        }
+
+        // The rows read from those tables (`iucn summary-tables`). Defaults to
+        // iucn_summary_tables.sqlite in the datastore folder.
+        public string? GetIucnSummaryTablesPath() {
+            var configured = _reader.Get("Datastore:IUCN_summary_tables_sqlite");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "iucn_summary_tables.sqlite");
+        }
+
         // DOIs found by checking candidate DOIs against doi.org (`iucn resolve-dois`), for
         // assessments whose DOI no other source gives. Defaults to iucn_doi_cache.sqlite in the
         // datastore folder.
