@@ -1,0 +1,469 @@
+# National and subnational red lists that `statuses red-lists-import` downloads from GBIF and stores
+# in the status lists store, for the "Other conservation statuses" part of the public species site.
+#
+# Each dataset is a Darwin Core Archive (DwC-A) checklist whose Distribution extension gives a
+# category per taxon in threatStatus. A dataset is listed here when:
+#   - it is an official or authoritative national or subnational red list, or a legal list of
+#     threatened species;
+#   - its licence is CC0, CC BY or CC BY-NC (the site is free and non-commercial);
+#   - its categories are the list's own, not copies of IUCN global categories;
+#   - the publisher has not replaced it with a later full edition (a partial update, such as the
+#     2008 update of Luxembourg's bryophyte list, is listed beside the list it updates).
+# docs/status-lists.md lists the datasets that were considered and left out, with the reasons.
+#
+# Fields:
+#   key          the dataset's key in the store: <country>-<list>[-<year>], never reused
+#   gbif         the GBIF dataset key (https://www.gbif.org/dataset/<key>); the import reads the
+#                title, licence, pubDate and archive endpoint from the GBIF registry
+#   country      ISO 3166-1 alpha-2 code of the country the list covers
+#   region       the part of the country a subnational list covers, with region_code (ISO 3166-2)
+#   name         the list's name as its publisher gives it, in the publisher's language
+#   name_en      an English name, when name is not in English
+#   year         the year of the edition as the publisher gives it; omitted when the dataset holds
+#                lists of several years (each row then has its own source and event date)
+#   publisher    who published the list (not who put it on GBIF, when they differ)
+#   licence      CC0 1.0, CC BY 4.0 or CC BY-NC 4.0; the import refuses a dataset whose licence in
+#                the GBIF registry is not one of these
+#   citation     the original list, as its archive's metadata (EML) cites it when it does; else
+#                the GBIF dataset
+#   kingdom      the kingdom to store for taxa when the archive gives none
+#   archive_url  use this archive instead of the registry's DWC_ARCHIVE endpoint (the Ecuador IPT
+#                does not answer, so its lists come from ChecklistBank's copies)
+#   categories   English labels for statuses that are not IUCN categories, or that add to one
+#                ("CR*"), keyed by the status as the archive writes it
+#   notes        anything the site side or the next person needs to know
+
+datasets:
+  - key: se-redlist-2025
+    gbif: 87e639cc-30a9-4007-bd2c-b0cab60326b9
+    country: SE
+    name: Rödlistade arter i Sverige 2025
+    name_en: The Swedish Red List 2025
+    year: 2025
+    publisher: SLU Artdatabanken
+    licence: CC0 1.0
+    citation: "SLU Artdatabanken (2025). Rödlistade arter i Sverige 2025. Uppsala: SLU Artdatabanken. https://pub.epsilon.slu.se/39759/3/slu-artdatabanken-rodlistan-2025.pdf"
+    notes: >-
+      Published on 24 March 2026. Only red-listed taxa (RE, CR, EN, VU, NT, DD); taxa assessed LC or
+      NA are not in the dataset. Taxon ids are Dyntaxa ids (urn:lsid:dyntaxa.se:Taxon:N; the
+      Artfakta page is https://artfakta.se/taxa/N). Synonyms point at their accepted taxon. A few
+      unranked rows are populations or seasonal occurrences ("Phocoena phocoena (Baltic
+      population)", "Clangula hyemalis (wintering)") and have no canonical name.
+
+  - key: dk-redlist
+    gbif: 4b3e4a71-704a-485c-917c-20a89944ea37
+    country: DK
+    name: Den danske Rødliste
+    name_en: The Danish Red List
+    publisher: Aarhus University, DCE (Danish Centre for Environment and Energy)
+    licence: CC BY 4.0
+    citation: "Aarhus University, DCE. The Danish Red List (Den danske Rødliste), redlist.au.dk. Categories as given in: Skipper L., Calabuig I. & The Danish Agency for Green Land Use and Aquatic Environment (2026). National Checklist of all species occurring in Denmark. https://doi.org/10.15468/bpmaze"
+    notes: >-
+      The statuses come from the national checklist behind arter.dk (the Danish agency's species
+      portal), which gives every taxon the Danish Red List category it has now; the archive does
+      not name the edition, so there is no year. The archive is rebuilt every night, so the import
+      only downloads it again when GBIF's pubDate changes. Taxon pages are the references URLs
+      (https://arter.dk//taxa/N). The distribution source column names where the occurrence
+      record came from, not the red list.
+
+  - key: co-mads-2024
+    gbif: 09174029-d182-442c-a12f-8013aee328d7
+    country: CO
+    name: Lista de especies silvestres amenazadas de la diversidad biológica continental y marino-costera de Colombia (Resolución 0126 de 2024)
+    name_en: List of threatened wild species of Colombia (Resolution 0126 of 2024)
+    year: 2024
+    publisher: Ministerio de Ambiente y Desarrollo Sostenible (MADS)
+    licence: CC0 1.0
+    citation: "Ministerio de Ambiente y Desarrollo Sostenible (2024). Lista de especies silvestres amenazadas de la diversidad biológica continental y marino-costera de Colombia - Resolución 0126 de 2024 expedida por el Ministerio de Ambiente y Desarrollo Sostenible. https://doi.org/10.15472/frowz3"
+    notes: >-
+      The legal list of threatened species: only CR, EN and VU. ChecklistBank's copy (dataset 288059)
+      has no archive.zip, so the registry's IPT endpoint is used. 36 taxa have the taxonomic status
+      "Sinónimo" and their own status, with no accepted name id; taxonRemarks gives the name in the
+      resolution ("Nombre original validado: ...").
+
+  - key: be-vlg-validated
+    gbif: fc18b0b1-8777-4c8a-8cb8-f9f15870d6a9
+    country: BE
+    region: Flanders
+    region_code: BE-VLG
+    name: Validated red lists of Flanders, Belgium
+    publisher: Research Institute for Nature and Forest (INBO)
+    licence: CC0 1.0
+    citation: "Maes D., Brosens D., T'jollyn F., Desmet P., Piesschaert F., Van Hoey S., Adriaens T., Dekoninck W., Devos K., Lock K., Onkelinx T., Packet J., Speybroeck J., Thomaes A., Van Den Berge K., Van Landuyt W. & Verreycken H. (2019). A database of threat statuses and life-history traits of Red List species in Flanders (northern Belgium). Biodiversity Data Journal 7: e34089. https://doi.org/10.3897/BDJ.7.e34089"
+    notes: >-
+      The red lists of 16 groups that the Flemish government validated, each from its own year
+      (1996 to 2017): each row's source names the group's list (for example "Van Landuyt et al.
+      (2006)" for vascular plants) and its event date the year. occurrenceRemarks has the Dutch
+      name of each category; it is not stored.
+
+  - key: ec-amphibians
+    gbif: bfd9dbff-4581-4dcb-980b-1473ced21cb2
+    country: EC
+    name: Lista Roja Nacional de Anfibios de Ecuador
+    name_en: National Red List of the amphibians of Ecuador
+    year: 2019
+    publisher: Ministerio del Ambiente, Agua y Transición Ecológica (MAATE)
+    licence: CC BY 4.0
+    archive_url: https://api.checklistbank.org/dataset/264127/archive.zip
+    citation: "Ortega-Andrade H.M., Roldes Blanco M., Cisneros-Heredia D.F., et al. (2023). Lista Roja Nacional de Anfibios de Ecuador. Ministerio de Ambiente y Energía de Ecuador - MAE. Checklist dataset. https://doi.org/10.60545/7tr7ff"
+    notes: >-
+      The ministry's IPT (patrimonio.ambiente.gob.ec) does not answer, so the archive is
+      ChecklistBank's copy (dataset 264127). Assessed in 2019 (event date). Two rows give "En" for EN.
+
+  - key: ec-freshwater-fish
+    gbif: f2f92d57-e52e-42f7-aa68-16a03fd53063
+    country: EC
+    name: Lista roja de los peces dulceacuícolas de Ecuador
+    name_en: Red List of the freshwater fishes of Ecuador
+    year: 2019
+    publisher: Ministerio del Ambiente, Agua y Transición Ecológica (MAATE)
+    licence: CC BY 4.0
+    archive_url: https://api.checklistbank.org/dataset/54652/archive.zip
+    citation: "Aguirre W., Anaguano-Yancha F., Burgos-Morán R., Carrillo-Moreno C., Guarderas L., Jácome-Negrete I., Jiménez-Prado P., Laaz E., Nugra F., Revelo W., Rivadeneira J., Utreras V. & Valdiviezo-Rivera J. (2019). Lista roja de los peces dulceacuícolas de Ecuador. Ministerio del Ambiente, Quito, Ecuador."
+    notes: >-
+      Archive from ChecklistBank (dataset 54652), as for the other Ecuador lists.
+
+  - key: ec-birds
+    gbif: 1a5a1475-6d5d-4c17-9692-feab928266e1
+    country: EC
+    name: Lista Roja de las Aves de Ecuador
+    name_en: Red List of the birds of Ecuador
+    year: 2018
+    publisher: Ministerio del Ambiente, Agua y Transición Ecológica (MAATE)
+    licence: CC BY 4.0
+    archive_url: https://api.checklistbank.org/dataset/53732/archive.zip
+    citation: "Freile J.F., Santander T., Jiménez-Uzcátegui G., Carrasco L., Cisneros-Heredia D., Guevera E., Sánchez-Nivicela M. & Tinoco B. (2023). Lista Roja de las Aves de Ecuador. Ministerio del Ambiente, Agua y Transición Ecológica - Ecuador. Checklist dataset. https://doi.org/10.60545/mrbohl"
+    notes: >-
+      Archive from ChecklistBank (dataset 53732). Assessed in 2018 (event date). Mainland Ecuador and
+      the Galápagos Islands are assessed apart: a taxon can have a row with locality "Ecuador
+      continental" and a row with "Ecuador insular | Islas Galápagos", with different categories.
+      countryCode is the word "Ecuador", not EC. "CR-PE" is CR, possibly extinct.
+    categories:
+      CR-PE: Critically Endangered (possibly extinct)
+
+  - key: ec-palms
+    gbif: dc4261e9-6a0e-492a-aa5e-f9e9e2135b5d
+    country: EC
+    name: Lista roja de las palmas del Ecuador
+    name_en: Red List of the palms of Ecuador
+    year: 2018
+    publisher: Ministerio del Ambiente, Agua y Transición Ecológica (MAATE)
+    licence: CC BY 4.0
+    archive_url: https://api.checklistbank.org/dataset/54007/archive.zip
+    citation: "Montúfar R. (2018). Lista roja de las palmas del Ecuador. Ministerio del Ambiente, Pontificia Universidad Católica del Ecuador. Quito, Ecuador."
+    notes: >-
+      Archive from ChecklistBank (dataset 54007). 21 palms.
+
+  - key: lu-plants-2025
+    gbif: 4fcc8f8f-8cc1-4eb4-b482-9a0e7cad38ff
+    country: LU
+    name: Red List of the Vascular Plants of Luxembourg
+    year: 2025
+    publisher: Musée national d'histoire naturelle, Luxembourg
+    licence: CC0 1.0
+    citation: "Colling G., Helminger T., Krippel Y., Schneider S. & Daco L. (2025). Red List of the Vascular Plants of Luxembourg. Ferrantia 93, Musée national d'histoire naturelle, Luxembourg, 65 pp."
+    notes: >-
+      Replaces the Luxembourg Lycopodiaceae list of 2019, which is not imported.
+
+  - key: lu-birds-2019
+    gbif: 3e1c76e4-34c5-4c63-bb75-0b686ec0de09
+    country: LU
+    name: Die Rote Liste der Brutvögel Luxemburgs
+    name_en: Red list of the breeding birds of Luxembourg
+    year: 2019
+    publisher: Centrale Ornithologique Luxembourg (natur&ëmwelt)
+    licence: CC0 1.0
+    citation: "Lorgé P., Redel C., Kirsch E. & Kieffer K. (2019). Die Rote Liste der Brutvögel Luxemburgs. Centrale Ornithologique Luxembourg. https://www.naturemwelt.lu/wp-content/uploads/2019/10/Rote-Liste-pL-09-2019.pdf"
+    notes: >-
+      Breeding birds only. Introduced species are NE.
+
+  - key: lu-odonata-2006
+    gbif: 3b66b40e-16bc-41e7-a12a-73eeec006720
+    country: LU
+    name: Rote Liste der Libellen Luxemburgs, 3. Fassung
+    name_en: Red list of the dragonflies of Luxembourg, third version
+    year: 2006
+    publisher: Société des naturalistes luxembourgeois
+    licence: CC0 1.0
+    citation: "Proess R. (2006). Rote Liste der Libellen Luxemburgs. 3. Fassung, 2006 (Insecta, Odonata). Bulletin de la Société des naturalistes luxembourgeois 107: 123-130."
+    notes: >-
+      "R" is not an IUCN category; the archive's remarks call those species extremely rare.
+    categories:
+      R: Extremely rare
+
+  - key: lu-orthoptera-2003
+    gbif: 5e59b985-2924-496d-a509-f0e29982dfad
+    country: LU
+    name: Rote Liste der Heuschrecken Luxemburgs
+    name_en: Red list of the grasshoppers and crickets of Luxembourg
+    year: 2003
+    publisher: Société des naturalistes luxembourgeois
+    licence: CC0 1.0
+    citation: "Proess R. & Meyer M. (2003). Rote Liste der Heuschrecken Luxemburgs. Bulletin de la Société des naturalistes luxembourgeois 104: 57-66."
+    notes: >-
+      "R" (8 species) is not an IUCN category and the archive does not explain it; the Odonata list
+      by the same author uses R for extremely rare species.
+
+  - key: lu-bryophytes-2003
+    gbif: df494018-0333-492c-8864-05cab5ef4b99
+    country: LU
+    name: Liste rouge des bryophytes du Luxembourg
+    name_en: Red list of the bryophytes of Luxembourg
+    year: 2003
+    publisher: Musée national d'histoire naturelle, Luxembourg
+    licence: CC0 1.0
+    citation: "Werner J. (2003). Liste rouge des bryophytes du Luxembourg. Mesures de conservation et perspectives. Ferrantia 35."
+    notes: >-
+      Updated in 2008 for some taxa (lu-bryophytes-2008): for a taxon in both, the 2008 status
+      replaces this one.
+
+  - key: lu-bryophytes-2008
+    gbif: c3148049-3806-4a60-9071-b1869e1dc416
+    country: LU
+    name: "Liste rouge des bryophytes du Luxembourg : une première mise à jour (2003-2008)"
+    name_en: Red list of the bryophytes of Luxembourg, first update
+    year: 2008
+    publisher: Société des naturalistes luxembourgeois
+    licence: CC0 1.0
+    citation: "Werner J. (2008). Liste rouge des bryophytes du Luxembourg : une première mise à jour (2003-2008). Bulletin de la Société des naturalistes luxembourgeois 109: 53-58."
+    notes: >-
+      A partial update of lu-bryophytes-2003: only the taxa whose status changed.
+
+  - key: cu-plants-2023
+    gbif: d51a552b-0d2c-4788-a5c9-824b552abbf1
+    country: CU
+    name: Cuban Redlisted Plant Species – 2023
+    year: 2023
+    publisher: IUCN/SSC Cuban Plant Specialist Group
+    licence: CC BY 4.0
+    citation: "González-Oliva L. & González-Torres L.R. (2023). Cuban Redlisted Plant Species – 2023. IUCN/SSC Cuban Plant Specialist Group. https://doi.org/10.15468/9qtwmv. Updates: González-Torres L.R., Palmarola A., González-Oliva L., Bécquer E.R., Testé E. & Barrios D. (eds.) (2016). Lista roja de la flora de Cuba. Bissea 10 (número especial 1): 1-352."
+    notes: >-
+      National assessments of Cuba's native plants. Each row's source is the URL of the
+      assessment's page at caribea.planta.ngo, which is stored as the row's URL. occurrenceRemarks
+      is narrative (endemism, protected areas) and is not stored.
+
+  - key: uy-fauna
+    gbif: 1d68f3a2-6b42-437d-a0f7-e850d74e0e9f
+    country: UY
+    name: Especies de fauna del Uruguay evaluadas y reportadas en Listas Rojas
+    name_en: Animal species of Uruguay assessed in national red lists
+    publisher: Dirección Nacional de Biodiversidad y Servicios Ecosistémicos, Ministerio de Ambiente
+    licence: CC BY 4.0
+    citation: "Dirección Nacional de Biodiversidad y Servicios Ecosistémicos, Ministerio de Ambiente (2025). Especies de fauna del Uruguay evaluadas y reportadas en Listas Rojas. https://doi.org/10.15468/tbrjqw. From: Azpiroz A.B., Alfaro M. & Jiménez S. (2012). Lista Roja de las Aves del Uruguay. Dirección Nacional de Medio Ambiente, Montevideo; Carreira S. & Maneyro R. (2015). Lista Roja de los Anfibios y Reptiles del Uruguay. Dirección Nacional de Medio Ambiente, Montevideo."
+    notes: >-
+      Two national lists: birds (2012, 454 rows) and amphibians and reptiles (2015, 120 rows); each
+      row's source names its list. 42 rows are synonyms with their own status and an accepted name id.
+
+  - key: is-plants-2018
+    gbif: 65a2fba2-be98-44b7-be8a-9bab6bf590b9
+    country: IS
+    name: Vascular Plant Red List for Iceland
+    year: 2018
+    publisher: Náttúrufræðistofnun Íslands (Icelandic Institute of Natural History)
+    licence: CC BY 4.0
+    citation: "Wasowicz P. & Heiðmarsson S. (2019). A vascular plant red list for Iceland. Acta Botanica Islandica 16: 31-48. https://doi.org/10.5281/zenodo.2875162"
+    notes: >-
+      Statuses are written out in full ("Least Concern", "Not Applicable").
+
+  - key: fr-plants-2018
+    gbif: 0ffb4808-0952-4b6e-a16f-d02792de30d7
+    country: FR
+    name: La Liste rouge des espèces menacées en France – Flore vasculaire de France métropolitaine
+    name_en: The Red List of threatened species in France, vascular flora of metropolitan France
+    year: 2018
+    publisher: UICN France, FCBN, AFB & MNHN
+    licence: CC BY 4.0
+    kingdom: Plantae
+    citation: "UICN France, FCBN, AFB & MNHN (2018). La Liste rouge des espèces menacées en France – Chapitre Flore vasculaire de France métropolitaine. Paris, France."
+    notes: >-
+      Metropolitan France only. Republished on GBIF by Hortus botanicus Leiden. The archive gives no
+      authorship column and no rank. Species only; subspecies are fr-plants-2018-subspecies.
+    categories:
+      CR*: Critically Endangered (presumed extinct)
+      NAa: Not applicable (introduced after 1500)
+      NAb: Not applicable (occasional or marginal)
+
+  - key: fr-plants-2018-subspecies
+    gbif: a3f9f472-7b5d-45bc-8915-9b65fe6c0bfe
+    country: FR
+    name: La Liste rouge des espèces menacées en France – Flore vasculaire de France métropolitaine (sous-espèces)
+    name_en: The Red List of threatened species in France, vascular flora of metropolitan France (subspecies)
+    year: 2018
+    publisher: UICN France, FCBN, AFB & MNHN
+    licence: CC BY 4.0
+    kingdom: Plantae
+    citation: "UICN France, FCBN, AFB & MNHN (2018). La Liste rouge des espèces menacées en France – Chapitre Flore vasculaire de France métropolitaine. Paris, France."
+    notes: >-
+      The subspecies and varieties of the 2018 French list. countryCode is "fr" in lower case.
+    categories:
+      CR*: Critically Endangered (presumed extinct)
+      NAa: Not applicable (introduced after 1500)
+      NAb: Not applicable (occasional or marginal)
+
+  - key: no-plants-2021
+    gbif: 02b69283-72f8-4406-81ac-5cae93e18846
+    country: "NO"
+    name: Norsk rødliste for arter 2021 – karplanter
+    name_en: The Norwegian Red List for Species 2021, vascular plants
+    year: 2021
+    publisher: Artsdatabanken
+    licence: CC BY 4.0
+    kingdom: Plantae
+    citation: "Artsdatabanken (2021). Norsk rødliste for arter 2021. https://lister.artsdatabanken.no/rodlisteforarter/2021 (vascular plants assessed by Solstad H., Elven R., Arnesen G., Eidesen P.B., Gaarder G., Hegre H., Høitomt T., Mjelde M. & Pedersen O.)"
+    notes: >-
+      Mainland Norway. Republished on GBIF by Hortus botanicus Leiden; the full 2021 list (all groups)
+      is not on GBIF. A degree sign after a category ("VU°") marks a category lowered for
+      immigration from populations outside Norway. Ranks are Norwegian (Art, Underart, Varietet).
+    categories:
+      VU°: Vulnerable (category lowered for immigration from outside Norway)
+      EN°: Endangered (category lowered for immigration from outside Norway)
+      NT°: Near Threatened (category lowered for immigration from outside Norway)
+      LC°: Least Concern (category lowered for immigration from outside Norway)
+
+  - key: nl-plants-2012
+    gbif: 485b1e9d-f185-42a1-896d-efc68a9c0513
+    country: NL
+    name: Rode Lijst Vaatplanten 2012
+    name_en: Red List of the vascular plants of the Netherlands 2012
+    year: 2012
+    publisher: FLORON
+    licence: CC BY 4.0
+    kingdom: Plantae
+    citation: "Sparrius L.B., Odé B. & Beringen R. (2014). Basisrapport Rode Lijst Vaatplanten 2012 volgens Nederlandse en IUCN-criteria. FLORON Rapport 57. FLORON, Nijmegen."
+    notes: >-
+      Republished on GBIF by Hortus botanicus Leiden. "REW" (15 species) is not an IUCN category and
+      the archive does not explain it. countryCode is "nl" in lower case.
+
+  - key: nl-bryophytes-2012
+    gbif: b7b772bc-6661-42f8-8a87-5ce4e7c45a7e
+    country: NL
+    name: Rode Lijst Mossen 2012
+    name_en: Red List of the bryophytes of the Netherlands 2012
+    year: 2012
+    publisher: BLWG (Bryologische en Lichenologische Werkgroep)
+    licence: CC BY 4.0
+    kingdom: Plantae
+    citation: "Siebel H., Bijlsma R., Sparrius L., Langezaal G. & Kamoen L. (2026). Red List Bryophytes (2012, Netherlands) - Rode Lijst Mossen (2012, Nederland). Hortus botanicus Leiden. Checklist dataset. https://doi.org/10.15468/4uxvfb"
+    notes: >-
+      Only red-listed taxa (RE, CR, EN, VU, NT). Republished on GBIF by Hortus botanicus Leiden; its
+      metadata does not cite the original report, so the citation is the GBIF dataset's.
+
+  - key: ch-plants-2016
+    gbif: 0f308281-6245-43c0-b483-3b1f9fe55a02
+    country: CH
+    name: Rote Liste Gefässpflanzen. Gefährdete Arten der Schweiz
+    name_en: Red List of the vascular plants of Switzerland
+    year: 2016
+    publisher: Bundesamt für Umwelt (BAFU) and Info Flora
+    licence: CC BY 4.0
+    kingdom: Plantae
+    citation: "Bornand C., Gygax A., Juillerat P., Jutzi M., Möhl A., Rometsch S., Sager L., Santiago H. & Eggenberg S. (2016). Rote Liste Gefässpflanzen. Gefährdete Arten der Schweiz. Bundesamt für Umwelt, Bern, und Info Flora, Genf. Umwelt-Vollzug Nr. 1621."
+    notes: >-
+      Republished on GBIF by Hortus botanicus Leiden. "CR(PE)" is CR, possibly extinct.
+
+  - key: de-plants-2018
+    gbif: 73370f38-ed24-4dfa-9a17-4df3a1e816a3
+    country: DE
+    name: Rote Liste und Gesamtartenliste der Farn- und Blütenpflanzen (Trachaeophyta) Deutschlands
+    name_en: Red List of the ferns and flowering plants of Germany
+    year: 2018
+    publisher: Bundesamt für Naturschutz (BfN)
+    licence: CC BY 4.0
+    kingdom: Plantae
+    citation: "Metzing D., Garve E. & Matzke-Hajek G. (2018). Rote Liste und Gesamtartenliste der Farn- und Blütenpflanzen (Trachaeophyta) Deutschlands. Naturschutz und Biologische Vielfalt 70(7): 13-358."
+    notes: >-
+      Republished on GBIF by Hortus botanicus Leiden. Germany's own categories, which the archive's
+      metadata says cannot be compared directly with IUCN's; the labels below are its English names.
+    categories:
+      "0": Extinct or lost (Ausgestorben oder verschollen)
+      "1": Threatened with extinction (Vom Aussterben bedroht)
+      "2": Highly threatened (Stark gefährdet)
+      "3": Threatened (Gefährdet)
+      G: Threatened, extent unknown (Gefährdung unbekannten Ausmaßes)
+      R: Extremely rare (Extrem selten)
+      V: Near threatened (Vorwarnliste)
+      D: Data deficient (Daten unzureichend)
+      "*": Not threatened (Ungefährdet)
+      nb: Not assessed (Nicht bewertet)
+
+  - key: ch-butterflies-2014
+    gbif: fc6c1b6c-7524-40bf-84a8-aea14ecf14bb
+    country: CH
+    name: Liste rouge Papillons diurnes et Zygènes. Espèces menacées en Suisse, état 2012
+    name_en: Red List of the butterflies and burnet moths of Switzerland
+    year: 2014
+    publisher: Office fédéral de l'environnement (OFEV) and Centre Suisse de Cartographie de la Faune (CSCF)
+    licence: CC BY 4.0
+    citation: "Wermeille E., Chittaro Y. & Gonseth Y. (2014). Liste rouge Papillons diurnes et Zygènes. Espèces menacées en Suisse, état 2012. Office fédéral de l'environnement, Berne, et Centre Suisse de Cartographie de la Faune, Neuchâtel. L'environnement pratique n° 1403: 97 pp."
+    notes: >-
+      From info fauna's national butterfly databank checklist (InfoSpecies); every row's source is
+      this list.
+
+  - key: ch-beetles-2016
+    gbif: c20a2c3b-5041-4062-9658-85d269480384
+    country: CH
+    name: Liste rouge des Coléoptères Buprestidés, Cérambycidés, Cétoniidés et Lucanidés. Espèces menacées en Suisse
+    name_en: Red List of the jewel beetles, longhorn beetles, flower chafers and stag beetles of Switzerland
+    year: 2016
+    publisher: Office fédéral de l'environnement (OFEV), info fauna (CSCF) and WSL
+    licence: CC BY 4.0
+    citation: "Monnerat C., Barbalat S., Lachat T. & Gonseth Y. (2016). Liste rouge des Coléoptères Buprestidés, Cérambycidés, Cétoniidés et Lucanidés. Espèces menacées en Suisse. Office fédéral de l'environnement, Berne; Info Fauna - CSCF, Neuchâtel; Institut fédéral de recherches WSL, Birmensdorf. L'environnement pratique n° 1622: 118 p."
+    notes: >-
+      From info fauna's national beetle databank checklist (2,335 taxa); only the four families of
+      this list have a status.
+
+  - key: ve-fauna-2015
+    gbif: 3d10c579-8f9f-4502-9b82-da800ed934c5
+    country: VE
+    name: Libro Rojo de la Fauna Venezolana
+    name_en: Red Book of the fauna of Venezuela
+    year: 2015
+    publisher: Provita and Fundación Empresas Polar
+    licence: CC BY 4.0
+    citation: "Rodríguez J.P., García-Rawlins A. & Rojas-Suárez F. (eds.) (2015). Libro Rojo de la Fauna Venezolana. Fourth edition. Provita y Fundación Empresas Polar. Caracas, Venezuela."
+    notes: >-
+      Venezuela's national red list of animals, published by Provita, a non-governmental
+      organisation. 107 rows are synonyms with their own status.
+
+  - key: ua-redbook-plants-2021
+    gbif: e4576d89-8dad-481b-8e53-8d449ffb94f9
+    country: UA
+    name: Перелік видів рослин та грибів, що заносяться до Червоної книги України (рослинний світ)
+    name_en: Plants, fungi and algae listed in the Red Data Book of Ukraine
+    year: 2021
+    publisher: Ministry of Environmental Protection and Natural Resources of Ukraine
+    licence: CC0 1.0
+    citation: "Наказ Міністерства захисту довкілля та природних ресурсів України від 15 лютого 2021 року № 111 (Order No. 111 of 15 February 2021 of the Ministry of Environmental Protection and Natural Resources of Ukraine). Dataset: Prylutskyi O., Marushchak O. & Vasyliuk O. (2023). List of algae, fungi, and plant species included into the Red Data Book of Ukraine. https://doi.org/10.15468/x2knyk"
+    notes: >-
+      The legal list. Categories are those of the Law of Ukraine "On the Red Book of Ukraine", in
+      Ukrainian; none is an IUCN category. One is written with a no-break space ("зниклий
+      в<U+00A0>природі"). The archive has no countryCode.
+    categories:
+      зниклий: Extinct
+      зниклий в природі: Extinct in the wild
+      зникаючий: Endangered
+      вразливий: Vulnerable
+      рідкісний: Rare
+      неоцінений: Not evaluated
+      недостатньо відомий: Insufficiently known
+
+  - key: ua-redbook-animals-2021
+    gbif: bca0cf23-b459-4164-a552-9b90825ee255
+    country: UA
+    name: Перелік видів тварин, що заносяться до Червоної книги України (тваринний світ)
+    name_en: Animals listed in the Red Data Book of Ukraine
+    year: 2021
+    publisher: Ministry of Environmental Protection and Natural Resources of Ukraine
+    licence: CC0 1.0
+    citation: "Наказ Міністерства захисту довкілля та природних ресурсів України від 19 січня 2021 року № 29 (Order No. 29 of 19 January 2021 of the Ministry of Environmental Protection and Natural Resources of Ukraine). Dataset: Prylutskyi O. & Marushchak O. (2023). List of animal species included into the Red Data Book of Ukraine. https://doi.org/10.15468/s2u4wd"
+    notes: >-
+      The legal list, with the categories of the Law of Ukraine "On the Red Book of Ukraine", in
+      Ukrainian.
+    categories:
+      зниклий: Extinct
+      зниклий в природі: Extinct in the wild
+      зникаючий: Endangered
+      вразливий: Vulnerable
+      рідкісний: Rare
+      неоцінений: Not evaluated
+      недостатньо відомий: Insufficiently known
