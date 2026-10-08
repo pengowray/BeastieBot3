@@ -28,6 +28,14 @@ public static class NatureServePlaces {
         ["PE"] = "Prince Edward Island", ["QC"] = "Quebec", ["SK"] = "Saskatchewan", ["YT"] = "Yukon",
     };
 
+    private static readonly HashSet<string> States = UnitedStates
+        .Where(p => p.Key is not ("DC" or "NN" or "PR" or "VI" or "GU" or "AS" or "MP"))
+        .Select(p => p.Value)
+        .ToHashSet(StringComparer.Ordinal);
+
+    /// Whether a name is one of the 50 US states (not DC, the Navajo Nation or a territory).
+    public static bool IsUsState(string name) => States.Contains(name);
+
     /// The name of a state, province or territory, or the code itself when it is not known.
     public static string Name(string nationCode, string subnationCode) {
         var names = nationCode.ToUpperInvariant() switch {

@@ -191,8 +191,10 @@ public static class SiteDbSchema {
                                                               -- the system or the list (other_status_list.country) gives the country
             list_key    TEXT,                                 -- other_status_list.list_key, for a system with several lists (the national red
                                                               -- lists from GBIF, JNCC's designations); NULL when the system is one list
-            qualifier   TEXT,                                 -- a short word the source gives with the status, as the site shows it:
-                                                              -- 'exotic', 'breeding', 'non-breeding'; NULL when none
+            qualifier   TEXT,                                 -- what the source gives with the status: natureserve-national and -subnational:
+                                                              -- 'exotic' (introduced there); cites: the Party that listed an Appendix III
+                                                              -- taxon ('Nepal'); gb-jncc: a law's sections ('sections 9(4)(b) and 9(5)(a)');
+                                                              -- NULL when none
             listed_under TEXT                                 -- cites: the higher taxon whose listing covers the taxon, rank and name as the site
                                                               -- shows them ('family Trochilidae'); NULL for the taxon's own listing
         );

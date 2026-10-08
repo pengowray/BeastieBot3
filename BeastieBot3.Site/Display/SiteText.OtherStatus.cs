@@ -33,7 +33,7 @@ public static partial class SiteText {
         "BR" => "Brazil",
         "CA" => "Canada",
         "GB" => "United Kingdom",
-        OtherStatusSystems.InternationalGroup => "International",
+        OtherStatusSystems.InternationalGroup => "International treaties",
         "NZ" => "New Zealand",
         "US" => "United States",
         OtherStatusSystems.NatureServeGroup => "Global",
@@ -42,7 +42,7 @@ public static partial class SiteText {
 
     /// The row label of a list, and a hover title: the full name when the label is an abbreviation
     /// (shown with abbr), else a note on what the list is, or null.
-    public static (string Label, string? Title, bool IsAbbreviation) OtherStatusList(string system) => system switch {
+    public static (string Label, string? Title, bool IsAbbreviation) OtherStatusList(string system, string? country = null) => system switch {
         OtherStatusSystems.Epbc => (EpbcAbbr, EpbcFullName, true),
         OtherStatusSystems.AustralianCapitalTerritory => ("Australian Capital Territory", null, false),
         OtherStatusSystems.NewSouthWales => ("New South Wales", null, false),
@@ -58,8 +58,9 @@ public static partial class SiteText {
         OtherStatusSystems.Nztcs => ("NZTCS", "New Zealand Threat Classification System", true),
         OtherStatusSystems.Esa => ("Endangered Species Act", null, false),
         OtherStatusSystems.Cites => ("CITES", "Convention on International Trade in Endangered Species of Wild Fauna and Flora", true),
-        OtherStatusSystems.NatureServeGlobal => ("NatureServe", "NatureServe's global conservation status rank", false),
-        OtherStatusSystems.NatureServeNational => ("NatureServe", "NatureServe's national conservation status rank", false),
+        OtherStatusSystems.NatureServeGlobal => ("NatureServe global rank", "NatureServe's global conservation status rank (G rank)", false),
+        OtherStatusSystems.NatureServeNational => ("NatureServe national rank",
+            $"NatureServe's national conservation status rank (N rank) for {(country == "CA" ? "Canada" : country == "US" ? "the United States" : country)}", false),
         _ => (system, null, false),
     };
 
@@ -91,37 +92,66 @@ public static partial class SiteText {
     }
 
     /// The line under a NatureServe national or subnational rank: what each part means, with the
-    /// season it applies to ("Apparently Secure when breeding; Secure when not breeding"), and
-    /// "exotic" when NatureServe says the taxon is exotic there. Null when no part has a meaning.
+    /// season it applies to in brackets ("Apparently Secure (breeding); Secure (non-breeding)"; one
+    /// meaning for every season: "Secure (breeding and non-breeding)"), and "Not Applicable:
+    /// introduced there" when NatureServe says the taxon is exotic there. Null when no part has a meaning.
     public static string? NatureServeLocalRankMeaning(string rank, string? qualifier) {
         var parts = OtherStatusSystems.NatureServeRankParts(rank)
-            .Select(p => OtherStatusSystems.NatureServeLocalRankMeaning(p.Code) is { } meaning ? meaning + Season(p.Season) : null)
-            .OfType<string>()
+            .Select(p => (Meaning: OtherStatusSystems.NatureServeLocalRankMeaning(p.Code), p.Season))
+            .Where(p => p.Meaning is not null)
             .ToList();
-        if (qualifier == "exotic") {
-            parts.Add("exotic");
+        if (parts.Count == 0) {
+            return null;
         }
-        return parts.Count == 0 ? null : string.Join("; ", parts);
+        var exotic = qualifier == "exotic" ? ": introduced there" : "";
+        if (parts.Count > 1 && parts.All(p => p.Meaning == parts[0].Meaning)) {
+            return $"{parts[0].Meaning} ({string.Join(" and ", parts.Select(p => Season(p.Season)))}){exotic}";
+        }
+        return string.Join("; ", parts.Select(p => p.Season == NatureServeSeason.Any ? p.Meaning! : $"{p.Meaning} ({Season(p.Season)})")) + exotic;
 
         static string Season(NatureServeSeason season) => season switch {
-            NatureServeSeason.Breeding => " when breeding",
-            NatureServeSeason.Nonbreeding => " when not breeding",
-            NatureServeSeason.Migrant => " on migration",
-            _ => "",
+            NatureServeSeason.Breeding => "breeding",
+            NatureServeSeason.Nonbreeding => "non-breeding",
+            NatureServeSeason.Migrant => "on migration",
+            _ => "all year",
         };
     }
 
+    /// The line under a status, or null: what a NatureServe rank means; for CITES, the Party that
+    /// listed an Appendix III taxon and the higher taxon whose listing covers it; for a UK law, the
+    /// sections of its schedule.
+    public static string? OtherStatusSecondLine(OtherStatusRow row, string kind) => row.System switch {
+        OtherStatusSystems.Cites => string.Join("; ", new[] {
+                row.Qualifier is { } party ? $"Listed by {party}" : null,
+                row.ListedUnder is { } under ? $"Covered by the listing of {under}" : null,
+            }.OfType<string>()) is { Length: > 0 } line ? line : null,
+        OtherStatusSystems.Jncc => row.Qualifier,
+        _ => NatureServeRankMeaning(row, kind),
+    };
+
     /// The text that opens the collapsed table of NatureServe's ranks in a country's states, provinces
-    /// or territories: how many places have a rank, and how many of them rank the taxon S1, S2, SH or SX.
-    public static string PlaceRanksSummary(string group, int places, int imperiled) {
-        var noun = group == "CA" ? (places == 1 ? "province or territory" : "provinces and territories") : (places == 1 ? "state" : "states");
+    /// or territories: how many places have a rank, and in how many of them it is S1, S2, SH or SX.
+    /// onlyStates: every US place is a state (not DC or the Navajo Nation).
+    public static string PlaceRanksSummary(string group, int places, int imperiled, bool onlyStates = true) {
+        var noun = group == "CA"
+            ? (places == 1 ? "province or territory" : "provinces and territories")
+            : onlyStates ? (places == 1 ? "state" : "states") : (places == 1 ? "area" : "states and other areas");
         var count = places.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
-        var rest = imperiled == 0 ? "" : $", imperiled or worse in {imperiled.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)}";
-        return $"NatureServe ranks in {count} {noun}{rest}";
+        var ranks = places == 1 ? "rank" : "ranks";
+        var rest = imperiled == 0 ? "" : $", Imperiled or worse in {imperiled.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} of them";
+        if (places == 1 && imperiled == 1) {
+            rest = ": Imperiled or worse";
+        }
+        return $"NatureServe {ranks} for {count} {noun}{rest}";
     }
 
+    /// The hover title of "Imperiled or worse" in PlaceRanksSummary.
+    public const string PlaceRanksImperiledTitle =
+        "Imperiled or worse: Critically Imperiled (S1), Imperiled (S2), Possibly Extirpated (SH) or Presumed Extirpated (SX)";
+
     /// The first column's heading in the table of NatureServe's ranks in a country's states, provinces or territories.
-    public static string PlaceRanksHeading(string group) => group == "CA" ? "Province or territory" : "State";
+    public static string PlaceRanksHeading(string group, bool onlyStates = true) =>
+        group == "CA" ? "Province or territory" : onlyStates ? "State" : "State or area";
     public const string ColPlaceRank = "Rank";
     public const string ColPlaceRankMeaning = "Meaning";
 
@@ -201,10 +231,6 @@ public static partial class SiteText {
         (date is null ? "." : $", downloaded on {date}.")
         + " Brazil's official list of threatened species (Portaria MMA 148/2022) can differ.";
 
-    /// The line under a CITES appendix when the listing covers the taxon as part of a higher taxon
-    /// ("family Trochilidae").
-    public static string OtherStatusListedUnder(string higherTaxon) => $"as part of {higherTaxon}";
-
     /// The text of a CITES row's link to the taxon's page on Species+.
     public const string OtherStatusCitesRecordLink = "Species+";
     /// The note under the tables when they have CITES rows, in parts around the link to the Checklist,
@@ -214,21 +240,24 @@ public static partial class SiteText {
     public const string CitesChecklistUrl = "https://checklist.cites.org/";
     public static string OtherStatusCitesRest(DateOnly? accessed) =>
         accessed is { } date
-            ? $", compiled by UNEP-WCMC, downloaded on {SiteFormat.Date(date)}. Citation: UNEP-WCMC (Comps.) {date.Year}. The Checklist of CITES Species Website. CITES Secretariat, Geneva, Switzerland. Compiled by UNEP-WCMC, Cambridge, UK. Available at: http://checklist.cites.org. [Accessed {date.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture)}]."
-            : ", compiled by UNEP-WCMC.";
+            ? $", downloaded on {SiteFormat.Date(date)}. Preferred citation: UNEP-WCMC (Comps.) {date.Year}. The Checklist of CITES Species Website. CITES Secretariat, Geneva, Switzerland. Compiled by UNEP-WCMC, Cambridge, UK. Available at: http://checklist.cites.org. [Accessed {date.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture)}]."
+            : ".";
 
     /// The text of a JNCC row's link to JNCC's page of the designations.
     public const string OtherStatusJnccRecordLink = "JNCC";
 
     /// The note under the tables when they have JNCC rows, in parts around the links to JNCC's page and
-    /// the licence. fileDate: the date of JNCC's workbook ("9 June 2026"); downloaded: when this site
-    /// downloaded it; attribution: the line JNCC asks for.
+    /// the licence: "United Kingdom statuses are from [Conservation Designations for UK Taxa], the Joint
+    /// Nature Conservation Committee (JNCC) spreadsheet dated 9 June 2026 ([Open Government Licence
+    /// v3.0]), downloaded on 8 October 2026. Contains JNCC/NE/NRW/NatureScot/NIEA data © copyright and
+    /// database right 2026." The attribution is the line JNCC asks for, as stored.
     public const string OtherStatusJnccSubject = "United Kingdom statuses are from ";
-    public const string OtherStatusJnccLink = "JNCC's Conservation Designations for UK Taxa";
-    public static string OtherStatusJnccDates(string? fileDate, string? downloaded) =>
-        (fileDate is null ? "" : $" (the file of {fileDate})") + (downloaded is null ? "." : $", downloaded on {downloaded}.");
-    public static string OtherStatusJnccAttribution(string? attribution) => attribution is null ? " " : $" {attribution}, used under the ";
+    public const string OtherStatusJnccLink = "Conservation Designations for UK Taxa";
+    public static string OtherStatusJnccSpreadsheet(string? fileDate) =>
+        fileDate is null ? ", the Joint Nature Conservation Committee (JNCC) spreadsheet (" : $", the Joint Nature Conservation Committee (JNCC) spreadsheet dated {fileDate} (";
     public const string OtherStatusJnccLicence = "Open Government Licence v3.0";
+    public static string OtherStatusJnccRest(string? downloaded, string? attribution) =>
+        ")" + (downloaded is null ? "." : $", downloaded on {downloaded}.") + (attribution is null ? "" : $" {attribution.TrimEnd('.')}.");
 
     public const string OtherStatusNatureServeCanadaCopy =
         "NatureServe's copy of the Canadian statuses may differ from Canada's Species at Risk Public Registry.";

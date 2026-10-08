@@ -81,9 +81,9 @@ public sealed record OtherStatusSourceInfo(
             return [
                 new(SiteText.OtherStatusJnccSubject),
                 new(SiteText.OtherStatusJnccLink, list?.Url),
-                new(SiteText.OtherStatusJnccDates(DateText(list?.Version), DateText(list?.Fetched)) + SiteText.OtherStatusJnccAttribution(list?.Citation)),
+                new(SiteText.OtherStatusJnccSpreadsheet(DateText(list?.Version))),
                 new(SiteText.OtherStatusJnccLicence, list?.LicenceUrl),
-                new("."),
+                new(SiteText.OtherStatusJnccRest(DateText(list?.Fetched), list?.Citation)),
             ];
         });
 

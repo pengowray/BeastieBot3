@@ -103,7 +103,7 @@ internal static partial class SiteLinkReaders {
                 ?? (listing.InheritedName is { } inheritedName && listing.InheritedRank is { } inheritedRank
                     ? $"{inheritedRank.ToLowerInvariant()} {inheritedName}"
                     : null);
-            var status = "Appendix " + listing.Appendix + (listing.Appendix == "III" && listing.PartyName is { } party ? $" ({party})" : "");
+            var status = "Appendix " + listing.Appendix;
             // A listing's own note names the populations or parts it covers. An inherited listing has the
             // higher taxon's note that applies to this taxon ("Except the populations of Loxodonta
             // africana of Botswana ..."), unless it is about the higher taxon's other members.
@@ -111,7 +111,7 @@ internal static partial class SiteLinkReaders {
             var population = note is null ? null : CitesNote(note, inherited: under is not null);
             taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Cites, status, listing.Appendix, listedName, population,
                 OtherStatusSources.Cites, cites.Id.ToString(CultureInfo.InvariantCulture), cites.Url, listing.EffectiveOn,
-                ListedUnder: under));
+                Qualifier: listing.Appendix == "III" ? listing.PartyName : null, ListedUnder: under));
             stats.CitesRows++;
         }
     }

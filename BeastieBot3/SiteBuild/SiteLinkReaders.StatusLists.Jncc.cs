@@ -44,24 +44,32 @@ internal static partial class SiteLinkReaders {
             var classified = record.Rows
                 .Select(r => (Row: r, Classified: JnccLists.Classify(r.Code, r.Designation, r.StatusCode, r.Area, r.Population)))
                 .Where(c => c.Classified is not null)
-                .Select(c => (c.Row, List: c.Classified!.Value.List, Status: c.Classified.Value.Status))
+                .Select(c => (c.Row, c.Classified!.List, c.Classified.Status, c.Classified.Section))
                 .ToList();
             foreach (var group in classified.GroupBy(c => (c.List.Key, Area: c.Row.Area ?? ""))) {
                 var list = group.First().List;
                 var isRedList = list.Key.StartsWith("jncc-redlist", StringComparison.Ordinal);
                 // A red list: one row per season (the status's bracketed season), the newest designation.
+                // A law: one row per schedule, its sections on the line under it. Any other list: one
+                // row, its statuses joined.
                 var shown = isRedList
                     ? group.GroupBy(c => Regex.Match(c.Status, @" \((breeding|non-breeding)\)$").Value)
                         .Select(season => season.OrderByDescending(c => c.Row.DesignatedOn, StringComparer.Ordinal).First())
-                        .Select(c => (c.Status, Report: c.Row.Source))
+                        .Select(c => (c.Status, Section: (string?)null, Report: c.Row.Source))
                         .ToList()
-                    : [(string.Join("; ", group.Select(c => c.Status).Distinct(StringComparer.Ordinal)),
-                        Report: list.Key == "jncc-rarity" ? group.First().Row.Source : null)];
-                foreach (var (status, report) in shown) {
+                    : group.Any(c => c.Section is not null) || list.SortOrder is >= 40 and < 50
+                        ? group.GroupBy(c => c.Status)
+                            .Select(schedule => (schedule.Key,
+                                Section: JnccLists.Sections(schedule.Select(c => c.Section).OfType<string>().Distinct(StringComparer.Ordinal).ToList()),
+                                Report: (string?)null))
+                            .ToList()
+                        : [(string.Join("; ", group.Select(c => c.Status).Distinct(StringComparer.Ordinal)), Section: (string?)null,
+                            Report: list.Key == "jncc-rarity" ? group.First().Row.Source : null)];
+                foreach (var (status, section, report) in shown) {
                     taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.Jncc, status, null,
                         SiteBuildRules.OtherListedName(group.First().Row.DesignatedName ?? record.Name, taxon.ScientificName),
                         SiteBuildRules.NullIfBlank(group.Key.Area), OtherStatusSources.Jncc, record.TaxonVersionKey,
-                        StatusLists.JnccDesignations.ResourcePageUrl, null, report, ListKey: list.Key));
+                        StatusLists.JnccDesignations.ResourcePageUrl, null, report, ListKey: list.Key, Qualifier: section));
                     stats.JnccRows++;
                 }
                 lists.TryAdd(list.Key, JnccLists.ToListRow(list, fetched, version, citation));

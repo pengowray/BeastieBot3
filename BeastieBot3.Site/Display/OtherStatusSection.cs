@@ -49,8 +49,9 @@ public sealed record OtherStatusTable(
     OtherStatusPlaceRanks? PlaceRanks = null);
 
 /// NatureServe's ranks in the states, provinces or territories of one country, in a collapsed table
-/// under the country's table. Summary: the text that opens it. PlaceHeading: the first column's heading.
-public sealed record OtherStatusPlaceRanks(string Summary, string PlaceHeading, IReadOnlyList<OtherStatusPlaceRank> Rows);
+/// under the country's table. Summary: the text that opens it, with SummaryTitle as its hover title (or
+/// null). PlaceHeading: the first column's heading.
+public sealed record OtherStatusPlaceRanks(string Summary, string? SummaryTitle, string PlaceHeading, IReadOnlyList<OtherStatusPlaceRank> Rows);
 
 /// One state, province or territory: its name, the rank as NatureServe gives it, and what it means.
 public sealed record OtherStatusPlaceRank(string Place, string Rank, string? Meaning);
@@ -106,7 +107,9 @@ public sealed record OtherStatusSection(IReadOnlyList<OtherStatusTable> Tables, 
             .OrderBy(p => p.Place, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var imperiled = rows.Count(r => OtherStatusSystems.NatureServeRankParts(r.Status).Any(p => p.Code is "1" or "2" or "H" or "X"));
-        return new OtherStatusPlaceRanks(SiteText.PlaceRanksSummary(group, places.Count, imperiled), SiteText.PlaceRanksHeading(group), places);
+        var onlyStates = group != "US" || places.All(p => NatureServePlaces.IsUsState(p.Place));
+        return new OtherStatusPlaceRanks(SiteText.PlaceRanksSummary(group, places.Count, imperiled, onlyStates),
+            imperiled == 0 ? null : SiteText.PlaceRanksImperiledTitle, SiteText.PlaceRanksHeading(group, onlyStates), places);
     }
 
     /// The heading of a date column whose dates come from these sources: the heading of a source with
@@ -121,14 +124,14 @@ public sealed record OtherStatusSection(IReadOnlyList<OtherStatusTable> Tables, 
     }
 
     private static OtherStatusLine BuildLine(OtherStatusRow row, string taxonKind) {
-        var (label, title, isAbbreviation) = row.List is { } list ? (list.Name, list.Title, false) : SiteText.OtherStatusList(row.System);
+        var (label, title, isAbbreviation) = row.List is { } list ? (list.Name, list.Title, false) : SiteText.OtherStatusList(row.System, row.Country);
         return new OtherStatusLine(
             label,
             title,
             isAbbreviation,
             row.Status,
             StatusTitle: SiteText.NatureServeRankTitle(row),
-            RankMeaning: row.ListedUnder is { } under ? SiteText.OtherStatusListedUnder(under) : SiteText.NatureServeRankMeaning(row, taxonKind),
+            RankMeaning: SiteText.OtherStatusSecondLine(row, taxonKind),
             AppliesTo: AppliesTo(row, taxonKind),
             ListedNameHtml: row.ListedName is { } listedName ? ListedNameHtml(listedName) : null,
             row.Report,

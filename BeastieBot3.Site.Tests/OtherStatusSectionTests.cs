@@ -52,14 +52,15 @@ public sealed class OtherStatusSectionTests {
             Local("natureserve-national", "CA", "N2"));
         Assert.Equal(["Canada", "United States"], section.Tables.Select(t => t.Heading));
         var us = section.Tables[1];
-        Assert.Equal(["Endangered Species Act", "NatureServe"], us.Rows.Select(r => r.ListLabel));
+        Assert.Equal(["Endangered Species Act", "NatureServe national rank"], us.Rows.Select(r => r.ListLabel));
         Assert.Equal("Vulnerable", us.Rows[1].RankMeaning);
         var places = us.PlaceRanks!;
         Assert.Equal(["Alabama", "Hawaii", "Texas"], places.Rows.Select(p => p.Place));
-        Assert.Equal("Apparently Secure when breeding; Secure when not breeding", places.Rows[0].Meaning);
-        Assert.Equal("Not Applicable; exotic", places.Rows[1].Meaning);
+        Assert.Equal("Apparently Secure (breeding); Secure (non-breeding)", places.Rows[0].Meaning);
+        Assert.Equal("Not Applicable: introduced there", places.Rows[1].Meaning);
         Assert.Equal("Critically Imperiled", places.Rows[2].Meaning);
-        Assert.Equal("NatureServe ranks in 3 states, imperiled or worse in 1", places.Summary);
+        Assert.Equal("NatureServe ranks for 3 states, Imperiled or worse in 1 of them", places.Summary);
+        Assert.Equal("State", places.PlaceHeading);
         Assert.Null(section.Tables[0].PlaceRanks);
     }
 

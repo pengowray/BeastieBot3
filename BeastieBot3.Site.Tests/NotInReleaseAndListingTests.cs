@@ -185,7 +185,7 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
             new[] { "List", "Status", "First listed", "Source" },
             new[] { "Endangered Species Act", "Threatened", "15 May 2008", "ECOS profile" },
             new[] { "List", "Status", "Source" },
-            new[] { "NatureServe", "G3G4 Vulnerable (rounded rank G3)", "NatureServe Explorer" },
+            new[] { "NatureServe global rank", "G3G4 Vulnerable (rounded rank G3)", "NatureServe Explorer" },
         }, rows);
         Assert.Contains("<abbr title=\"Committee on the Status of Endangered Wildlife in Canada, an independent committee that assesses species\">COSEWIC</abbr>", section);
         Assert.Contains("<a href=\"https://ecos.fws.gov/ecp/species/4958\">ECOS profile</a>", section);
