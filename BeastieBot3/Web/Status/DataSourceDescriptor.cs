@@ -76,7 +76,7 @@ public static class DataSourceCatalogue {
             Id = "iucn-api-cache",
             Name = "IUCN API cache",
             Kind = "sqlite",
-            Description = "Local cache of /api/v4 taxa and assessment payloads.",
+            Description = "Local cache of /api/v4 taxa and assessment payloads, and the IUCN Green Status of Species assessments (`iucn api green-status`).",
             ResolvePath = p => p.GetIucnApiCachePath(),
             Metrics = new[] {
                 new MetricSpec { Label = "taxa cached",         Sql = "SELECT COUNT(*) FROM taxa" },
@@ -96,6 +96,7 @@ public static class DataSourceCatalogue {
                         """,
                 },
                 new MetricSpec { Label = "failed requests",     Sql = "SELECT COUNT(*) FROM failed_requests" },
+                new MetricSpec { Label = "Green Status assessments", Sql = "SELECT COUNT(*) FROM green_status" },
             },
         },
         new DataSourceDescriptor {
