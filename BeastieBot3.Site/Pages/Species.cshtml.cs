@@ -141,9 +141,8 @@ public sealed class SpeciesModel : TaxonPageModel {
     /// The genus this taxon is in, for the link to the genus's list page; null when the site has no group for it.
     public GroupRow? GenusGroup => Classification.LastOrDefault(g => g.IsGenus);
 
-    public IReadOnlyList<EnglishCommonName> EnglishNames { get; private set; } = [];
-    public IReadOnlyList<LanguageGroup> OtherLanguages { get; private set; } = [];
-    public IReadOnlyList<SynonymRow> Synonyms { get; private set; } = [];
+    /// English common names, names in other languages and synonyms, with their sources.
+    public TaxonNames Names { get; private set; } = new([], [], []);
 
     /// For a species in the release: its subspecies and varieties from IUCN, the Catalogue of Life and
     /// Wikidata; null for any other taxon and when no source lists one.
@@ -196,7 +195,7 @@ public sealed class SpeciesModel : TaxonPageModel {
             StatusParts = PartsOf(status);
             StatusCredits = CreditsView.Build(_queries.GetCredits(status.AssessmentId));
         }
-        LoadNames();
+        Names = TaxonNames.Build(_queries.GetNames(taxon.TaxonId), taxon.CommonNameEn);
         SubspeciesList = SubspeciesRows.Load(_queries, Taxon);
         LoadRelatedTaxa();
         LoadArrival(q);
@@ -215,13 +214,6 @@ public sealed class SpeciesModel : TaxonPageModel {
             UnassessedSpeciesName = $"{taxon.Genus} {taxon.SpeciesEpithet}";
             RelatedTaxa = _queries.GetUnassessedSpeciesSiblings(taxon);
         }
-    }
-
-    private void LoadNames() {
-        var names = TaxonNames.Build(_queries.GetNames(Taxon!.TaxonId), Taxon.CommonNameEn);
-        EnglishNames = names.English;
-        OtherLanguages = names.OtherLanguages;
-        Synonyms = names.Synonyms;
     }
 
     private void LoadArrival(string? q) {

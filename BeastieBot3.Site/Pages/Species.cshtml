@@ -43,7 +43,7 @@
         <p class="taxon-common-name">@taxon.CommonNameEn</p>
     }
     @if (SiteFormat.ProvisionalMarker(taxon.ScientificName) is { } provisional) {
-        <p class="provisional-note">@SiteText.ProvisionalName(provisional.Marker, provisional.Rank, Model.Synonyms.Count > 0)</p>
+        <p class="provisional-note">@SiteText.ProvisionalName(provisional.Marker, provisional.Rank, Model.Names.Synonyms.Count > 0)</p>
     }
     @if (parentPrefix is not null && Model.Parent is { } parent) {
         <p class="parent-line">@parentPrefix <a href="/species/@parent.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(parent.ScientificName, parent.SubpopulationName))</a></p>
@@ -195,81 +195,7 @@
 
 @if (Model.OtherStatusSection is { } otherStatuses) {<partial name="_OtherStatuses" model="otherStatuses" />}
 
-<section class="names" aria-labelledby="names-heading">
-    <h2 id="names-heading">@SiteText.HeadingNames</h2>
-    <h3>@SiteText.NamesEnglish</h3>
-    @if (Model.EnglishNames.Count == 0) {
-        <p>@SiteText.NoEnglishName</p>
-    } else {
-        <div class="table-scroll">
-            <table class="names-table">
-                <thead>
-                    <tr>
-                        <th scope="col">@SiteText.ColName</th>
-                        <th scope="col">@SiteText.ColSource</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var n in Model.EnglishNames) {
-                        <tr>
-                            <th scope="row">@n.Name @if (n.IsIucnMain) {<span class="tag">@SiteText.IucnMainName</span>}</th>
-                            <td>@string.Join(", ", n.Sources)</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-
-    @if (Model.OtherLanguages.Count > 0) {
-        <h3>@SiteText.NamesOtherLanguages</h3>
-        var hiddenLanguages = Math.Max(0, Model.OtherLanguages.Count - SpeciesModel.ShortListLength);
-        @* One table, one tbody per language with the language in a header cell across its rows; the
-           languages after the first few are hidden until the box is ticked. *@
-        <div class="more-list">
-            <div class="table-scroll">
-                <table class="names-table language-names">
-                    <thead>
-                        <tr>
-                            <th scope="col">@SiteText.ColLanguage</th>
-                            <th scope="col">@SiteText.ColName</th>
-                            <th scope="col">@SiteText.ColSource</th>
-                        </tr>
-                    </thead>
-                    @for (var i = 0; i < Model.OtherLanguages.Count; i++) {
-                        var g = Model.OtherLanguages[i];
-                        <tbody class="@(i >= SpeciesModel.ShortListLength ? "more-item" : null)">
-                            @for (var j = 0; j < g.Names.Count; j++) {
-                                var n = g.Names[j];
-                                <tr>
-                                    @if (j == 0) {
-                                        <th scope="rowgroup" rowspan="@g.Names.Count">@g.Language</th>
-                                    }
-                                    <td lang="@g.Lang">@n.Name@if (n.Latin is { } latin) {<text> </text><span class="transliteration" lang="@(g.Lang is null ? "und-Latn" : g.Lang + "-Latn")" title="@SiteText.TransliterationTitle">@latin</span>}</td>
-                                    <td>@string.Join(", ", n.Sources)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    }
-                </table>
-            </div>
-            @if (hiddenLanguages > 0) {
-                <p class="more-toggle"><label><input type="checkbox" class="show-more" autocomplete="off"> @SiteText.ShowMoreLanguages(hiddenLanguages)</label></p>
-            }
-        </div>
-    }
-
-    @if (Model.Synonyms.Count > 0) {
-        <h3>@SiteText.NamesSynonyms</h3>
-        @* One table; the synonyms after the first few are hidden until the box is ticked. *@
-        <div class="more-list">
-            <partial name="_SynonymTable" model="Model.Synonyms" />
-            @if (Model.Synonyms.Count > SpeciesModel.ShortListLength) {
-                <p class="more-toggle"><label><input type="checkbox" class="show-more" autocomplete="off"> @SiteText.ShowMoreSynonyms(Model.Synonyms.Count - SpeciesModel.ShortListLength)</label></p>
-            }
-        </div>
-    }
-</section>
+<partial name="_TaxonNames" model="Model.Names" />
 @if (Model.SubspeciesList is { } subspeciesList) {<partial name="_Subspecies" model="subspeciesList" />}
 
 @if (Model.ComparativeClassification.Count > 0) {
