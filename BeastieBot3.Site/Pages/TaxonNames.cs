@@ -13,8 +13,9 @@ public sealed record SynonymSource(string Label, string? OtherAuthority);
 public sealed record SynonymRow(string Name, string? Authority, IReadOnlyList<SynonymSource> Sources);
 
 /// A common name in a language other than English, in the form most of its sources give, with the
-/// labels of its sources in OtherLanguageSourceOrder.
-public sealed record OtherLanguageName(string Name, IReadOnlyList<string> Sources);
+/// labels of its sources in OtherLanguageSourceOrder. Latin: its transliteration into Latin letters
+/// (NameTransliteration), or null.
+public sealed record OtherLanguageName(string Name, IReadOnlyList<string> Sources, string? Latin = null);
 
 /// Common names in one language, the names with most sources first. Lang: the code for the lang
 /// attribute, or null.
@@ -47,7 +48,7 @@ public sealed record TaxonNames(
         var otherLanguages = names
             .Where(n => n.NameType == NameTypes.Common && !LanguageNames.IsEnglish(n.Language))
             .GroupBy(n => LanguageNames.Key(n.Language))
-            .Select(g => new LanguageGroup(LanguageNames.Name(g.Key), LanguageNames.LangAttribute(g.Key), OtherLanguageNames(g),
+            .Select(g => new LanguageGroup(LanguageNames.Name(g.Key), LanguageNames.LangAttribute(g.Key), OtherLanguageNames(g, g.Key),
                 NotGiven: g.Key.Length == 0))
             .OrderBy(g => g.NotGiven)
             .ThenBy(g => g.Language, StringComparer.CurrentCultureIgnoreCase)
@@ -58,13 +59,14 @@ public sealed record TaxonNames(
 
     /// The names of one language, one per name with case and Unicode normalisation ignored
     /// (SiteNameKey.CaseFold; accents count), each with all the sources that give it: the names
-    /// with most sources first, then by name.
-    public static IReadOnlyList<OtherLanguageName> OtherLanguageNames(IEnumerable<NameRow> rows) => rows
+    /// with most sources first, then by name. lang: the language's code, for the transliteration.
+    public static IReadOnlyList<OtherLanguageName> OtherLanguageNames(IEnumerable<NameRow> rows, string? lang = null) => rows
         .GroupBy(r => SiteNameKey.CaseFold(r.Name))
         .Select(g => {
             var group = g.OrderBy(r => OtherLanguageSourceOrder(r.Source)).ThenBy(r => r.NameId).ToList();
             var sources = group.Select(r => r.Source).Distinct().ToList();
-            return new OtherLanguageName(ShownForm(group), sources.Select(SiteText.SourceLabel).ToList());
+            var shown = ShownForm(group);
+            return new OtherLanguageName(shown, sources.Select(SiteText.SourceLabel).ToList(), NameTransliteration.For(shown, lang));
         })
         .OrderByDescending(n => n.Sources.Count)
         .ThenBy(n => n.Name, StringComparer.CurrentCultureIgnoreCase)

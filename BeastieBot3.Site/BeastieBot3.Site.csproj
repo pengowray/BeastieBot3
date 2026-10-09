@@ -19,6 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Latin transliterations of common names in other scripts (ICU's transforms, managed port). -->
+    <PackageReference Include="ICU4N.Transliterator" Version="60.1.0-alpha.356" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
   </ItemGroup>
 

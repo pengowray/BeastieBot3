@@ -244,7 +244,7 @@
                                     @if (j == 0) {
                                         <th scope="rowgroup" rowspan="@g.Names.Count">@g.Language</th>
                                     }
-                                    <td lang="@g.Lang">@n.Name</td>
+                                    <td lang="@g.Lang">@n.Name@if (n.Latin is { } latin) {<text> </text><span class="transliteration" lang="@(g.Lang is null ? "und-Latn" : g.Lang + "-Latn")" title="@SiteText.TransliterationTitle">@latin</span>}</td>
                                     <td>@string.Join(", ", n.Sources)</td>
                                 </tr>
                             }

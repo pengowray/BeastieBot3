@@ -35,4 +35,7 @@ public static partial class SiteText {
     public const string WikitextPageLabel = "Wikitext and citations";
     public const string BackToTaxonPage = "Back to the taxon page";
     public const string WikitextChooseAssessment = "Choose an assessment in the tables below to get its wikitext.";
+
+    // Taxon page, names in other languages: the grey line under a name in another script.
+    public const string TransliterationTitle = "Transliteration into Latin letters";
 }

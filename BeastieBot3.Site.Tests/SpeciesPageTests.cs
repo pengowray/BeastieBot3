@@ -375,8 +375,8 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         // The name with most sources first.
         Assert.Contains("German Tiger Wikidata, Catalogue of Life, Wikipedia Königstiger Wikidata", text);
         Assert.Matches("<th scope=\"rowgroup\" rowspan=\"2\">German</th>\\s*<td lang=\"de\">Tiger</td>", html);
-        Assert.Contains("Japanese トラ Wikidata, Catalogue of Life, Wikipedia", text);
-        Assert.Contains("Chinese 老虎 Wikidata, Catalogue of Life 虎 Wikipedia", text);
+        Assert.Contains("Japanese トラ tora Wikidata, Catalogue of Life, Wikipedia", text);
+        Assert.Contains("Chinese 老虎 lǎo hǔ Wikidata, Catalogue of Life 虎 hǔ Wikipedia", text);
         // Languages by name; the 11th and later are hidden until the box is ticked.
         var languages = new[] {
             "Austronesian languages", "Chinese", "Dutch", "French", "German", "Italian", "Japanese", "Korean", "Polish", "Portuguese",

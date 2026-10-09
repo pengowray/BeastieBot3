@@ -1622,6 +1622,13 @@ th.num {
     text-decoration: none;
 }
 
+/* A name in another script, with its transliteration into Latin letters on the line below. */
+.language-names .transliteration {
+    display: block;
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
 /* A list or table whose items after the first few are hidden until its "Show all" box is ticked
    (synonyms and names in other languages on a taxon page). */
 .more-list .more-item {
