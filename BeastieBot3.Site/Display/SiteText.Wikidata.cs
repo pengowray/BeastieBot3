@@ -30,7 +30,7 @@ public static partial class SiteText {
     public const string SearchWikidataLink = "search Wikidata";
     public const string SearchWikidataAfter = " in case one was added after this site's data was downloaded.";
     public const string CreateItemLine =
-        "To create the item, run these commands in QuickStatements with your Wikidata account. Then cite the new item with {{cite Q|<new item id>}}.";
+        "To create the item, run these commands in QuickStatements with your Wikidata account. Then cite the new item with {{cite Q|<new item id>|name-list-style=apa}}, which gives the authors' given names as initials.";
     public const string LabelCreateItem = "QuickStatements commands to create the item";
     public const string OpenInQuickStatements = "Open in QuickStatements";
     public const string CopyQuickStatements = "Copy QuickStatements commands";
