@@ -390,7 +390,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     public async Task AnEarlierAssessmentIdRedirectsWithThatAssessmentShown() {
         var response = await _client.GetAsync($"/search?q=e.T{FixtureDb.PolarBear}A{FixtureDb.PolarBear2008}");
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal($"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}#wikitext", response.Headers.Location?.OriginalString);
+        Assert.Equal($"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}#wikitext", response.Headers.Location?.OriginalString);
     }
 
     [Fact]
@@ -406,7 +406,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     public async Task AllResultsListsAnAssessmentIdMatch() {
         var html = await _client.GetStringAsync($"/search?q=A{FixtureDb.PolarBear2008}&all=1");
         Assert.Contains($"Matched IUCN assessment ID: {FixtureDb.PolarBear2008} (Global, 2008)", Html.Text(html));
-        Assert.Contains($"href=\"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}#wikitext\"", html);
+        Assert.Contains($"href=\"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}#wikitext\"", html);
     }
 
     [Fact]

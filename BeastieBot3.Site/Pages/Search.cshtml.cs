@@ -172,10 +172,10 @@ public sealed class SearchModel : PageModel {
         return Page();
     }
 
-    /// The taxon page of an id hit: with the assessment shown, when the id was an assessment's that
-    /// the page does not show first.
+    /// The page of an id hit: the taxon page, or the taxon's wikitext page with the assessment shown
+    /// when the id was an assessment's other than the one the taxon page shows first.
     public static string SpeciesUrl(IdHit hit) => hit is { AssessmentId: { } aid, IsDefault: false }
-        ? $"/species/{hit.Taxon.TaxonId}?assessment={aid}#wikitext"
+        ? SpeciesWikitextModel.PathFor(hit.Taxon.TaxonId, $"?assessment={aid}") + "#wikitext"
         : $"/species/{hit.Taxon.TaxonId}";
 
     /// <summary>

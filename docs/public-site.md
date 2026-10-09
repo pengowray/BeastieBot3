@@ -20,7 +20,7 @@ on the taxon's Wikidata item up to date. Instructions for deploying it to an Ora
 | IUCN citations | `BeastieBot3/Iucn/Citations/` | Code the site build and the Wikidata dry run share: `CreditNameSplitter` (splits a credit's `full` string into names), `IucnAuthorNameParser` (reads one name as a person, an organisation, or a name kept as IUCN wrote it), `AssessorNamePool` (repairs names with a letter lost to an encoding error), `AssessorGivenNames` (finds a person's full given names in the assessor credit's `value[]` list; see [Full given names](#full-given-names)) and `IucnCitationText` (removes IUCN's "Accessed on" sentence and reads the DOI in IUCN's citation text). |
 | DOI lookup | `BeastieBot3/Iucn/Doi/` | `iucn resolve-dois` looks for DOIs that IUCN's citation text, GBIF and Wikidata do not give, in Crossref's list of IUCN DOIs and at doi.org, and saves them in the DOI cache (`Datastore:IUCN_doi_cache_sqlite`). See [Missing DOIs](#missing-dois-iucn-resolve-dois). |
 | Site build | `BeastieBot3/SiteBuild/` | `site build-db` builds the site database; `site check-citations` writes a read-only report. Citation code: `IucnCitationPartsParser` (title annotations, and putting the parts together), `IucnDoiSelector` (choosing a DOI), `IucnTaxaHeaders` (each taxon's list of assessments). `SiteApiTaxaReader` reads the taxa that are only in the API cache. `SiteBuildRules.ClassifySpratName` matches SPRAT profiles to taxa, both whole-taxon profiles and population profiles. `SiteWikidataItems` chooses each assessment's Wikidata item. `SiteBuildRules.DescribesAnotherKingdom` decides whether a Wikidata item matched to a taxon by name is left out of `taxon.wikidata_qid`: it is left out when the item's English description names a group in another kingdom. `SiteLinkReaders` reads the taxon items' IUCN conservation status (P141) statements, and `P141JsonReferences` reads the parts of their references that the Wikidata cache's index does not record: later stated in items and reference URLs (see [IUCN conservation status on Wikidata](#iucn-conservation-status-on-wikidata)). |
-| Site | `BeastieBot3.Site/` (net10.0, Razor Pages) | Opens the site database read-only and reads no other data. `Pages/WikitextOptions.cs` reads and writes the citation options; `Pages/WikidataCite.cs` builds the `{{cite Q}}` part and the IUCN conservation status part of the wikitext section, which the partials `Pages/Shared/_WikidataName.cshtml`, `_WikidataItemChanges.cshtml`, `_WikidataMainSubject.cshtml`, `_WikidataStatus.cshtml` and `_WikidataStatusPlan.cshtml` show; `wwwroot/site.js` updates the wikitext when an option changes (see [Citation options](#citation-options)). `wwwroot/theme.js` and the tokens at the top of `wwwroot/site.css` make the light and dark themes (see [Theme](#theme)). Tests in `BeastieBot3.Site.Tests/`, and a Playwright check of the wikitext updates in `BeastieBot3.Site.Tests/browser/live-update.cjs`. |
+| Site | `BeastieBot3.Site/` (net10.0, Razor Pages) | Opens the site database read-only and reads no other data. Taxon and group pages are reference pages; the wikitext tools are on their own pages (see [Taxon pages, wikitext pages and the Tools menu](#taxon-pages-wikitext-pages-and-the-tools-menu)). `Pages/WikitextOptions.cs` reads and writes the citation options; `Pages/WikidataCite.cs` builds the `{{cite Q}}` part and the IUCN conservation status part of the wikitext section, which the partials `Pages/Shared/_WikidataName.cshtml`, `_WikidataItemChanges.cshtml`, `_WikidataMainSubject.cshtml`, `_WikidataStatus.cshtml` and `_WikidataStatusPlan.cshtml` show; `wwwroot/site.js` updates the wikitext when an option changes (see [Citation options](#citation-options)). `wwwroot/theme.js` and the tokens at the top of `wwwroot/site.css` make the light and dark themes (see [Theme](#theme)). Tests in `BeastieBot3.Site.Tests/`, and a Playwright check of the wikitext updates in `BeastieBot3.Site.Tests/browser/live-update.cjs`. |
 | Deployment | `deploy/oracle/` | Server setup, app and database deploys, rollback, status. |
 
 `BeastieBot3.Site` references only `BeastieBot3.Shared`, never the `BeastieBot3` project, because
@@ -423,6 +423,15 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
     with most sources first, then by name; languages by their English name, "Language not given"
     last. Each language is one `tbody` whose first row has the language in a `th` with `rowspan`;
     the languages after the first 10 are hidden until the reader ticks "Show all languages".
+  - A name in another script has its transliteration into Latin letters under it, in grey
+    (`Display/NameTransliteration.cs`): ICU's Any-Latin transform through the managed port ICU4N
+    (`ICU4N.Transliterator`, an alpha release; an exception gives no transliteration). Pinyin with
+    tone marks for Chinese, Hepburn-style romaji for kana, ISO-style transliterations for Cyrillic,
+    Greek, Indic and other alphabets. Left out: names already in Latin letters; Arabic, Hebrew,
+    Syriac and Thaana, which are written without most vowels; Thai and Lao, which ICU gives only
+    with diacritics few readers know; and Chinese characters in any language but Chinese (`zh`,
+    `cmn`), because ICU reads them as Mandarin (a Japanese name with kanji would get a Chinese
+    reading). Computed when the page is made; nothing is stored.
   - These names are in `name_key` and `name_fts`, so a search in another language finds the
     taxon, but not in `name_word` (spelling suggestions use the English names only).
 - When the build reads the DOI cache, it sets the meta key `iucn_doi_checked_to` to the newest
@@ -663,7 +672,8 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   so it can go inside a `<legend>`, but never inside a `<label>`. A fieldset whose legend has one
   gets `aria-labelledby` pointing at a span around the legend's text, so screen readers name the
   group "Red List categories", not "Red List categories Help for Red List categories".
-- "Wikipedia list": the list as wikitext, with a preview, and the options beside it
+- The group's list page (`/taxa/{rank}/{name}/list`, linked from the group page's Tools section):
+  the list as wikitext, with a preview, and the options beside it
   (`Lists/GroupListQuery.cs` reads and writes them as query parameters, so a list can be linked):
   line format (the lists' styles A, B and C; the default is the style the generated lists use for
   such a group), `{{IUCN status}}` on or off, a section for each category (off by default), a
@@ -1525,8 +1535,8 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   (taxon id), `A14871490` (assessment id), a plain number (looked up as both), an IUCN DOI
   (`10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en`, also with `doi:` or a doi.org address) and a
   Red List address (`iucnredlist.org/species/22823/14871490`). One match redirects to the taxon
-  page; an assessment that is not the taxon's latest global one opens with that assessment's
-  wikitext shown (`?assessment=N#wikitext`). Several matches are listed with "Matched IUCN taxon
+  page; an assessment that is not the taxon's latest global one opens the taxon's wikitext page
+  with that assessment's wikitext shown (`/species/{id}/wikitext?assessment=N#wikitext`). Several matches are listed with "Matched IUCN taxon
   ID" or "Matched IUCN assessment ID". A DOI is read for the ids in it, so the DOI of an errata
   version that names the assessment it corrects finds that assessment. When the text names a
   taxon and an assessment and the site has only the taxon, the taxon is listed under a line
@@ -1605,7 +1615,11 @@ taxon's classification in IUCN, on this site (IUCN with the
 Catalogue of Life groups between its ranks), in the Catalogue of Life, Wikidata, English
 Wikipedia and Wikispecies, row by main rank (kingdom to species; `Display/ClassificationComparison.cs`).
 `site build-db` writes each source's nodes to `ladder_node` (`SiteBuild/SiteLadders.cs`); the page
-climbs `parent_id` from the taxon's start node.
+climbs `parent_id` from the taxon's start node. The rows above the order row (above family, or
+genus, when no source has an order) are hidden until the reader ticks "Show N ranks above order"
+(`ComparisonRow.AboveCut`; CSS only, `:has`); the label also counts the hidden cells marked ≠.
+Every row from order down is shown, including groups that only Wikidata, Wikipedia or Wikispecies
+has, because the lower ranks are the ones that differ between sources.
 
 | Source | Start node | Downloaded by |
 | --- | --- | --- |
@@ -1623,9 +1637,42 @@ template's "Rank: name" lines (Latin ranks in English, as for Wikipedia's templa
 out comments, `<noinclude>` parts and the templates' "summary" blocks. A taxon gets a Wikispecies
 column only when its page's last taxonavigation line names the page itself.
 
+### Taxon pages, wikitext pages and the Tools menu
+
+A taxon page (`/species/{id}`, `Pages/Species.cshtml`, `SpeciesModel`) is a reference page: status,
+assessment tables, IUCN's subspecies and subpopulations, Green Status, other statuses, names,
+classifications, links, and a "Tools" section at the bottom. The status section has IUCN's own
+citation text and the credits of the assessment it shows. The wikitext for citing the taxon's
+assessments is on its wikitext page (`/species/{id}/wikitext`, `Pages/SpeciesWikitext.cshtml`,
+`SpeciesWikitextModel`): `{{cite iucn}}`, `{{IUCN status}}`, the taxobox status lines (with the
+taxobox status check under them), the Green Status citation, the citation options, `{{cite Q}}`
+and the Wikidata commands, then the same assessment tables with a "Show wikitext" column that picks
+the assessment. Both models derive from `TaxonPageModel`, which reads the taxon and its assessment
+tables; the tables are one partial (`_AssessmentTables.cshtml`, with `_CombinedHistory.cshtml`)
+that adds the column when its model is a `SpeciesWikitextModel`.
+
+A group page (`/taxa/{rank}/{name}`, `GroupModel`) and its list page
+(`/taxa/{rank}/{name}/list`, `Pages/GroupList.cshtml`, `GroupListModel`) split the same way; both
+derive from `GroupPageModel`, which finds the group (or lists the groups with that rank and name,
+linking each to the same kind of page).
+
+- An address of a taxon page with a wikitext option (`SiteCachePolicies.SpeciesQueryKeys`:
+  `assessment`, `authors`, `fullnames`, `access`, `opts`, `ref`, `refname`, `amp`, `cite`,
+  `gsyear`) is redirected (302) to the wikitext page with the same query, `q` left out. An address
+  of a group page with a list option (`GroupListModel.ListQueryKeys`) goes to the list page. These
+  keys stay in the reference pages' output cache keys, so such an address never gets the cached
+  page instead of the redirect; only 200 answers are stored.
+- A search for an assessment id that is not the taxon's first assessment goes straight to the
+  wikitext page (`SearchModel.SpeciesUrl`).
+- The header has a "Tools" menu (`<details class="nav-menu">` in `_Layout.cshtml`; `site.js` closes
+  it on Escape and on a click outside it): the tool of the page shown first (`ViewData["PageTools"]`,
+  set by the taxon and group pages), then the update page and "All tools" (`/tools`,
+  `Pages/Tools.cshtml`, which describes each tool and links an example taxon and genus). Strings in
+  `Display/SiteText.Tools.cs` and `GroupText.Tools.cs`.
+
 ### Citation options
 
-The options form in a taxon page's wikitext section is read from and written to the query string
+The options form on a taxon's wikitext page is read from and written to the query string
 (`Pages/WikitextOptions.cs`): `authors=author|lastfirst` (default `lastfirst`, `|last1=Surname
 |first1=I.`, since 6 October 2026; a sole author that is not a person, such as BirdLife International,
 is `|author=`; the species tables and `/update` use the same default), `fullnames=1`,
