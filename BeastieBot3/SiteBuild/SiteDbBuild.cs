@@ -617,6 +617,7 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.ColRelease, _stats.ColRelease);
         writer.SetMeta(SiteDbSchema.MetaKeys.MddVersion, _stats.MddVersion);
         writer.SetMeta(SiteDbSchema.MetaKeys.AmphibiaWebVersion, _stats.AmphibiaWebVersion);
+        writer.SetMeta(SiteDbSchema.MetaKeys.ReptileDbVersion, _stats.ReptileDbVersion);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColCitation, _stats.ColCitation);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColDoi, _stats.ColDoi);
         writer.SetMeta(SiteDbSchema.MetaKeys.SpratReport, _stats.SpratReport);

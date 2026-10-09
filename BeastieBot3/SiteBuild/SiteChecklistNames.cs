@@ -24,6 +24,7 @@ internal static class SiteChecklistNames {
         var info = store.Sources().ToDictionary(s => s.Source, StringComparer.Ordinal);
         stats.MddVersion = info.GetValueOrDefault("mdd")?.Version;
         stats.AmphibiaWebVersion = info.GetValueOrDefault("amphibiaweb")?.Version;
+        stats.ReptileDbVersion = info.GetValueOrDefault("reptiledb")?.Version;
         var matched = new HashSet<long>();
         foreach (var (source, className, siteSource) in Sources) {
             if (!info.ContainsKey(source)) {

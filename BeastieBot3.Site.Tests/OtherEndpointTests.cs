@@ -151,7 +151,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("<th scope=\"row\"><a href=\"https://www.wikipedia.org\">Wikipedia</a></th>", html);
         Assert.Contains("Common names in English and other languages (from article titles), classification and English common names "
             + "(from taxoboxes), and links to English Wikipedia articles", text);
-        Assert.Contains("English common names and synonyms of mammals", text);
+        Assert.Contains("English common names, synonyms and subspecies of mammals", text);
         Assert.Contains("<td><a href=\"https://creativecommons.org/licenses/by-nc/4.0/\">CC BY-NC 4.0</a></td>", html);
         Assert.Contains("Mammal Diversity Database. Mammal Diversity Database (v2.5). Zenodo.", text);
         Assert.Contains("AmphibiaWeb. University of California, Berkeley, CA, USA. Names list of", text);

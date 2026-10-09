@@ -187,6 +187,9 @@ public static partial class SiteText {
     public const string MddUrl = "https://www.mammaldiversity.org/";
     /// The Mammal Diversity Database's releases on Zenodo (the concept DOI, which leads to the newest).
     public const string MddDoiUrl = "https://doi.org/10.5281/zenodo.4139722";
+    public const string ReptileDbUrl = "http://www.reptile-database.org/";
+    /// The Reptile Database's DOI on ChecklistBank (dataset 1008), for every version.
+    public const string ReptileDbDoiUrl = "https://doi.org/10.48580/d37s";
     public const string AmphibiaWebUrl = "https://amphibiaweb.org/";
     public const string LicenceCc0 = "https://creativecommons.org/publicdomain/zero/1.0/";
     public const string IucnRedListUrl = "https://www.iucnredlist.org";

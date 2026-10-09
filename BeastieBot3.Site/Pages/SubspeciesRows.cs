@@ -21,7 +21,8 @@ public sealed record SubspeciesSource(string Source, string Label, IReadOnlyList
 /// in SourceOrder.
 public sealed record SubspeciesRow(string Name, string Rank, string? Authority, IReadOnlyList<SubspeciesSource> Sources);
 
-/// The species page's list of subspecies and varieties from IUCN, the Catalogue of Life and Wikidata:
+/// The species page's list of subspecies and varieties from IUCN, Wikidata, the Catalogue of Life, the
+/// Mammal Diversity Database and the Reptile Database:
 /// the names with most sources first, then by name, as in the table of names in other languages.
 public sealed record SubspeciesList(IReadOnlyList<SubspeciesRow> Rows) {
     public bool HasSubspecies => Rows.Any(r => r.Rank == InfraspecificNames.Subspecies);

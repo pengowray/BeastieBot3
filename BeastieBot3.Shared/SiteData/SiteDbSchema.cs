@@ -588,6 +588,8 @@ public static class SiteDbSchema {
         /// The Mammal Diversity Database and AmphibiaWeb versions the names come from.
         public const string MddVersion = "mdd_version";
         public const string AmphibiaWebVersion = "amphibiaweb_version";
+        /// The Reptile Database's version in the checklists store ("ChecklistBank 1008 (2026-06)"), whose subspecies the site lists.
+        public const string ReptileDbVersion = "reptiledb_version";
         /// The release's recommended citation and DOI from the ColDP metadata ("10.48580/dgykv").
         public const string ColCitation = "col_citation";
         public const string ColDoi = "col_doi";

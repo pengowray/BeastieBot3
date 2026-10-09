@@ -29,6 +29,8 @@ public sealed class AboutModel : PageModel {
     /// The Mammal Diversity Database's version ("v2.5") and the date of AmphibiaWeb's names file, when the site has their names.
     public string? MddVersion { get; private set; }
     public string? AmphibiaWebDate { get; private set; }
+    /// The Reptile Database's version ("ChecklistBank 1008 (2026-06)"), when the site lists its subspecies.
+    public string? ReptileDbVersion { get; private set; }
     public string? SpratDate { get; private set; }
     /// When the site database's copies of NatureServe Explorer and of ECOS were downloaded; null when it has none.
     public string? NatureServeDate { get; private set; }
@@ -98,6 +100,7 @@ public sealed class AboutModel : PageModel {
             : snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistVersion);
         ColRelease = snapshot.Get(SiteDbSchema.MetaKeys.ColRelease);
         MddVersion = snapshot.Get(SiteDbSchema.MetaKeys.MddVersion);
+        ReptileDbVersion = snapshot.Get(SiteDbSchema.MetaKeys.ReptileDbVersion);
         AmphibiaWebDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.AmphibiaWebVersion), out var aw) ? SiteFormat.Date(aw) : null;
         GbifCitation = snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistCitation);
         if (snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistDoi) is { } gbifDoi) {

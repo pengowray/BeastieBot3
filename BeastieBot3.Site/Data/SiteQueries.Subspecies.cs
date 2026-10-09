@@ -10,7 +10,7 @@ public sealed record InfraspecificNameRow(string Source, string SourceId, string
 
 public sealed partial class SiteQueries {
     /// The subspecies and varieties of a species from IUCN (its subspecies and varieties in the
-    /// release), the Catalogue of Life and Wikidata, unmerged.
+    /// release) and the other sources in infraspecific_name, unmerged.
     public IReadOnlyList<InfraspecificNameRow> GetInfraspecificNames(long speciesTaxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();

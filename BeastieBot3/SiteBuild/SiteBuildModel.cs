@@ -258,6 +258,8 @@ internal sealed class SiteBuildStats {
     public int ChecklistSynonyms;
     public string? MddVersion;
     public string? AmphibiaWebVersion;
+    /// The Reptile Database's version in the checklists store ("ChecklistBank 1008 (2026-06)"), for the About page's credit of its subspecies.
+    public string? ReptileDbVersion;
     public int WikidataLadderNodes;
     public int TaxaWithAreas;
     public int TaxonAreaRows;

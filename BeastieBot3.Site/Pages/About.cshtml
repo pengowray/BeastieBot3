@@ -111,9 +111,17 @@
                 @if (Model.MddVersion is not null) {
                     <tr>
                         <th scope="row"><a href="@SiteText.MddUrl">Mammal Diversity Database</a></th>
-                        <td>English common names and synonyms of mammals</td>
+                        <td>English common names, synonyms and subspecies of mammals</td>
                         <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
                         <td>@Model.MddVersion</td>
+                    </tr>
+                }
+                @if (Model.ReptileDbVersion is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.ReptileDbUrl">The Reptile Database</a></th>
+                        <td>Subspecies of reptiles</td>
+                        <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
+                        <td>@Model.ReptileDbVersion</td>
                     </tr>
                 }
                 @if (Model.AmphibiaWebDate is not null) {
@@ -212,6 +220,9 @@
         <li><strong>Catalogue of Life:</strong> @Html.Raw(AboutModel.CitationHtml(Model.ColCitation ?? (Model.ColRelease is null ? "Catalogue of Life." : $"Catalogue of Life, release {Model.ColRelease}."), Model.ColUrl))</li>
         @if (Model.MddVersion is not null) {
             <li><strong>Mammal Diversity Database:</strong> @Html.Raw(AboutModel.CitationHtml($"Mammal Diversity Database. Mammal Diversity Database ({Model.MddVersion}). Zenodo.", SiteText.MddDoiUrl))</li>
+        }
+        @if (Model.ReptileDbVersion is not null) {
+            <li><strong>The Reptile Database:</strong> @Html.Raw(AboutModel.CitationHtml($"Uetz, P. & Hošek, J. (eds.) The Reptile Database ({Model.ReptileDbVersion}). ChecklistBank.", SiteText.ReptileDbDoiUrl))</li>
         }
         @if (Model.AmphibiaWebDate is not null) {
             <li><strong>AmphibiaWeb:</strong> @Html.Raw(AboutModel.CitationHtml($"AmphibiaWeb. University of California, Berkeley, CA, USA. Names list of {Model.AmphibiaWebDate}.", SiteText.AmphibiaWebUrl))</li>

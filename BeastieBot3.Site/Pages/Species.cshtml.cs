@@ -144,8 +144,8 @@ public sealed class SpeciesModel : TaxonPageModel {
     /// English common names, names in other languages and synonyms, with their sources.
     public TaxonNames Names { get; private set; } = new([], [], []);
 
-    /// For a species in the release: its subspecies and varieties from IUCN, the Catalogue of Life and
-    /// Wikidata; null for any other taxon and when no source lists one.
+    /// For a species in the release: its subspecies and varieties from IUCN and the other sources in
+    /// infraspecific_name; null for any other taxon and when no source lists one.
     public SubspeciesList? SubspeciesList { get; private set; }
 
     /// For a subspecies, variety or subpopulation: its species, with that species' latest global assessment.
