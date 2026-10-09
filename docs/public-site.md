@@ -1740,11 +1740,20 @@ of `OtherWikipedias.cs`):
 | uk | `{{Cite IUCN}}` (`|page=`) | the English lines |
 | pt | `{{citar iucn}}` (`|page=`, DOIs ending .en only) | `{{Info/Taxonomia}}` estado, sistema_estado (lower case), estado_ref |
 
-The wikis with a copy of `{{cite iucn}}` go through `CiteIucnRenderer` with a `CiteIucnDialect`
-(template name, article number parameter, DOI suffixes, ISO access date). For other wikis the page
+Each wiki's `WikipediaEdition` in `OtherWikipedias.All` records what its templates take, and the page
+reads only these properties, never the wiki's code: `CitationTemplate` (the box label),
+`TaxoboxTemplate` (null for de, which gets a note instead of taxobox lines), `CiteIucnCopy` (the
+`CiteIucnDialect` of a copy of `{{cite iucn}}`: template name, article number parameter, DOI
+suffixes, ISO access date; such a citation goes through `CiteIucnRenderer` and takes the author
+format and `|name-list-style=amp` options), `TakesFullGivenNames` (the copies and zh: the "Full
+given names instead of initials" option), and the facts behind the notes:
+`CitationLinksCurrentAssessment` (fr), `CitationLinksFromArticleItem` (es),
+`TaxoboxMainCategoriesOnly` (pl; `MainCategoryCode` gives the code, with a note when a category is
+shown as another or not at all) and `TaxoboxFootnoteRefName` (pl, "iucn"). For other wikis the page
 leaves out `{{IUCN status}}`, the Green Status citation, `{{cite Q}}`, the English taxobox check and
-the `{{cite iucn}}` DOI note, hides the options their citation does not take (keeping their values),
-and adds notes on the wiki's templates. Tests: `OtherWikipediasTests`.
+the `{{cite iucn}}` DOI note, and hides the options their citation does not take (keeping their
+values). Tests: `OtherWikipediasTests`, whose `CapabilitiesMatchTheRenderers` checks each edition's
+properties against what its renderers write.
 
 ### Subspecies and varieties (`infraspecific_name`, schema 27)
 

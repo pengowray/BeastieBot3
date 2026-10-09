@@ -135,8 +135,8 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
             DownloadDateText = downloaded is { } d ? SiteFormat.Date(d) : null;
             citeOptions = Options.ToCiteIucnOptions(today, downloaded);
             GivenNames = GivenNamesCoverage.Of(Parts);
-            var cite = Edition.IsEnglish ? CiteIucnRenderer.Render(Parts, citeOptions) : OtherWikipedias.Citation(Edition.Code, Parts, Facts(), citeOptions);
-            var citeTemplate = OtherWikipedias.CitationTemplate(Edition.Code);
+            var cite = Edition.IsEnglish ? CiteIucnRenderer.Render(Parts, citeOptions) : OtherWikipedias.Citation(Edition, Parts, Facts(), citeOptions);
+            var citeTemplate = Edition.CitationTemplate;
             boxes.Add(new WikitextBox("wikitext-cite", Edition.IsEnglish ? SiteText.LabelCite : SiteText.LabelCiteTemplate(citeTemplate), citeTemplate, cite, Rows: 5));
 
             DoiNote = cite.Contains("|doi=", StringComparison.Ordinal)
@@ -201,9 +201,11 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
     public IReadOnlyList<string> WikiNotes { get; private set; } = [];
 
     /// The options that apply to the chosen Wikipedia's citation: the author format and |name-list-style=
-    /// for the wikis whose citation is a copy of {{cite iucn}}, {{cite Q}} and the Green Status year for English only.
-    public bool ShowAuthorOptions => Edition.Code is "en" or "pt" or "uk" or "ja";
-    public bool ShowAmpOption => ShowAuthorOptions;
+    /// for the wikis whose citation is a copy of {{cite iucn}}, full given names for those and zh,
+    /// {{cite Q}} and the Green Status year for English only.
+    public bool ShowAuthorStyleOption => Edition.CiteIucnCopy is not null;
+    public bool ShowFullGivenNamesOption => Edition.TakesFullGivenNames && GivenNames is not null;
+    public bool ShowAmpOption => Edition.CiteIucnCopy is not null;
     public bool ShowCiteTemplateOption => Edition.IsEnglish;
     public bool ShowGreenStatusYearOption => Edition.IsEnglish && GreenStatus is not null;
 
@@ -214,33 +216,32 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
     // The taxobox lines and notes of a Wikipedia other than English.
     private void BuildOtherWiki(List<WikitextBox> boxes, CiteIucnOptions? citeOptions) {
         var notes = new List<string>();
-        var code = Edition.Code;
         var facts = Facts();
-        if (OtherWikipedias.TaxoboxTemplate(code) is not { } taxobox) {
+        if (Edition.TaxoboxTemplate is not { } taxobox) {
             notes.Add(SiteText.WikiNoTaxoboxStatus(Edition.Name));
         } else if (Parts is not null && citeOptions is not null && IucnCategories.HasTaxoboxCode(Selected!)) {
-            var statusRef = OtherWikipedias.Citation(code, Parts, facts, citeOptions with { WrapInRef = true });
-            if (OtherWikipedias.TaxoboxLines(code, facts, Selected!.TaxonId, statusRef) is { } lines) {
+            var statusRef = OtherWikipedias.Citation(Edition, Parts, facts, citeOptions with { WrapInRef = true });
+            if (OtherWikipedias.TaxoboxLines(Edition, facts, Selected!.TaxonId, statusRef) is { } lines) {
                 boxes.Add(new WikitextBox("wikitext-speciesbox", SiteText.TaxoboxLabel(taxobox), taxobox, lines, Rows: 4));
             }
-            var taxoboxCode = SpeciesboxStatus.ToStatusCode(facts.Category, facts.PossiblyExtinct, facts.PossiblyExtinctInTheWild);
-            if (code == "pl" && OtherWikipedias.PolishCode(taxoboxCode) is { } plCode && plCode != taxoboxCode) {
-                notes.Add(SiteText.WikiPolishCode(taxoboxCode switch { "PE" => "CR(PE)", "PEW" => "CR(PEW)", _ => taxoboxCode }, plCode));
-            }
-            if (code == "pl" && OtherWikipedias.PolishCode(taxoboxCode) is null) {
-                notes.Add(SiteText.WikiPolishNoCode(taxoboxCode));
+            if (Edition.TaxoboxMainCategoriesOnly) {
+                var taxoboxCode = SpeciesboxStatus.ToStatusCode(facts.Category, facts.PossiblyExtinct, facts.PossiblyExtinctInTheWild);
+                var shownAs = OtherWikipedias.MainCategoryCode(taxoboxCode);
+                if (shownAs is null) {
+                    notes.Add(SiteText.WikiCategoryNotShown(Edition.Name, taxoboxCode));
+                } else if (shownAs != taxoboxCode) {
+                    notes.Add(SiteText.WikiCategoryShownAs(Edition.Name, taxoboxCode switch { "PE" => "CR(PE)", "PEW" => "CR(PEW)", _ => taxoboxCode }, shownAs));
+                }
             }
         }
-        switch (code) {
-            case "fr":
-                notes.Add(SiteText.WikiFrenchCurrentAssessment);
-                break;
-            case "es":
-                notes.Add(SiteText.WikiSpanishWikidataLink);
-                break;
-            case "pl":
-                notes.Add(SiteText.WikiPolishRefName);
-                break;
+        if (Edition.CitationLinksCurrentAssessment) {
+            notes.Add(SiteText.WikiLinksCurrentAssessment(Edition.CitationTemplate));
+        }
+        if (Edition.CitationLinksFromArticleItem) {
+            notes.Add(SiteText.WikiLinksFromArticleItem(Edition.Name, Edition.CitationTemplate));
+        }
+        if (Edition.TaxoboxFootnoteRefName is { } refName) {
+            notes.Add(SiteText.WikiFootnoteRefName(refName));
         }
         WikiNotes = notes;
     }

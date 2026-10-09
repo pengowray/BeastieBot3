@@ -40,10 +40,42 @@ namespace BeastieBot3.Shared.Wikitext;
 //   ..., year, id, title, errata and amends as IUCN's words ("errata version published in 2017"),
 //   page (the article number), doi, access-date (ISO). Live: 狮.
 
-/// A Wikipedia this site writes IUCN citations and taxobox status lines for, besides English.
-/// Code: the wiki's language code ("fr"); Name: its English name; NativeName: its name in its language.
+/// A Wikipedia this site writes IUCN citations and taxobox status lines for, and what its templates
+/// take. Code: the wiki's language code ("fr"); Name: its English name; NativeName: its name in its
+/// language. OtherWikipedias.All has one for each wiki, with the facts from the evidence above.
 public sealed record WikipediaEdition(string Code, string Name, string NativeName) {
     public bool IsEnglish => Code == "en";
+
+    /// The template its citation uses ("{{UICN}}"), for labels.
+    public required string CitationTemplate { get; init; }
+
+    /// The taxobox its status lines are for ("{{Ficha de taxón}}"); null when its taxoboxes have no
+    /// conservation status (de).
+    public string? TaxoboxTemplate { get; init; }
+
+    /// How its citation template differs from English {{cite iucn}}, when it is a copy of it (en, ja,
+    /// pt, uk); null otherwise. A copy takes the author style (|author= or |last=/|first=) and
+    /// |name-list-style=amp.
+    public CiteIucnDialect? CiteIucnCopy { get; init; }
+
+    /// Its citation can give the authors' full given names (CiteIucnOptions.FullGivenNames): the
+    /// {{cite iucn}} copies and zh's {{IUCN}}.
+    public bool TakesFullGivenNames { get; init; }
+
+    /// Its citation links the taxon's current assessment, whatever assessment it cites (fr's {{UICN}}).
+    public bool CitationLinksCurrentAssessment { get; init; }
+
+    /// Its citation builds its link from the IUCN taxon ID (P627) on the article's own Wikidata item
+    /// (es's {{IUCN}}), so it suits only the article about the taxon.
+    public bool CitationLinksFromArticleItem { get; init; }
+
+    /// Its taxobox has only the categories EX, EW, CR, EN, VU, NT, LC and DD (pl), so the status lines
+    /// give MainCategoryCode's code, or no status.
+    public bool TaxoboxMainCategoriesOnly { get; init; }
+
+    /// The ref name that its taxobox's status footnote points at when the article has a reference with
+    /// that name (pl: "iucn"); null for a taxobox that has a reference parameter or no footnote.
+    public string? TaxoboxFootnoteRefName { get; init; }
 }
 
 /// What a citation and the taxobox lines need beyond the citation parts: the category and flags,
@@ -59,81 +91,75 @@ public sealed record AssessmentFacts(
     string Kind);
 
 public static partial class OtherWikipedias {
-    public static readonly WikipediaEdition English = new("en", "English", "English");
+    public static readonly CiteIucnDialect Portuguese = new("citar iucn", "page", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "en" }, IsoAccessDate: true);
+    public static readonly CiteIucnDialect Ukrainian = new("Cite IUCN", "page", CiteIucnDialect.English.DoiLanguages, IsoAccessDate: true);
+
+    public static readonly WikipediaEdition English = new("en", "English", "English") {
+        CitationTemplate = "{{cite iucn}}", TaxoboxTemplate = "{{Speciesbox}}", CiteIucnCopy = CiteIucnDialect.English, TakesFullGivenNames = true,
+    };
 
     /// The Wikipedias the site writes for, English first, then by size.
     public static readonly IReadOnlyList<WikipediaEdition> All = [
         English,
-        new("de", "German", "Deutsch"),
-        new("fr", "French", "Français"),
-        new("es", "Spanish", "Español"),
-        new("pl", "Polish", "Polski"),
-        new("zh", "Chinese", "中文"),
-        new("ja", "Japanese", "日本語"),
-        new("uk", "Ukrainian", "Українська"),
-        new("pt", "Portuguese", "Português"),
+        new("de", "German", "Deutsch") { CitationTemplate = "{{IUCN}}" },
+        new("fr", "French", "Français") {
+            CitationTemplate = "{{UICN}}", TaxoboxTemplate = "{{Taxobox UICN}}", CitationLinksCurrentAssessment = true,
+        },
+        new("es", "Spanish", "Español") {
+            CitationTemplate = "{{IUCN}}", TaxoboxTemplate = "{{Ficha de taxón}}", CitationLinksFromArticleItem = true,
+        },
+        new("pl", "Polish", "Polski") {
+            CitationTemplate = "{{IUCN}}", TaxoboxTemplate = "{{Zwierzę infobox}}", TaxoboxMainCategoriesOnly = true, TaxoboxFootnoteRefName = "iucn",
+        },
+        new("zh", "Chinese", "中文") { CitationTemplate = "{{IUCN}}", TaxoboxTemplate = "{{Speciesbox}}", TakesFullGivenNames = true },
+        new("ja", "Japanese", "日本語") {
+            CitationTemplate = "{{cite iucn}}", TaxoboxTemplate = "{{生物分類表}}", CiteIucnCopy = CiteIucnDialect.English, TakesFullGivenNames = true,
+        },
+        new("uk", "Ukrainian", "Українська") {
+            CitationTemplate = "{{Cite IUCN}}", TaxoboxTemplate = "{{Speciesbox}}", CiteIucnCopy = Ukrainian, TakesFullGivenNames = true,
+        },
+        new("pt", "Portuguese", "Português") {
+            CitationTemplate = "{{citar iucn}}", TaxoboxTemplate = "{{Info/Taxonomia}}", CiteIucnCopy = Portuguese, TakesFullGivenNames = true,
+        },
     ];
 
     /// The Wikipedia with the code ("fr"), or null.
     public static WikipediaEdition? Find(string? code) =>
         string.IsNullOrWhiteSpace(code) ? null : All.FirstOrDefault(e => string.Equals(e.Code, code.Trim(), StringComparison.OrdinalIgnoreCase));
 
-    public static readonly CiteIucnDialect Portuguese = new("citar iucn", "page", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "en" }, IsoAccessDate: true);
-    public static readonly CiteIucnDialect Ukrainian = new("Cite IUCN", "page", CiteIucnDialect.English.DoiLanguages, IsoAccessDate: true);
-
-    /// The template a wiki's citation uses ("{{UICN}}"), for labels.
-    public static string CitationTemplate(string code) => code switch {
-        "de" or "es" or "pl" or "zh" => "{{IUCN}}",
-        "fr" => "{{UICN}}",
-        "pt" => "{{citar iucn}}",
-        "uk" => "{{Cite IUCN}}",
-        _ => "{{cite iucn}}",
-    };
-
-    /// The taxobox a wiki's status lines are for ("{{Ficha de taxón}}"); null when its taxoboxes
-    /// have no conservation status (de).
-    public static string? TaxoboxTemplate(string code) => code switch {
-        "de" => null,
-        "fr" => "{{Taxobox UICN}}",
-        "es" => "{{Ficha de taxón}}",
-        "pl" => "{{Zwierzę infobox}}",
-        "pt" => "{{Info/Taxonomia}}",
-        "ja" => "{{生物分類表}}",
-        _ => "{{Speciesbox}}",
-    };
-
     /// The citation of the assessment for the wiki, wrapped in <ref> when options.WrapInRef. English
-    /// and the wikis with a copy of its {{cite iucn}} (ja, pt, uk) go through CiteIucnRenderer.
-    public static string Citation(string code, IucnCitationParts parts, AssessmentFacts facts, CiteIucnOptions options) {
-        var template = code switch {
-            "de" => German(parts, facts, options.AccessDate),
-            "fr" => French(parts, facts, options.AccessDate),
-            "es" => Spanish(parts, options.AccessDate),
-            "pl" => Polish(parts, options.AccessDate),
-            "zh" => Chinese(parts, options),
-            "pt" => CiteIucnRenderer.Render(parts, options with { WrapInRef = false, Dialect = Portuguese }),
-            "uk" => CiteIucnRenderer.Render(parts, options with { WrapInRef = false, Dialect = Ukrainian }),
-            _ => CiteIucnRenderer.Render(parts, options with { WrapInRef = false, Dialect = CiteIucnDialect.English }),
-        };
+    /// and the wikis with a copy of its {{cite iucn}} (edition.CiteIucnCopy) go through CiteIucnRenderer.
+    public static string Citation(WikipediaEdition edition, IucnCitationParts parts, AssessmentFacts facts, CiteIucnOptions options) {
+        var template = edition.CiteIucnCopy is { } dialect
+            ? CiteIucnRenderer.Render(parts, options with { WrapInRef = false, Dialect = dialect })
+            : edition.Code switch {
+                "de" => German(parts, facts, options.AccessDate),
+                "fr" => French(parts, facts, options.AccessDate),
+                "es" => Spanish(parts, options.AccessDate),
+                "pl" => Polish(parts, options.AccessDate),
+                "zh" => Chinese(parts, options),
+                _ => CiteIucnRenderer.Render(parts, options with { WrapInRef = false, Dialect = CiteIucnDialect.English }),
+            };
         return Wrap(template, options);
     }
 
     /// The taxobox status lines for the wiki; null when its taxoboxes have no conservation status (de).
     /// statusRef: the complete reference markup, or null to leave it out (fr and pl have no reference
     /// parameter).
-    public static string? TaxoboxLines(string code, AssessmentFacts facts, long taxonId, string? statusRef) {
+    public static string? TaxoboxLines(WikipediaEdition edition, AssessmentFacts facts, long taxonId, string? statusRef) {
+        if (edition.TaxoboxTemplate is null) {
+            return null;
+        }
         var codeEn = SpeciesboxStatus.ToStatusCode(facts.Category, facts.PossiblyExtinct, facts.PossiblyExtinctInTheWild);
         var system = SpeciesboxStatus.ToStatusSystem(codeEn, facts.CriteriaVersion);
-        switch (code) {
-            case "de":
-                return null;
+        switch (edition.Code) {
             case "fr": {
                 var frCode = codeEn switch { "LR/cd" => "CD", "LR/nt" => "NT", "LR/lc" => "LC", _ => codeEn };
                 var criteria = WikitextValue.Clean(facts.Criteria);
                 return criteria.Length == 0 ? $"{{{{Taxobox UICN | {frCode} }}}}" : $"{{{{Taxobox UICN | {frCode} | {criteria} }}}}";
             }
             case "pl":
-                return PolishCode(codeEn) is { } plCode
+                return MainCategoryCode(codeEn) is { } plCode
                     ? $"| status IUCN = {plCode}\n| IUCN id = {taxonId.ToString(CultureInfo.InvariantCulture)}"
                     : $"| IUCN id = {taxonId.ToString(CultureInfo.InvariantCulture)}";
             case "pt": {
@@ -159,10 +185,11 @@ public static partial class OtherWikipedias {
         }
     }
 
-    /// Polish infobox code: upper case EX, EW, CR, EN, VU, NT, LC, DD. The box has no possibly
-    /// extinct or Lower Risk categories: PE and PEW are CR, LR/cd and LR/nt NT, LR/lc LC. Null for a
-    /// code it cannot show (NE, NA, RE).
-    public static string? PolishCode(string taxoboxCode) => taxoboxCode switch {
+    /// The code in a taxobox that has only the categories EX, EW, CR, EN, VU, NT, LC and DD
+    /// (WikipediaEdition.TaxoboxMainCategoriesOnly; the Polish infoboxes), from an English taxobox
+    /// code. Such a box has no possibly extinct or Lower Risk categories: PE and PEW are CR, LR/cd and
+    /// LR/nt NT, LR/lc LC. Null for a code it cannot show (NE, NA, RE).
+    public static string? MainCategoryCode(string taxoboxCode) => taxoboxCode switch {
         "PE" or "PEW" => "CR",
         "LR/cd" or "LR/nt" => "NT",
         "LR/lc" => "LC",

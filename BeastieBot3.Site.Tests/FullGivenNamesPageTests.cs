@@ -30,6 +30,18 @@ public sealed class FullGivenNamesPageTests(SiteFactory factory) : IClassFixture
     }
 
     [Fact]
+    public async Task OtherWikipedias_OptionIsShownWhereTheCitationTakesFullGivenNames() {
+        // Chinese {{IUCN}} takes full given names but has one author format.
+        var zh = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?wiki=zh");
+        Assert.Contains(Checkbox + " aria-describedby=\"fullnames-help\">", zh);
+        Assert.DoesNotContain("<input type=\"radio\" name=\"authors\"", zh);
+        Assert.Contains("<input type=\"hidden\" name=\"authors\" value=\"lastfirst\">", zh);
+        Assert.StartsWith("<ref name=\"iucn\">{{IUCN |author1=Goodrich, John |author2=", Html.Textarea(await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?wiki=zh&fullnames=1"), "wikitext-cite"));
+        // French {{UICN}} has no authors.
+        Assert.DoesNotContain(Checkbox, await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?wiki=fr"));
+    }
+
+    [Fact]
     public async Task ChoiceIsKept() {
         var tiger = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?fullnames=1");
         Assert.Contains(Checkbox + " checked=\"checked\"", tiger);

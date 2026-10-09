@@ -152,12 +152,17 @@
                     @if (!Model.SelectedIsDefault) {
                         <input type="hidden" name="assessment" value="@selected.AssessmentId">
                     }
-                    @if (Model.ShowAuthorOptions) {
+                    @if (Model.ShowAuthorStyleOption || Model.ShowFullGivenNamesOption) {
                     <fieldset class="option-group">
                         <legend>@SiteText.AuthorsLabel</legend>
-                        <label><input type="radio" name="authors" value="author" checked="@(Model.Options.AuthorStyle == CiteAuthorStyle.AuthorN)"> @Html.Raw(SiteText.AuthorsAuthorHtml)</label>
-                        <label><input type="radio" name="authors" value="lastfirst" checked="@(Model.Options.AuthorStyle == CiteAuthorStyle.LastFirst)"> @Html.Raw(SiteText.AuthorsLastFirstHtml)</label>
-                        @if (Model.GivenNames is { } given) {
+                        @if (Model.ShowAuthorStyleOption) {
+                            <label><input type="radio" name="authors" value="author" checked="@(Model.Options.AuthorStyle == CiteAuthorStyle.AuthorN)"> @Html.Raw(SiteText.AuthorsAuthorHtml)</label>
+                            <label><input type="radio" name="authors" value="lastfirst" checked="@(Model.Options.AuthorStyle == CiteAuthorStyle.LastFirst)"> @Html.Raw(SiteText.AuthorsLastFirstHtml)</label>
+                        } else {
+                            @* Kept for the other Wikipedias, whose citations take it. *@
+                            <input type="hidden" name="authors" value="@(Model.Options.AuthorStyle == CiteAuthorStyle.AuthorN ? "author" : "lastfirst")">
+                        }
+                        @if (Model.ShowFullGivenNamesOption && Model.GivenNames is { } given) {
                             <label class="option-extra"><input type="checkbox" name="fullnames" value="1" checked="@Model.Options.FullGivenNames" aria-describedby="fullnames-help"> @SiteText.FullGivenNames</label>
                             <p class="help" id="fullnames-help">@SiteText.FullGivenNamesHelp(given.WithGivenNames, given.People, given.Example.GivenNames!.Trim(), given.Example.Display.Trim())</p>
                         } else if (Model.Options.FullGivenNames) {
