@@ -128,8 +128,15 @@ body {
     line-height: 1.5;
 }
 
+/* Links have no underline; one appears on hover and on keyboard focus. */
 a {
     color: var(--link);
+    text-decoration: none;
+}
+
+a:hover,
+a:focus-visible {
+    text-decoration: underline;
 }
 
 a:visited {
@@ -1609,13 +1616,6 @@ th.num {
 }
 .ranks-table .other-rank {
     display: block;
-}
-.ranks-table a {
-    text-decoration: none;
-}
-.ranks-table a:hover,
-.ranks-table a:focus-visible {
-    text-decoration: underline;
 }
 /* The rows above order are hidden until the box is ticked. */
 .comparative-classification .above-rank {
