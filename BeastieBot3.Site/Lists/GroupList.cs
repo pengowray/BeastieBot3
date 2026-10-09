@@ -307,6 +307,11 @@ public static class GroupList {
     public static string HeadingText(GroupRow group) =>
         group.ShowRank && group.Rank != "unranked" ? $"{Capitalize(group.Rank)} {group.Name}" : group.Name;
 
+    /// The group's rank and name for use inside a sentence: "family Felidae", or the name alone when
+    /// the rank is not shown.
+    public static string InSentence(GroupRow group) =>
+        group.ShowRank && group.Rank != "unranked" ? $"{group.Rank} {group.Name}" : group.Name;
+
     public static string Capitalize(string text) =>
         text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
 

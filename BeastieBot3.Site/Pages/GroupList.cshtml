@@ -10,7 +10,7 @@
             : GroupText.NotFoundHeading(Model.RequestedRank.ToLowerInvariant(), Model.RequestedName);
         ViewData["NoIndex"] = true;
     } else {
-        ViewData["Title"] = GroupText.ListPageTitle(GroupList.HeadingText(group));
+        ViewData["Title"] = GroupText.ListPageTitle(GroupList.InSentence(group));
     }
 }
 @if (group is null) {
