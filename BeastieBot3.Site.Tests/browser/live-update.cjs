@@ -103,18 +103,18 @@ async function waitForCite(page, test, what) {
     check(await page.locator("[data-live-status]").isVisible() || (await page.locator("[data-live-status]").count()) === 1,
         "the status line is in place");
     check(await page.locator("#wikitext-cite").isVisible(), "the {{cite iucn}} box is shown");
-    // The |last1= form is longer, so the boxes above the form grow; the page scrolls by as much.
-    const lastFirst = page.locator("input[name=authors][value=lastfirst]");
-    await lastFirst.scrollIntoViewIfNeeded();
+    // The |author= form (not the default) changes the boxes above the form; the form stays where it was on the screen.
+    const authorN = page.locator("input[name=authors][value=author]");
+    await authorN.scrollIntoViewIfNeeded();
     const formTop = await page.locator("form.options-form").evaluate((form) => form.getBoundingClientRect().top);
     const boxesHeight = await page.locator("#wikitext-output").evaluate((region) => region.getBoundingClientRect().height);
 
-    await lastFirst.check();
-    if (await waitForCite(page, () => document.getElementById("wikitext-cite").value.includes("|last1=Wiig"), "author format")) {
+    await authorN.check();
+    if (await waitForCite(page, () => document.getElementById("wikitext-cite").value.includes("|author=Wiig"), "author format")) {
         check(true, "changing the author format updates {{cite iucn}}");
     }
-    await page.waitForFunction(() => location.search.includes("authors=lastfirst"));
-    check(page.url().includes("authors=lastfirst"), "the address bar has authors=lastfirst: " + page.url());
+    await page.waitForFunction(() => location.search.includes("authors=author"));
+    check(page.url().includes("authors=author"), "the address bar has authors=author: " + page.url());
     check(await stillSamePage(page), "the page was not loaded again");
     await page.waitForFunction(() => document.querySelector("[data-live-status]").textContent === "Wikitext updated");
     check(true, "the status line says Wikitext updated");
@@ -122,9 +122,9 @@ async function waitForCite(page, test, what) {
     const newBoxesHeight = await page.locator("#wikitext-output").evaluate((region) => region.getBoundingClientRect().height);
     check(Math.abs(newTop - formTop) < 2,
         `the form stays where it was on the screen (${formTop} -> ${newTop}; boxes ${boxesHeight} -> ${newBoxesHeight} px high)`);
-    check((await page.locator(`a[data-options-link="${polarBear2008}"]`).getAttribute("href")).includes("authors=lastfirst"),
+    check((await page.locator(`a[data-options-link="${polarBear2008}"]`).getAttribute("href")).includes("authors=author"),
         "the Show wikitext link of the 2008 assessment carries the new option");
-    check((await page.locator("#wikitext-speciesbox").inputValue()).includes("|last1=Wiig"), "the {{Speciesbox}} box is updated too");
+    check((await page.locator("#wikitext-speciesbox").inputValue()).includes("|author=Wiig"), "the {{Speciesbox}} box is updated too");
 
     await page.locator("input[name=access][value=none]").check();
     if (await waitForCite(page, () => !document.getElementById("wikitext-cite").value.includes("access-date"), "access date")) {
@@ -203,12 +203,12 @@ async function waitForCite(page, test, what) {
     // At phone width the boxes wrap, so a longer citation makes them taller: the page scrolls by as
     // much, and the form stays where it was on the screen.
     await page.goto(`${base}/species/${polarBear}/wikitext`);
-    const phoneLastFirst = page.locator("input[name=authors][value=lastfirst]");
-    await phoneLastFirst.scrollIntoViewIfNeeded();
+    const phoneAuthorN = page.locator("input[name=authors][value=author]");
+    await phoneAuthorN.scrollIntoViewIfNeeded();
     const phoneTop = await page.locator("form.options-form").evaluate((form) => form.getBoundingClientRect().top);
     const phoneBoxes = await page.locator("#wikitext-output").evaluate((region) => region.getBoundingClientRect().height);
-    await phoneLastFirst.check();
-    await page.waitForFunction(() => location.search.includes("authors=lastfirst"));
+    await phoneAuthorN.check();
+    await page.waitForFunction(() => location.search.includes("authors=author"));
     const phoneNewTop = await page.locator("form.options-form").evaluate((form) => form.getBoundingClientRect().top);
     const phoneNewBoxes = await page.locator("#wikitext-output").evaluate((region) => region.getBoundingClientRect().height);
     check(phoneNewBoxes !== phoneBoxes, `at phone width the boxes change height (${phoneBoxes} -> ${phoneNewBoxes} px)`);
@@ -230,11 +230,11 @@ async function waitForCite(page, test, what) {
     });
     await Promise.all([
         page.waitForNavigation(),
-        page.locator("input[name=authors][value=lastfirst]").check(),
+        page.locator("input[name=authors][value=author]").check(),
     ]);
     check(failed && !(await stillSamePage(page)), "a failed update loads the page instead");
-    check(page.url().includes("authors=lastfirst") && page.url().endsWith("#wikitext"), "and that page has the new options: " + page.url());
-    check((await cite(page)).includes("|last1=Wiig"), "and its wikitext uses them");
+    check(page.url().includes("authors=author") && page.url().endsWith("#wikitext"), "and that page has the new options: " + page.url());
+    check((await cite(page)).includes("|author=Wiig"), "and its wikitext uses them");
     await page.unroute("**/species/**");
 
     // The group page's list: ticking a source updates the list in place and ticks Not Evaluated,

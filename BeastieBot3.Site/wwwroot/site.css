@@ -1271,6 +1271,13 @@ th.num {
 .nav-menu > summary {
     cursor: pointer;
     color: var(--link);
+    list-style: none;
+}
+.nav-menu > summary::-webkit-details-marker {
+    display: none;
+}
+.nav-menu > summary::after {
+    content: " \25BE";
 }
 .nav-menu > summary:hover {
     text-decoration: underline;
@@ -1279,8 +1286,8 @@ th.num {
     position: absolute;
     right: 0;
     z-index: 10;
-    min-width: 16rem;
-    max-width: calc(100vw - 2rem);
+    width: max-content;
+    max-width: min(22rem, calc(100vw - 2rem));
     margin: 0.4rem 0 0;
     padding: 0.35rem 0;
     list-style: none;
