@@ -1724,8 +1724,10 @@ The wikitext page writes for nine Wikipedias (`wiki=`; `OtherWikipedias.All` in 
 English, German, French, Spanish, Polish, Chinese, Japanese, Ukrainian and Portuguese, chosen by a row
 of links above the boxes (`nav.wiki-chooser`; each link keeps the other options). Each uses the wiki's
 own citation template and taxobox status lines (`OtherWikipedias.Citation`, `TaxoboxLines`), as found
-in each wiki's template sources, documentation and live articles on 9 October 2026 (the evidence is
-the comment at the top of `OtherWikipedias.cs`):
+in each wiki's template sources, documentation and live articles on 9 October 2026 (the full survey,
+with a link for each claim and notes on the Italian, Dutch, Russian, Swedish, Catalan and Vietnamese Wikipedias, which the
+site does not write for, is [other-wikipedias.md](other-wikipedias.md); a summary is the comment at the top
+of `OtherWikipedias.cs`):
 
 | Wiki | Citation | Taxobox status |
 | --- | --- | --- |

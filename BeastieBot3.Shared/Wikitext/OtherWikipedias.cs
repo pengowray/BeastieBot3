@@ -8,7 +8,8 @@ namespace BeastieBot3.Shared.Wikitext;
 //
 // Evidence: a survey of each wiki's templates, fetched on 2026-10-09 with read-only API requests
 // (template sources, documentation pages and live article revisions). Where a doc page and the
-// template's source disagreed, the source was followed.
+// template's source disagreed, the source was followed. The full survey, with a link for each claim,
+// is docs/other-wikipedias.md.
 // - de: Vorlage:Taxobox has no conservation status. Vorlage:IUCN (doc Vorlage:IUCN/Doku): Year (the
 //   Red List edition), ID, ScientificName (plain; the template italicises it), AssessmentID (without
 //   it the link is a search), YearAssessed, Assessor ("M. C. M. Kierulff, A. B. Rylands, ..."), Abruf

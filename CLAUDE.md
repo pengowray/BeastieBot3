@@ -344,6 +344,7 @@ A `taxa_group` of `~` (null) means no taxonomic filter — counts all species in
 | `docs/wikidata-iucn-status.md` | Wikidata IUCN status dry run: decisions (references, item per assessment, rank variants, coordination), the assessment item model shared with the public site, tiers, safety properties, what's not built |
 | `docs/redlist-audit-site.md` | `redlist audit-site` generator: producers, unified model, commentary mechanism, output structure |
 | `docs/status-lists.md` | Status lists store: NatureServe and ECOS downloads, tables, licences, the 10,000-record limit of NatureServe's search, full and refresh downloads, ECOS bracket names, the national red lists from GBIF (which were chosen and why, what is stored, matching notes for the site), what is not stored |
+| `docs/other-wikipedias.md` | Survey (9 October 2026) of the IUCN citation templates, taxobox status parameters and inline status templates of 14 Wikipedias other than English, with a link to the template source, doc page or article revision for each claim; the evidence for `OtherWikipedias` |
 | `docs/public-site.md` | Public species site: parts, release update steps and the `public-site` workflow, site database contract, citation parsing, full given names and DOI rules, `iucn resolve-dois`, Wikidata items of assessments (`{{cite Q}}`, QuickStatements commands), citation options and live updates, site settings and theme, known gaps |
 
 ## Code Conventions
