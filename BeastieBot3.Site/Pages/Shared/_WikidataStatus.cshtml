@@ -10,7 +10,7 @@
     var showTable = view.IsReview || (view.Scope == WikidataStatusScope.Offered && plan is not null);
 }
 <section class="wikidata-status" id="wikidata-status" aria-labelledby="wikidata-status-heading">
-    <h3 id="wikidata-status-heading">@SiteText.HeadingWikidataStatus</h3>
+    <h2 id="wikidata-status-heading">@SiteText.HeadingWikidataStatus</h2>
     @switch (view.Scope) {
         case WikidataStatusScope.NotSpeciesOrSubspecies:
             <p>@SiteText.StatusNotSpecies</p>

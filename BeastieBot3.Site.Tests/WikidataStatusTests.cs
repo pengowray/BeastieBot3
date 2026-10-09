@@ -18,11 +18,11 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
         return html[start..html.IndexOf("</section>", start, StringComparison.Ordinal)];
     }
 
-    private async Task<string> PartText(long taxonId) => Html.Text(Part(await _client.GetStringAsync($"/species/{taxonId}/wikitext")));
+    private async Task<string> PartText(long taxonId) => Html.Text(Part(await _client.GetStringAsync($"/species/{taxonId}/wikidata")));
 
     [Fact]
     public async Task ChangedStatus_ReplaceFirst_KeepInDetails() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikidata");
         var text = Html.Text(Part(html));
 
         Assert.Contains("IUCN conservation status on Wikidata", text);
@@ -56,7 +56,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task SameStatus_AddsTheReferenceOnly() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikidata");
         var text = Html.Text(Part(html));
 
         Assert.Contains("Wikidata gives the same status.", text);
@@ -73,7 +73,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
     public async Task PreferredStatement_KeepFirst_AndNoCommandsOnlyRanks() {
         // The koala's item gives endangered at preferred rank, and the assessment's vulnerable at
         // normal rank with a reference to the assessment's item.
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Koala}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Koala}/wikidata");
         var part = Part(html);
         var text = Html.Text(part);
 
@@ -99,7 +99,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task OtherSourceStatement_IsShownButNotCompared_AndATaxonIdReferenceCounts() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Woylie}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Woylie}/wikidata");
         var text = Html.Text(Part(html));
 
         Assert.Contains("critically endangered (Q219127), normal rank endangered (Q96377276), normal rank, no reference to IUCN", text);
@@ -110,7 +110,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task TaxonIdOnSeveralItems_EveryItemIsCompared_NoCommands() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Leopard}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Leopard}/wikidata");
         var text = Html.Text(Part(html));
 
         Assert.Contains("IUCN Red List 2026-1 vulnerable (Q278113)", text);
@@ -124,7 +124,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task TaxonIdAtDeprecatedRank_NoCommands() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}/wikidata");
         var text = Html.Text(Part(html));
 
         Assert.Contains($"Wikidata item {FixtureDb.CassowaryItem}, downloaded 13 September 2026, IUCN taxon ID at deprecated rank least concern (Q211005)", text);
@@ -145,7 +145,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task ConservationDependent_ComparisonButNoCommands() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.ArtemiaMonica}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.ArtemiaMonica}/wikidata");
         var text = Html.Text(Part(html));
 
         Assert.Contains("IUCN Red List 2026-1 no value for LR/cd", text);
@@ -156,7 +156,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task DeprecatedStatementWithTheValue_NoCommands() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}/wikidata");
         var text = Html.Text(Part(html));
 
         Assert.Contains("least concern (Q211005)", text);
@@ -166,7 +166,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task ItemMatchedByName_NoCommands() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Lion}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Lion}/wikidata");
         Assert.Contains("No commands: the Wikidata item <a href=\"https://www.wikidata.org/wiki/Q140\">Q140</a> was matched to this taxon by name and does not state IUCN taxon ID (P627) 15951.", Part(html));
         Assert.DoesNotContain("status-compare", Part(html));
     }
@@ -182,10 +182,10 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
     [Fact]
     public async Task OnlyForTheLatestGlobalAssessment() {
         foreach (var url in new[] {
-                     $"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}",
-                     $"/species/{FixtureDb.HouseSparrow}/wikitext?assessment={FixtureDb.HouseSparrowEurope}",
-                     $"/species/{FixtureDb.RegionalOnly}/wikitext",
-                     $"/species/{FixtureDb.AmurLeopard}/wikitext",
+                     $"/species/{FixtureDb.PolarBear}/wikidata?assessment={FixtureDb.PolarBear2008}",
+                     $"/species/{FixtureDb.HouseSparrow}/wikidata?assessment={FixtureDb.HouseSparrowEurope}",
+                     $"/species/{FixtureDb.RegionalOnly}/wikidata",
+                     $"/species/{FixtureDb.AmurLeopard}/wikidata",
                  }) {
             var response = await _client.GetAsync(url);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -195,7 +195,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task PartComesAfterTheCiteQPartInTheWikitextSection() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikidata");
         var citeQ = Html.IndexOf(html, "id=\"wikidata-cite\"");
         var status = Html.IndexOf(html, "id=\"wikidata-status\"");
         var history = Html.IndexOf(html, "<section class=\"history\"");
@@ -209,7 +209,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task ItemTitleAndLabel_AreListedAsReplaced() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikidata");
         var start = Html.IndexOf(html, "id=\"wikidata-cite\"");
         var citeQ = html[start..html.IndexOf("</section>", start, StringComparison.Ordinal)];
         var text = Html.Text(citeQ);
@@ -237,11 +237,14 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task ErrataVersionSharingAnItem_OnlyCiteQ_AndALinkToTheAssessmentItIsFor() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}/wikitext");
-        var part = await CiteQPart($"/species/{FixtureDb.Micropyropsis}/wikitext");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}/wikidata");
+        var part = await CiteQPart($"/species/{FixtureDb.Micropyropsis}/wikidata");
         var text = Html.Text(part);
 
-        Assert.Contains($"{{{{cite Q|{FixtureDb.MicropyropsisItem}", Html.Textarea(html, WikidataCite.CiteQBoxId));
+        // The {{cite Q}} is on the Wikipedia page, when the reader chooses it.
+        var wikipedia = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}/wikitext?cite=q");
+        Assert.Contains($"{{{{cite Q|{FixtureDb.MicropyropsisItem}", Html.Textarea(wikipedia, WikidataCite.CiteQBoxId));
+        Assert.Null(Html.Textarea(html, WikidataCite.CiteQBoxId));
         Assert.Contains("This errata version has the same DOI as the assessment it corrects, so it shares that assessment's Wikidata item. Commands to update the item are on that assessment's page.", text);
         Assert.Contains($"assessment={FixtureDb.MicropyropsisReplaced}", part);
         Assert.Null(Html.Textarea(html, WikidataCite.CommandsBoxId));
@@ -250,7 +253,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task TheAssessmentAnItemIsFor_HasTheCommands_BuiltFromItsOwnIds() {
-        var url = $"/species/{FixtureDb.Micropyropsis}/wikitext?assessment={FixtureDb.MicropyropsisReplaced}";
+        var url = $"/species/{FixtureDb.Micropyropsis}/wikidata?assessment={FixtureDb.MicropyropsisReplaced}";
         var html = await _client.GetStringAsync(url);
         var commands = Html.Textarea(html, WikidataCite.CommandsBoxId)!.Split('\n');
 
@@ -262,7 +265,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task NewItem_UsesTheRegisteredName_AndSaysSo() {
-        var url = $"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}";
+        var url = $"/species/{FixtureDb.PolarBear}/wikidata?assessment={FixtureDb.PolarBear2008}";
         var html = await _client.GetStringAsync(url);
         var text = Html.Text(await CiteQPart(url));
 
@@ -275,7 +278,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
     [Fact]
     public async Task NewItem_WithIucnsCitationName_SaysTheTitleNameIsNotKnown() {
-        var text = Html.Text(await CiteQPart($"/species/{FixtureDb.Bromus}/wikitext"));
+        var text = Html.Text(await CiteQPart($"/species/{FixtureDb.Bromus}/wikidata"));
         Assert.Contains("The commands use the name in IUCN's citation, Bromus interruptus. IUCN's citation gives the taxon's current name, even for an older assessment.", text);
     }
 

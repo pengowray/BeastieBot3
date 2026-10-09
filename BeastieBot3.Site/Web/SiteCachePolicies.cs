@@ -12,6 +12,9 @@ public static class SiteCachePolicies {
     /// Output cache policy of the wikitext pages of taxa.
     public const string SpeciesWikitext = "species-wikitext";
 
+    /// Output cache policy of the Wikidata pages of taxa.
+    public const string SpeciesWikidata = "species-wikidata";
+
     /// Output cache policy of the group pages.
     public const string Group = "group";
 
@@ -49,6 +52,13 @@ public static class SiteCachePolicies {
             .Tag(DatabaseTag)
             .SetVaryByQuery(SpeciesQueryKeys)
             .VaryByValue(_ => new KeyValuePair<string, string>("utc-day", DateTime.UtcNow.ToString("yyyy-MM-dd"))));
+
+        // Wikidata pages vary only by the assessment shown: they have no options, and nothing on them
+        // depends on the date.
+        options.AddPolicy(SpeciesWikidata, policy => policy
+            .Expire(Lifetime)
+            .Tag(DatabaseTag)
+            .SetVaryByQuery(["assessment"]));
 
         // Group pages vary by what picks one of two groups with the same name and by the search text
         // (q) that the link back to the search results repeats. The list options are in the key too:

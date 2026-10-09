@@ -1,20 +1,16 @@
 @model SpeciesWikitextModel
-@* The citation template in the taxobox status_ref ({{cite iucn}} or {{cite Q}}), shown when the
-   page has taxobox status lines; otherwise the choice is kept for the next assessment shown. *@
+@* The citation template: {{cite iucn}}, or {{cite Q}} when the assessment has a Wikidata item. With
+   {{cite Q}}, its box is shown below the {{cite iucn}} box and the taxobox status_ref uses it. *@
 @{
     var template = Model.Options.Template;
     var hasItem = Model.Selected?.WikidataItemQid is { Length: > 0 };
 }
-@if (Model.Boxes.Any(b => b.Id == "wikitext-speciesbox")) {
-    <fieldset class="option-group">
-        <legend>@SiteText.StatusRefTemplateLabel</legend>
-        <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteIucnValue" checked="@(template == ReferenceTemplate.CiteIucn)" aria-describedby="status-ref-help"> @SiteText.StatusRefTemplateIucn</label>
-        <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteQValue" checked="@(template == ReferenceTemplate.CiteQ)" aria-describedby="status-ref-help"> @SiteText.StatusRefTemplateQ</label>
-        @if (!hasItem) {
-            <p class="help">@SiteText.StatusRefNoItem</p>
-        }
-        <p class="help" id="status-ref-help">@SiteText.StatusRefTemplateHelp</p>
-    </fieldset>
-} else if (template == ReferenceTemplate.CiteQ) {
-    <input type="hidden" name="@IucnReference.QueryKey" value="@IucnReference.CiteQValue">
-}
+<fieldset class="option-group">
+    <legend>@SiteText.CitationTemplateLabel</legend>
+    <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteIucnValue" checked="@(template == ReferenceTemplate.CiteIucn)" aria-describedby="status-ref-help"> @SiteText.StatusRefTemplateIucn</label>
+    <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteQValue" checked="@(template == ReferenceTemplate.CiteQ)" aria-describedby="status-ref-help"> @SiteText.StatusRefTemplateQ</label>
+    @if (!hasItem && Model.Selected is { } selected && Model.Taxon is { } taxon) {
+        <p class="help">@SiteText.CiteQNoItemBefore<a href="@AssessmentToolModel.WikidataPath(taxon.TaxonId, Model.SelectedIsDefault ? "" : "?assessment=" + selected.AssessmentId)">@SiteText.CiteQNoItemLink</a>@SiteText.CiteQNoItemAfter</p>
+    }
+    <p class="help" id="status-ref-help">@SiteText.CitationTemplateHelp</p>
+</fieldset>

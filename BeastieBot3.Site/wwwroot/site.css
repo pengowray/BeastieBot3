@@ -1316,6 +1316,15 @@ th.num {
 .tool-header .tool-back {
     margin: 0.4rem 0 0;
 }
+/* The links of a tool page's header: the taxon page and the other tool page. */
+.tool-links-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    margin: 0.4rem 0 0;
+    padding: 0;
+    list-style: none;
+}
 
 /* The Tools section at the bottom of taxon and group pages, and the tools page. */
 .tool-links {

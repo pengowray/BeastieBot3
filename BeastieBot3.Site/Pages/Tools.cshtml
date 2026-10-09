@@ -23,6 +23,16 @@
     </p>
 </section>
 
+<section class="tool-entry" aria-labelledby="tool-wikidata-heading">
+    <h2 id="tool-wikidata-heading">@SiteText.ToolsWikidataHeading</h2>
+    <p>@SiteText.ToolsWikidataText</p>
+    <p>@SiteText.ToolsWhereTaxon
+        @if (example is not null) {
+            @SiteText.ToolsExample <a href="@AssessmentToolModel.WikidataPath(example.TaxonId)"><i>@example.ScientificName</i></a>
+        }
+    </p>
+</section>
+
 <section class="tool-entry" aria-labelledby="tool-list-heading">
     <h2 id="tool-list-heading">@SiteText.ToolsListHeading</h2>
     <p>@SiteText.ToolsListText</p>

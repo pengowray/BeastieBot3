@@ -120,7 +120,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("contact User talk:Example on English Wikipedia. Include the address of the page.", text);
         Assert.Contains("its earlier global assessments, and its latest assessment in each region", text);
         Assert.Contains("These pages show the taxon's earlier assessments, and their wikitext pages give wikitext for each.", text);
-        Assert.Contains("Each taxon also has a wikitext page, linked from the Tools menu at the top of its page and the Tools section at the bottom.", text);
+        Assert.Contains("Each taxon also has two tool pages, linked from the Tools menu at the top of its page and the Tools section at the bottom.", text);
         Assert.Contains("Version 2026-1. Assessment details downloaded from the IUCN Red List API between 18 August and 1 September 2026.", text);
         Assert.Contains("COL26.7 XR", text);
         Assert.Contains("1 October 2026", text);
@@ -259,7 +259,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
 
     [Fact]
     public async Task PagesHaveNoInlineScriptsOrStyles() {
-        foreach (var url in new[] { "/", "/species/22823", "/species/22823/wikitext", "/taxa/family/ursidae/list", "/tools", "/search?q=Fillerus", "/about", "/no/such/page" }) {
+        foreach (var url in new[] { "/", "/species/22823", "/species/22823/wikitext", "/species/22823/wikidata", "/taxa/family/ursidae/list", "/tools", "/search?q=Fillerus", "/about", "/no/such/page" }) {
             var html = await (await _client.GetAsync(url)).Content.ReadAsStringAsync();
             Assert.DoesNotMatch("<script(?![^>]*\\bsrc=)", html);
             Assert.DoesNotContain(" style=\"", html);
@@ -276,6 +276,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
                      FixtureDb.AmurLeopard, FixtureDb.WoylieOld, FixtureDb.Woylie }) {
             urls.Add($"/species/{id}");
             urls.Add($"/species/{id}/wikitext");
+            urls.Add($"/species/{id}/wikidata");
             urls.Add($"/species/{id}/wikitext?authors=author&access=none");
         }
         urls.Add($"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}");

@@ -1,4 +1,5 @@
 using BeastieBot3.Shared.Wikitext;
+using BeastieBot3.Site.Pages;
 using BeastieBot3.Site.Update;
 
 namespace BeastieBot3.Site.Tests;
@@ -40,7 +41,9 @@ public sealed class CiteQOptionTests(SiteFactory factory) : IClassFixture<SiteFa
         var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?cite=q");
 
         Assert.Contains("| status_ref = <ref name=\"iucn\">{{cite iucn", Html.Textarea(html, "wikitext-speciesbox"));
-        Assert.Contains("This assessment has no Wikidata item, so status_ref uses {{cite iucn}}.", html);
+        Assert.Contains("This assessment has no Wikidata item, so the citations use {{cite iucn}}. ", Html.Text(html));
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikidata\">Commands to create the item</a>", html);
+        Assert.Null(Html.Textarea(html, WikidataCite.CiteQBoxId));
     }
 
     private static string Citation(long taxonId, long assessmentId, int year, string name) => new IucnCitationParts {

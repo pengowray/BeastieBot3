@@ -4,7 +4,7 @@
    the swatch of its row colour, then the table, newest first. *@
 @{
     var combined = Model.Combined!;
-    var tool = Model as SpeciesWikitextModel;
+    var tool = Model as AssessmentToolModel;
     var selected = tool?.Selected;
     var thisPage = combined.ThisPage;
     string NameHtml(TaxonRow t) => ScientificNameMarkup.ToHtml(t.ScientificName, t.SubpopulationName);
@@ -57,7 +57,7 @@
                         <th scope="col">@SiteText.ColCriteria</th>
                         <th scope="col" class="narrow-hide">@SiteText.ColAssessed</th>
                         @if (tool is not null) {
-                            <th scope="col">@SiteText.ColWikitext</th>
+                            <th scope="col">@tool.ToolColumnHeading</th>
                         }
                         <th scope="col">@SiteText.ColAssessment</th>
                     </tr>
@@ -95,9 +95,9 @@
                                         <span class="shown-label">@SiteText.Shown</span>
                                     } else if (own) {
                                         var ownIsLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId;
-                                        <a data-options-link="@SpeciesWikitextModel.OptionsLinkKey(ownIsLatest ? null : a.AssessmentId)" href="@(tool.OptionsUrl(ownIsLatest ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(null, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
+                                        <a data-options-link="@AssessmentToolModel.OptionsLinkKey(ownIsLatest ? null : a.AssessmentId)" href="@(tool.OptionsUrl(ownIsLatest ? null : a.AssessmentId))#wikitext" aria-label="@tool.ShowLinkAccessible(null, a.YearPublished, versionNote)">@tool.ShowLinkText</a>
                                     } else {
-                                        <a data-options-link="@SpeciesWikitextModel.OtherIdOptionsLinkKey(row)" href="@(tool.OtherIdOptionsUrl(row))#wikitext" aria-label="@SiteText.ShowWikitextOtherIdAccessible(a.TaxonId, a.YearPublished, versionNote)">@SiteText.ShowWikitextOtherId(a.TaxonId)</a>
+                                        <a data-options-link="@AssessmentToolModel.OtherIdOptionsLinkKey(row)" href="@(tool.OtherIdOptionsUrl(row))#wikitext" aria-label="@tool.ShowOtherIdAccessible(a.TaxonId, a.YearPublished, versionNote)">@tool.ShowOtherIdText(a.TaxonId)</a>
                                     }
                                 </td>
                             }

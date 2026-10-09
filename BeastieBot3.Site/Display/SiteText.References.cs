@@ -4,9 +4,12 @@ namespace BeastieBot3.Site.Display;
 // update page. The group page's species tables use the same option labels (GroupText.Tables).
 
 public static partial class SiteText {
-    public const string StatusRefTemplateLabel = "Citation in taxobox status_ref";
+    public const string CitationTemplateLabel = "Citation template";
     public const string StatusRefTemplateIucn = "{{cite iucn}}";
     public const string StatusRefTemplateQ = "{{cite Q}} when the assessment has a Wikidata item";
-    public const string StatusRefTemplateHelp = "Applies only to the taxobox status lines. The {{cite iucn}} and {{cite Q}} boxes stay the same.";
-    public const string StatusRefNoItem = "This assessment has no Wikidata item, so status_ref uses {{cite iucn}}.";
+    public const string CitationTemplateHelp = "{{cite Q}} cites the assessment's Wikidata item. Its box is shown below the {{cite iucn}} box, and the taxobox status_ref uses it.";
+    /// When the assessment has no Wikidata item: CiteQNoItemBefore + link to the Wikidata page + CiteQNoItemAfter.
+    public const string CiteQNoItemBefore = "This assessment has no Wikidata item, so the citations use {{cite iucn}}. ";
+    public const string CiteQNoItemLink = "Commands to create the item";
+    public const string CiteQNoItemAfter = " are on the Wikidata references page.";
 }

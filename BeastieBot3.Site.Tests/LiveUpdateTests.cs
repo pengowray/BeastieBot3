@@ -38,10 +38,8 @@ public sealed class LiveUpdateTests(SiteFactory factory) : IClassFixture<SiteFac
     public async Task RegionsHaveIdsAndTheFormIsOutsideThem() {
         var html = await Page();
         var regions = Regex.Matches(html, "<(div|section)[^>]*\\sdata-live-region[\\s>]");
-        Assert.Equal(2, regions.Count);
-        Assert.All(regions, region => Assert.Matches("\\sid=\"[a-z-]+\"", region.Value));
+        Assert.Single(regions);
         Assert.Contains("<div class=\"wikitext-output\" id=\"wikitext-output\" data-live-region>", html);
-        Assert.Contains("<section class=\"wikidata-cite\" id=\"wikidata-cite\" aria-labelledby=\"wikidata-cite-heading\" data-live-region>", html);
 
         // The boxes are in the first region, which is closed before the form starts.
         var output = html.LastIndexOf("<div", Html.IndexOf(html, "id=\"wikitext-output\""), StringComparison.Ordinal);

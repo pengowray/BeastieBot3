@@ -1,4 +1,3 @@
-using System.Text.Json;
 using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
@@ -37,20 +36,12 @@ public sealed record GivenNamesCoverage(int WithGivenNames, int People, Citation
 /// and its IUCN status on Wikidata. The assessment tables pick the assessment (?assessment=).
 [OutputCache(PolicyName = SiteCachePolicies.SpeciesWikitext)]
 [ResponseCache(Duration = 600, Location = ResponseCacheLocation.Any)]
-public sealed class SpeciesWikitextModel : TaxonPageModel {
-    private readonly ILogger<SpeciesWikitextModel> _logger;
-
+public sealed class SpeciesWikitextModel : AssessmentToolModel {
     public SpeciesWikitextModel(SiteDatabase db, SiteQueries queries, IOptions<SiteOptions> options, ILogger<SpeciesWikitextModel> logger)
-        : base(db, queries, options) {
-        _logger = logger;
+        : base(db, queries, options, logger) {
     }
 
-    /// The assessment the wikitext is for.
-    public AssessmentRow? Selected { get; private set; }
-    public bool SelectedIsDefault => Selected is not null && Selected.AssessmentId == StatusAssessment?.AssessmentId;
-
     public WikitextOptions Options { get; private set; } = WikitextOptions.Default;
-    public IucnCitationParts? Parts { get; private set; }
     public IReadOnlyList<WikitextBox> Boxes { get; private set; } = [];
     public string? DoiNote { get; private set; }
     public IReadOnlyList<string> UnsplitAuthors { get; private set; } = [];
@@ -63,26 +54,21 @@ public sealed class SpeciesWikitextModel : TaxonPageModel {
     /// For the full given names option, which is shown only when this is not null.
     public GivenNamesCoverage? GivenNames { get; private set; }
 
-    /// The "{{cite Q}} citation from Wikidata" part of the wikitext section; null when no assessment
-    /// is selected.
+    /// The selected assessment's Wikidata item and its {{cite Q}}, shown when the reader chose {{cite Q}}
+    /// (Options.Template); null when no assessment is selected.
     public WikidataCiteView? Wikidata { get; private set; }
 
-    /// The "IUCN conservation status on Wikidata" part; null unless the wikitext shown is for the
-    /// latest global assessment of a taxon in the release.
-    public WikidataStatusView? WikidataStatus { get; private set; }
+    /// True when the reader chose {{cite Q}} and the assessment has a Wikidata item with a {{cite Q}}.
+    public bool ShowsCiteQ => Options.Template == ReferenceTemplate.CiteQ && Wikidata?.CiteQ is not null;
 
     /// This page with the current options, as a link to it would give them.
     public string CurrentOptionsUrl => OptionsUrl(SelectedIsDefault || Selected is null ? null : Selected.AssessmentId);
-
-    /// The key of a "Show wikitext" link, so site.js can update its address after the options change.
-    public static string OptionsLinkKey(long? assessmentId) =>
-        assessmentId is { } id ? id.ToString(System.Globalization.CultureInfo.InvariantCulture) : "default";
 
     /// The taxobox an article about this taxon most likely uses, which names the status parameters box.
     public TaxoboxTemplate Taxobox { get; private set; } = TaxoboxTemplate.Speciesbox;
 
     /// The wikitext page of a taxon: "/species/22732/wikitext" with the query (which starts with "?" or is empty).
-    public static string PathFor(long taxonId, string query = "") => $"/species/{taxonId}/wikitext{query}";
+    public static string PathFor(long taxonId, string query = "") => WikipediaPath(taxonId, query);
 
     public IActionResult OnGet(long taxonId, long? assessment, string? authors, string? access, string? opts,
         [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? fullnames,
@@ -91,7 +77,7 @@ public sealed class SpeciesWikitextModel : TaxonPageModel {
         if (!LoadTaxon(taxonId)) {
             return Page();
         }
-        Selected = (assessment is { } id ? Assessments.FirstOrDefault(a => a.AssessmentId == id) : null) ?? StatusAssessment;
+        SelectAssessment(assessment);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
             Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames) with {
             Template = IucnReference.FromQuery(cite),
@@ -107,7 +93,7 @@ public sealed class SpeciesWikitextModel : TaxonPageModel {
     /// The URL of this page with the current options and the given assessment (null: the default
     /// one). The ref name goes along only when the visitor chose it; otherwise that assessment's
     /// own default applies.
-    public string OptionsUrl(long? assessmentId) {
+    public override string OptionsUrl(long? assessmentId) {
         var target = (assessmentId is { } id ? Assessments.FirstOrDefault(a => a.AssessmentId == id) : null) ?? StatusAssessment;
         var targetDefault = target is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(target);
         return PathFor(Taxon?.TaxonId ?? RequestedTaxonId, Options.ToQuery(assessmentId, targetDefault));
@@ -119,16 +105,17 @@ public sealed class SpeciesWikitextModel : TaxonPageModel {
     /// The "Show wikitext" link of a combined history row under another IUCN id: that id's wikitext
     /// page with the assessment and the current options. The ref name goes along only when the
     /// visitor chose it, as on this page; otherwise the default that page gives the assessment applies.
-    public string OtherIdOptionsUrl(CombinedRow row) {
+    public override string OtherIdOptionsUrl(CombinedRow row) {
         var other = row.Id.Taxon;
         var targetDefault = DefaultRefNames.For(row.Assessment, other.InRelease ? other.LatestGlobalAssessmentId : null, row.Id.Global);
         return PathFor(other.TaxonId, Options.ToQuery(row.Assessment.AssessmentId, targetDefault));
     }
 
-    /// The data-options-link key of a combined history row under another IUCN id, which cannot be
-    /// one of this page's own keys (an assessment id, or "default").
-    public static string OtherIdOptionsLinkKey(CombinedRow row) =>
-        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{row.Id.TaxonId}-{row.Assessment.AssessmentId}");
+    public override string ToolColumnHeading => SiteText.ColWikitext;
+    public override string ShowLinkText => SiteText.ShowWikitext;
+    public override string ShowLinkAccessible(string? region, int? year, string? versionNote) => SiteText.ShowWikitextAccessible(region, year, versionNote);
+    public override string ShowOtherIdText(long taxonId) => SiteText.ShowWikitextOtherId(taxonId);
+    public override string ShowOtherIdAccessible(long taxonId, int? year, string? versionNote) => SiteText.ShowWikitextOtherIdAccessible(taxonId, year, versionNote);
 
     private void BuildWikitext() {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -187,27 +174,9 @@ public sealed class SpeciesWikitextModel : TaxonPageModel {
         }
         Boxes = boxes;
 
-        Wikidata = WikidataCite.Build(Selected, Parts, Taxon?.WikidataQid, ReadItemModel(), Options.ToCiteQOptions(today, downloaded),
-            (what, e) => _logger.LogWarning(e, "WikidataCitation.{Method} failed for assessment {AssessmentId}", what, Selected.AssessmentId),
-            hasPage: id => Assessments.Any(a => a.AssessmentId == id), taxonItemDoubt: TaxonItemDoubt.Of(Taxon));
-        if (Taxon is not null && Taxon.InRelease && LatestGlobal is not null && Selected.AssessmentId == LatestGlobal.AssessmentId) {
-            WikidataStatus = WikidataCite.BuildStatus(Taxon, LatestGlobal, Parts,
-                (what, e) => _logger.LogWarning(e, "{Method} failed for taxon {TaxonId}", what, Taxon.TaxonId));
-        }
+        Wikidata = BuildWikidataCite(Options.ToCiteQOptions(today, downloaded));
     }
 
     /// The ref name of the Green Status citation, beside the Red List assessment's "iucn".
     public const string GreenStatusRefName = "iucn-green";
-
-    // The assessment item model `site build-db` stored; the defaults when it stored none. Null when
-    // the stored model cannot be read, so the page offers no QuickStatements commands rather than
-    // commands for another model.
-    private WikidataItemModel? ReadItemModel() {
-        try {
-            return WikidataItemModel.FromJson(_db.Snapshot?.Get(SiteDbSchema.MetaKeys.WikidataItemModel));
-        } catch (JsonException e) {
-            _logger.LogWarning(e, "The site database's {Key} cannot be read", SiteDbSchema.MetaKeys.WikidataItemModel);
-            return null;
-        }
-    }
 }

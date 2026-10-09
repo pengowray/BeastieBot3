@@ -19,10 +19,10 @@ public static partial class SiteText {
     /// The wikitext page of a taxon: "Wikitext and citations for " and the taxon's name.
     public const string ToolWikitextFor = "Wikitext and citations for ";
     public const string ToolWikitextHelp =
-        "{{cite iucn}}, {{IUCN status}} and taxobox status lines for any IUCN assessment of this taxon, and QuickStatements commands for Wikidata.";
+        "{{cite iucn}}, {{IUCN status}} and taxobox status lines for any IUCN assessment of this taxon.";
     public const string ToolsWikitextHeading = "Wikitext and citations for a taxon";
     public const string ToolsWikitextText =
-        "{{cite iucn}}, {{IUCN status}} and taxobox status lines for any IUCN assessment of a taxon, with {{cite Q}} and QuickStatements commands for Wikidata.";
+        "{{cite iucn}}, {{IUCN status}} and taxobox status lines for any IUCN assessment of a taxon, with citation options, and {{cite Q}} when the assessment has a Wikidata item.";
     public const string ToolsWhereTaxon =
         "Search for a taxon, then choose this tool in the Tools menu at the top of its page or in the Tools section at the bottom.";
 

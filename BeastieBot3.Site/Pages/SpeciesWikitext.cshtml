@@ -26,7 +26,10 @@
     @if (taxon.CommonNameEn is not null) {
         <p class="taxon-common-name">@taxon.CommonNameEn</p>
     }
-    <p class="tool-back"><a href="/species/@taxon.TaxonId">@SiteText.TaxonPageFor<span class="sci-name">@Html.Raw(nameHtml)</span></a></p>
+    <ul class="tool-links-inline">
+        <li><a href="/species/@taxon.TaxonId">@SiteText.TaxonPageFor<span class="sci-name">@Html.Raw(nameHtml)</span></a></li>
+        <li><a href="@AssessmentToolModel.WikidataPath(taxon.TaxonId, Model.SelectedIsDefault || selected is null ? "" : "?assessment=" + selected.AssessmentId)">@SiteText.WikidataPageFor<span class="sci-name">@Html.Raw(nameHtml)</span></a></li>
+    </ul>
 </header>
 
 @if (selected is null) {
@@ -112,6 +115,14 @@
                 }
             </div>
         }
+        @if (Model.ShowsCiteQ && Model.Wikidata?.CiteQ is { } citeQ) {
+            <div class="wikitext-box">
+                <partial name="_WikitextBoxContent" model="citeQ" />
+                <div class="citation-notes">
+                    <p class="note"><a href="@SiteText.CiteQGuidanceUrl">@SiteText.CiteQGuidanceLink</a>@SiteText.CiteQGuidanceAfter</p>
+                </div>
+            </div>
+        }
         @if (Model.Credits is { } creditsWithoutCitation && !Model.Boxes.Any(b => b.Id == "wikitext-cite")) {
             <div class="citation-notes">
                 <partial name="_AssessmentCredits" model="creditsWithoutCitation" />
@@ -179,71 +190,6 @@
             </form>
         }
 
-        @if (Model.Wikidata is { } wikidata) {
-            <section class="wikidata-cite" id="wikidata-cite" aria-labelledby="wikidata-cite-heading" data-live-region>
-                <h3 id="wikidata-cite-heading">@SiteText.HeadingWikidataCite</h3>
-                @if (wikidata.ItemQid is { } itemQid) {
-                    <p class="wikidata-item">@SiteText.WikidataItemBefore<a href="@wikidata.ItemUrl">@itemQid</a></p>
-                    @if (wikidata.CiteQ is { } citeQ) {
-                        <div class="wikitext-box">
-                            <partial name="_WikitextBoxContent" model="citeQ" />
-                        </div>
-                        <p class="note"><a href="@SiteText.CiteQGuidanceUrl">@SiteText.CiteQGuidanceLink</a>@SiteText.CiteQGuidanceAfter</p>
-                    }
-                    @if (wikidata.ItemIsForAssessmentId is { } owner) {
-                        @if (wikidata.ItemAssessmentHasPage) {
-                            <p class="wikidata-borrowed">@SiteText.BorrowedItemBefore<a href="@(Model.OptionsUrl(owner))#wikidata-cite">@SiteText.BorrowedItemLink</a>.</p>
-                        } else {
-                            <p class="wikidata-borrowed">@SiteText.BorrowedItemNoPage(owner)</p>
-                        }
-                    }
-                    <partial name="_WikidataName" model="wikidata" />
-                    @if (wikidata.Commands is { } add) {
-                        var changes = wikidata.Changes;
-                        @if (changes.Count == 0) {
-                            <p class="wikidata-missing">@SiteText.MissingStatements(string.Join(", ", wikidata.AddedStatements)) @SiteText.AddStatementsLine</p>
-                        } else {
-                            @if (wikidata.AddedStatements.Count > 0) {
-                                <p class="wikidata-missing">@SiteText.MissingStatements(string.Join(", ", wikidata.AddedStatements))</p>
-                            }
-                            <partial name="_WikidataItemChanges" model="wikidata" />
-                            <p>@SiteText.RunCommandsLine</p>
-                        }
-                        <partial name="_WikidataMainSubject" model="wikidata" />
-                        <div class="wikitext-box">
-                            <partial name="_WikitextBoxContent" model="add" />
-                        </div>
-                        @if (wikidata.QuickStatementsUrl is { } addUrl) {
-                            <p class="quickstatements-link"><a href="@addUrl">@SiteText.OpenInQuickStatements</a></p>
-                        }
-                    }
-                } else {
-                    <p class="wikidata-item">@SiteText.NoWikidataItem</p>
-                    @if (wikidata.NoUsableName && wikidata.CitationName is { } internalName) {
-                        <p>@SiteText.NoUsableName(internalName)</p>
-                    }
-                    @if (wikidata.Commands is { } create) {
-                        <p>
-                            @if (wikidata.SearchUrl is { } searchUrl) {
-                                @SiteText.SearchWikidataBefore<a href="@searchUrl">@SiteText.SearchWikidataLink</a>@SiteText.SearchWikidataAfter
-                            }
-                            @SiteText.CreateItemLine
-                        </p>
-                        <partial name="_WikidataName" model="wikidata" />
-                        <partial name="_WikidataMainSubject" model="wikidata" />
-                        <div class="wikitext-box">
-                            <partial name="_WikitextBoxContent" model="create" />
-                        </div>
-                        @if (wikidata.QuickStatementsUrl is { } createUrl) {
-                            <p class="quickstatements-link"><a href="@createUrl">@SiteText.OpenInQuickStatements</a></p>
-                        }
-                    }
-                }
-            </section>
-        }
-        @if (Model.WikidataStatus is { HasContent: true } wikidataStatus && Model.LatestGlobal is { } latestGlobal) {
-            <partial name="_WikidataStatus" model="@(new WikidataStatusPartial(wikidataStatus, latestGlobal, Model.Version))" />
-        }
     </section>
 }
 

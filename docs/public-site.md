@@ -1651,14 +1651,29 @@ column only when its page's last taxonavigation line names the page itself.
 A taxon page (`/species/{id}`, `Pages/Species.cshtml`, `SpeciesModel`) is a reference page: status,
 assessment tables, IUCN's subspecies and subpopulations, Green Status, other statuses, names,
 classifications, links, and a "Tools" section at the bottom. The status section has IUCN's own
-citation text and the credits of the assessment it shows. The wikitext for citing the taxon's
-assessments is on its wikitext page (`/species/{id}/wikitext`, `Pages/SpeciesWikitext.cshtml`,
-`SpeciesWikitextModel`): `{{cite iucn}}`, `{{IUCN status}}`, the taxobox status lines (with the
-taxobox status check under them), the Green Status citation, the citation options, `{{cite Q}}`
-and the Wikidata commands, then the same assessment tables with a "Show wikitext" column that picks
-the assessment. Both models derive from `TaxonPageModel`, which reads the taxon and its assessment
-tables; the tables are one partial (`_AssessmentTables.cshtml`, with `_CombinedHistory.cshtml`)
-that adds the column when its model is a `SpeciesWikitextModel`.
+citation text and the credits of the assessment it shows. Each taxon has two tool pages, both for
+one of its assessments (`?assessment=`, else the one the taxon page shows first), each with the same
+assessment tables plus a column that picks the assessment:
+
+- The wikitext page (Wikipedia; `/species/{id}/wikitext`, `Pages/SpeciesWikitext.cshtml`,
+  `SpeciesWikitextModel`): `{{cite iucn}}`, `{{IUCN status}}`, the taxobox status lines (with the
+  taxobox status check under them), the Green Status citation and the citation options. The option
+  "Citation template" (`cite=iucn|q`) chooses `{{cite Q}}`: with it, and when the assessment has a
+  Wikidata item, the `{{cite Q}}` box is shown below the `{{cite iucn}}` box and status_ref uses it;
+  without an item, the option says so and links the Wikidata page's commands to create one. Column
+  "Wikitext", links "Show wikitext".
+- The Wikidata references page (`/species/{id}/wikidata`, `Pages/SpeciesWikidata.cshtml`,
+  `SpeciesWikidataModel`): the assessment's Wikidata item, the QuickStatements commands that create
+  it or add what it lacks, and for the latest global assessment the taxon item's IUCN status (P141)
+  with its commands (`_WikidataStatus.cshtml`). No options and no form: nothing on it depends on the
+  date, so its output cache varies only by `assessment` (`SiteCachePolicies.SpeciesWikidata`).
+  Column "Wikidata", links "Show Wikidata item".
+
+`TaxonPageModel` reads the taxon and its assessment tables; `AssessmentToolModel` (both tool pages)
+picks the assessment, builds the Wikidata part (`WikidataCite.Build`, `BuildStatus`) and names the
+tables' column and links. The tables are one partial (`_AssessmentTables.cshtml`, with
+`_CombinedHistory.cshtml`) that adds the column when its model is an `AssessmentToolModel`. Each tool
+page's header links the taxon page and the other tool page for the same assessment.
 
 A group page (`/taxa/{rank}/{name}`, `GroupModel`) and its list page
 (`/taxa/{rank}/{name}/list`, `Pages/GroupList.cshtml`, `GroupListModel`) split the same way; both

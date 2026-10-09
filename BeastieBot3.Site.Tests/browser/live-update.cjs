@@ -179,19 +179,24 @@ async function waitForCite(page, test, what) {
     await page.reload();
     check((await cite(page)) === before, "loading the address again gives the same wikitext");
 
-    // Tiger: the full given names option and the Wikidata part.
+    // Tiger: the full given names option, and {{cite Q}} when it is chosen (the assessment has a
+    // Wikidata item). The Wikidata commands are on the Wikidata page.
     await page.goto(`${base}/species/${tiger}/wikitext`);
     await mark(page);
-    check(await page.locator("#wikidata-cite").isVisible(), "the tiger page has the Wikidata part");
+    check(await page.locator("#wikidata-cite").count() === 0, "the Wikipedia page has no Wikidata commands");
+    check(await page.locator("#wikitext-cite-q").count() === 0, "{{cite Q}} is not shown until it is chosen");
     await page.locator("input[name=fullnames]").check();
     await page.waitForFunction(() => location.search.includes("fullnames=1"));
     check(page.url().includes("fullnames=1"), "the address bar has fullnames=1: " + page.url());
     check(await stillSamePage(page), "the full given names option updates without a page load");
-    await page.locator("input[name=access][value=today]").check();
-    await page.waitForFunction(() => location.search.includes("access=today"));
-    check(await page.locator("#wikidata-cite a[href*='wikidata.org/wiki/Q900000001']").count() === 1,
-        "the Wikidata part is still there after an update, with the item link");
+    await page.locator("input[name=cite][value=q]").check();
+    await page.waitForFunction(() => location.search.includes("cite=q"));
+    check(await page.locator("#wikitext-cite-q").isVisible(), "choosing {{cite Q}} shows its box without a page load");
+    check(await stillSamePage(page), "and the page was not loaded again");
     await shot(page, "tiger-wikitext", "#wikitext");
+    await page.goto(`${base}/species/${tiger}/wikidata`);
+    check(await page.locator("#wikidata-cite a[href*='wikidata.org/wiki/Q900000001']").count() === 1,
+        "the Wikidata page has the item link");
 
     // At phone width.
     await page.setViewportSize({ width: 375, height: 812 });
