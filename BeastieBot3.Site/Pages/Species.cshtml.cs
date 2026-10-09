@@ -196,7 +196,7 @@ public sealed class SpeciesModel : TaxonPageModel {
             StatusCredits = CreditsView.Build(_queries.GetCredits(status.AssessmentId));
         }
         Names = TaxonNames.Build(_queries.GetNames(taxon.TaxonId), taxon.CommonNameEn);
-        SubspeciesList = SubspeciesRows.Load(_queries, Taxon);
+        SubspeciesList = SubspeciesRows.Load(_queries, taxon);
         LoadRelatedTaxa();
         LoadArrival(q);
         ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, $"/species/{taxon.TaxonId}");
