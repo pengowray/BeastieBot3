@@ -135,9 +135,9 @@ public static partial class SiteText {
         $"{iucnLabel} is {value} on Wikidata, which has no Lower Risk values.";
 
     public const string StatusAgrees = "Wikidata gives the same status.";
-    public const string StatusAgreesCited = "Wikidata gives the same status, with a reference to this assessment's Wikidata item. No commands needed.";
+    public const string StatusAgreesCited = "Wikidata gives the same status, with a reference to this assessment's Wikidata item. No changes needed.";
     public static string StatusAgreesCitedTaxonId(long taxonId) =>
-        $"Wikidata gives the same status, with a reference that has IUCN taxon ID (P627) {taxonId}. No commands needed.";
+        $"Wikidata gives the same status, with a reference that has IUCN taxon ID (P627) {taxonId}. No changes needed.";
     public const string StatusDiffers = "Wikidata gives a different status.";
     public const string StatusMissing = "Wikidata gives no IUCN conservation status for this taxon.";
     public const string StatusMissingNoIucnReference = "None of the item's IUCN conservation status statements has a reference to IUCN.";

@@ -104,7 +104,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
 
         Assert.Contains("critically endangered (Q219127), normal rank endangered (Q96377276), normal rank, no reference to IUCN", text);
         Assert.Contains("Only statements with a reference to IUCN are compared with the assessment, and the commands never remove the other statements.", text);
-        Assert.Contains("Wikidata gives the same status, with a reference that has IUCN taxon ID (P627) 2790. No commands needed.", text);
+        Assert.Contains("Wikidata gives the same status, with a reference that has IUCN taxon ID (P627) 2790. No changes needed.", text);
         Assert.Null(Html.Textarea(html, WikidataCite.StatusCommandsBoxId));
     }
 
