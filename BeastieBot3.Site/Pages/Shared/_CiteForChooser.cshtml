@@ -1,0 +1,13 @@
+@model CiteForChooser
+@* The heading and the row of choices of the citations pages: Wikidata, then each Wikipedia. The
+   chosen one is plain bold text. *@
+<h2 id="wikitext-heading">@Model.Heading</h2>
+<nav class="wiki-chooser" aria-labelledby="wikitext-heading">
+    <ul>
+        @foreach (var link in Model.Links) {
+            @* Razor writes a data- attribute even when its value is null, so the link without
+               options has its own markup. *@
+            <li>@if (link.Current) {<span aria-current="page" lang="@link.Lang">@link.Text</span>} else if (link.OptionsKey is null) {<a href="@link.Href" lang="@link.Lang" hreflang="@link.Lang">@link.Text</a>} else {<a href="@link.Href" data-options-link="@link.OptionsKey" lang="@link.Lang" hreflang="@link.Lang">@link.Text</a>}</li>
+        }
+    </ul>
+</nav>

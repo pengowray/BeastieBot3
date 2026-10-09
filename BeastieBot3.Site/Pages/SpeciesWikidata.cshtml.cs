@@ -41,6 +41,19 @@ public sealed class SpeciesWikidataModel : AssessmentToolModel {
         return Page();
     }
 
+    /// The heading and the row of choices, Wikidata chosen. The links to each Wikipedia keep the
+    /// assessment only: this page has no citation options to carry.
+    public CiteForChooser Chooser => BuildChooser(null, edition => {
+        var query = new List<string>();
+        if (SelectedIdForLinks is { } id) {
+            query.Add("assessment=" + id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        if (!edition.IsEnglish) {
+            query.Add(WikitextOptions.WikiKey + "=" + edition.Code);
+        }
+        return WikipediaPath(Taxon?.TaxonId ?? RequestedTaxonId, query.Count == 0 ? "" : "?" + string.Join('&', query));
+    }, wikipediaLinksKeepOptions: false);
+
     public override string OptionsUrl(long? assessmentId) =>
         WikidataPath(Taxon?.TaxonId ?? RequestedTaxonId, assessmentId is { } id ? $"?assessment={id}" : "");
 

@@ -1,0 +1,63 @@
+@model WikidataItemPartial
+@* The assessment's Wikidata item: a link to it with the QuickStatements commands that add its
+   missing statements or fix its title and label, or, when the site's data has no item, the commands
+   that create one. On the Wikidata choice of the citations pages, and on a Wikipedia choice when the
+   citation template option asks for it. *@
+@{
+    var wikidata = Model.Wikidata;
+    var page = Model.Page;
+}
+    <section class="wikidata-cite" id="wikidata-cite" aria-labelledby="wikidata-cite-heading">
+        <h3 id="wikidata-cite-heading">@SiteText.HeadingWikidataItem</h3>
+        @if (wikidata.ItemQid is { } itemQid) {
+            <p class="wikidata-item">@SiteText.WikidataItemBefore<a href="@wikidata.ItemUrl">@itemQid</a></p>
+            @if (wikidata.ItemIsForAssessmentId is { } owner) {
+                @if (wikidata.ItemAssessmentHasPage) {
+                    <p class="wikidata-borrowed">@SiteText.BorrowedItemBefore<a href="@(page.OptionsUrl(owner))">@SiteText.BorrowedItemLink</a>.</p>
+                } else {
+                    <p class="wikidata-borrowed">@SiteText.BorrowedItemNoPage(owner)</p>
+                }
+            }
+            <partial name="_WikidataName" model="wikidata" />
+            @if (wikidata.Commands is { } add) {
+                var changes = wikidata.Changes;
+                @if (changes.Count == 0) {
+                    <p class="wikidata-missing">@SiteText.MissingStatements(string.Join(", ", wikidata.AddedStatements)) @SiteText.AddStatementsLine</p>
+                } else {
+                    @if (wikidata.AddedStatements.Count > 0) {
+                        <p class="wikidata-missing">@SiteText.MissingStatements(string.Join(", ", wikidata.AddedStatements))</p>
+                    }
+                    <partial name="_WikidataItemChanges" model="wikidata" />
+                    <p>@SiteText.RunCommandsLine</p>
+                }
+                <partial name="_WikidataMainSubject" model="wikidata" />
+                <div class="wikitext-box">
+                    <partial name="_WikitextBoxContent" model="add" />
+                </div>
+                @if (wikidata.QuickStatementsUrl is { } addUrl) {
+                    <p class="quickstatements-link"><a href="@addUrl">@SiteText.OpenInQuickStatements</a></p>
+                }
+            }
+        } else {
+            <p class="wikidata-item">@SiteText.NoWikidataItem</p>
+            @if (wikidata.NoUsableName && wikidata.CitationName is { } internalName) {
+                <p>@SiteText.NoUsableName(internalName)</p>
+            }
+            @if (wikidata.Commands is { } create) {
+                <p>
+                    @if (wikidata.SearchUrl is { } searchUrl) {
+                        @SiteText.SearchWikidataBefore<a href="@searchUrl">@SiteText.SearchWikidataLink</a>@SiteText.SearchWikidataAfter
+                    }
+                    @SiteText.CreateItemLine
+                </p>
+                <partial name="_WikidataName" model="wikidata" />
+                <partial name="_WikidataMainSubject" model="wikidata" />
+                <div class="wikitext-box">
+                    <partial name="_WikitextBoxContent" model="create" />
+                </div>
+                @if (wikidata.QuickStatementsUrl is { } createUrl) {
+                    <p class="quickstatements-link"><a href="@createUrl">@SiteText.OpenInQuickStatements</a></p>
+                }
+            }
+        }
+    </section>

@@ -29,6 +29,8 @@ public static partial class SiteText {
     public const string ThemeSystem = "System";
     public const string ThemeLight = "Light";
     public const string ThemeDark = "Dark";
+    /// The accessible name of the theme menu's button, with the current choice: "Theme: Dark".
+    public static string ThemeName(string choice) => $"{ThemeLabel}: {choice}";
 
     // Home page
     public const string SearchLabel = "Search for a taxon";

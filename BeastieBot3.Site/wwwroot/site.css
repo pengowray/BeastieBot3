@@ -255,35 +255,100 @@ h3 {
     color: var(--fg);
 }
 
-.site-nav {
-    margin-left: auto;
-}
-
-/* Theme control. Hidden until theme.js has set data-theme on <html>, so it never shows without
-   JavaScript; invisible (but taking its space) until theme.js has selected the saved choice. */
-.theme-control {
-    display: none;
-    align-items: center;
-    gap: 0.4rem;
+/* The header's second row: the tool links, and About at the far end. */
+.header-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 1.25rem;
+    padding-bottom: 0.5rem;
     font-size: 0.9rem;
 }
 
-:root[data-theme] .theme-control {
+.tool-nav ul {
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tool-nav a[aria-current] {
+    color: var(--fg);
+    font-weight: 700;
+}
+
+.header-nav .site-nav {
+    margin-left: auto;
+}
+
+/* Theme menu: an icon button at the end of the first row. Hidden until theme.js has set data-theme
+   on <html>, so it never shows without JavaScript; invisible (but taking its space) until theme.js
+   has ticked the saved choice. The icon of the current choice is the one shown. */
+.theme-menu {
+    display: none;
+    margin-left: auto;
+}
+
+:root[data-theme] .theme-menu {
+    display: block;
     visibility: hidden;
 }
 
-:root[data-theme-ready] .theme-control {
+:root[data-theme-ready] .theme-menu {
     visibility: visible;
 }
 
-.theme-control select {
-    font: inherit;
-    padding: 0.2rem 0.35rem;
-    border: 1px solid var(--muted);
+.theme-menu > summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid transparent;
     border-radius: 4px;
-    background: var(--bg);
     color: var(--fg);
+}
+
+.theme-menu > summary::after {
+    content: none;
+}
+
+.theme-menu > summary:hover,
+.theme-menu[open] > summary {
+    border-color: var(--control-border);
+    text-decoration: none;
+}
+
+.theme-icon {
+    display: none;
+}
+
+:root[data-theme="system"] .theme-icon-system,
+:root[data-theme="light"] .theme-icon-light,
+:root[data-theme="dark"] .theme-icon-dark {
+    display: block;
+}
+
+.menu-panel {
+    position: absolute;
+    right: 0;
+    z-index: 10;
+    min-width: 8rem;
+    margin: 0.4rem 0 0;
+    padding: 0.35rem 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+.menu-panel label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
 }
 
 .site-footer {
@@ -337,8 +402,7 @@ h3 {
     padding: 0.35rem 0.55rem;
 }
 
-/* On phones the search box takes a line of its own, under the site name and About, and the theme
-   control goes on the line after it. */
+/* On phones the search box takes a line of its own, under the site name and the theme menu. */
 @media (max-width: 40rem) {
     .header-row {
         display: grid;
@@ -351,12 +415,12 @@ h3 {
         grid-column: 1;
     }
 
-    /* The short name only, so the name, Tools and About fit on one line. */
+    /* The short name only, so the name and the theme menu fit on one line. */
     .site-name-owner {
         display: none;
     }
 
-    .site-nav {
+    .theme-menu {
         grid-row: 1;
         grid-column: 2;
     }
@@ -366,9 +430,9 @@ h3 {
         max-width: none;
     }
 
-    .theme-control {
-        grid-column: 1 / -1;
-        justify-self: end;
+    /* About follows the tool links instead of taking a line of its own at the far end. */
+    .header-nav .site-nav {
+        margin-left: 0;
     }
 }
 
@@ -820,6 +884,11 @@ textarea {
 
 /* {{cite Q}} and QuickStatements, after the citation options */
 
+/* The link to the third citation template choice is hidden while that choice is ticked. */
+.option-group:has(input[value="new"]:checked) .create-item-link {
+    display: none;
+}
+
 .wikidata-cite {
     margin-top: 2rem;
 }
@@ -1268,48 +1337,16 @@ th.num {
 
 /* ---------------------------------------------------------------- status updater */
 
-/* The site navigation: the Tools menu and the About link. */
-.site-nav {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem 1rem;
-}
-
-/* The Tools menu: a <details> whose list opens below its summary, over the page. */
+/* A menu in the header: a <details> whose panel opens below its summary, over the page. */
 .nav-menu {
     position: relative;
 }
 .nav-menu > summary {
     cursor: pointer;
-    color: var(--link);
     list-style: none;
 }
 .nav-menu > summary::-webkit-details-marker {
     display: none;
-}
-.nav-menu > summary::after {
-    content: " \25BE";
-}
-.nav-menu > summary:hover {
-    text-decoration: underline;
-}
-.nav-menu > ul {
-    position: absolute;
-    right: 0;
-    z-index: 10;
-    width: max-content;
-    max-width: min(22rem, calc(100vw - 2rem));
-    margin: 0.4rem 0 0;
-    padding: 0.35rem 0;
-    list-style: none;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-}
-.nav-menu > ul a {
-    display: block;
-    padding: 0.4rem 0.9rem;
 }
 
 /* The page of a tool for one taxon or group: the tool's name above the taxon's name, and a link back. */
@@ -1321,22 +1358,23 @@ th.num {
 .tool-header .tool-back {
     margin: 0.4rem 0 0;
 }
-/* The row of tool tabs above every tool page: plain links, the current one underlined by a bar. */
-.tool-tabs ul {
+/* The tabs under a taxon's or group's name (_PageTabs): plain links, the current one underlined by
+   a bar. */
+.page-tabs ul {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 1.25rem;
-    margin: 0 0 1rem;
+    gap: 0 1.5rem;
+    margin: 0.75rem 0 1rem;
     padding: 0;
     list-style: none;
     border-bottom: 1px solid var(--border);
 }
-.tool-tabs a {
+.page-tabs a {
     display: inline-block;
-    padding: 0.5rem 0 0.4rem;
+    padding: 0.4rem 0 0.35rem;
     border-bottom: 3px solid transparent;
 }
-.tool-tabs a[aria-current] {
+.page-tabs a[aria-current] {
     border-bottom-color: var(--link);
     color: var(--fg);
     font-weight: 700;

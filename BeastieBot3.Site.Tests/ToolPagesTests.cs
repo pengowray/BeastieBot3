@@ -2,21 +2,23 @@ using System.Net;
 
 namespace BeastieBot3.Site.Tests;
 
-// The tool pages behind the row of tool tabs: /tools, /cite, /update-statuses, /species-list-maker.
+// The tool pages linked from the header: /tools, /cite, /update-statuses, /species-list-maker.
 public sealed class ToolPagesTests(SiteFactory factory) : IClassFixture<SiteFactory> {
     private readonly HttpClient _client = factory.Client();
 
     [Fact]
-    public async Task EveryToolPageHasTheTabsWithItsOwnMarked() {
+    public async Task EveryPageHasTheToolLinksInTheHeaderWithItsOwnMarked() {
         foreach (var (url, current) in new[] {
-                     ("/tools", (string?)null), ("/cite", "/cite"), ("/update-statuses", "/update-statuses"), ("/species-list-maker", "/species-list-maker"),
+                     ("/tools", (string?)null), ("/", null), ($"/species/{FixtureDb.PolarBear}", null),
+                     ("/cite", "/cite"), ("/update-statuses", "/update-statuses"), ("/species-list-maker", "/species-list-maker"),
                      ($"/species/{FixtureDb.PolarBear}/wikitext", "/cite"), ($"/species/{FixtureDb.PolarBear}/wikidata", "/cite"),
                      ("/taxa/family/ursidae/list", "/species-list-maker"),
                  }) {
             var html = await _client.GetStringAsync(url);
-            Assert.Contains("<nav class=\"tool-tabs\"", html);
-            if (current is not null) {
-                Assert.Contains($"<a href=\"{current}\" aria-current=\"page\">", html);
+            var header = html[html.IndexOf("<header class=\"site-header\">", StringComparison.Ordinal)..html.IndexOf("</header>", StringComparison.Ordinal)];
+            Assert.Contains("<nav class=\"tool-nav\" aria-label=\"Tools\">", header);
+            foreach (var tool in new[] { "/cite", "/update-statuses", "/species-list-maker" }) {
+                Assert.Contains(tool == current ? $"<a href=\"{tool}\" aria-current=\"page\">" : $"<a href=\"{tool}\">", header);
             }
         }
     }

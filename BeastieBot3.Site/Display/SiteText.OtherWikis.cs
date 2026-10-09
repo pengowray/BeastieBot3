@@ -1,13 +1,14 @@
 namespace BeastieBot3.Site.Display;
 
-// The wikitext page's choice of Wikipedia (OtherWikipedias) and its notes about each wiki's templates.
+// The citations pages' choice of Wikidata or a Wikipedia (OtherWikipedias), and the notes about each wiki's templates.
 
 public static partial class SiteText {
-    /// The accessible name of the row of links to each Wikipedia.
+    /// The accessible name of the /cite page's list of Wikipedia languages.
     public const string WikiChooserLabel = "Wikipedia language";
 
-    /// The heading of the wikitext section: "Wikitext for French Wikipedia".
-    public static string HeadingWikitextFor(BeastieBot3.Shared.Wikitext.WikipediaEdition edition) => $"Wikitext for {edition.Name} Wikipedia";
+    /// The heading of the citations pages, above the row of choices: a Wikipedia, or Wikidata.
+    public const string HeadingCiteForWikipedia = "Cite for Wikipedia";
+    public const string HeadingCiteForWikidata = "Cite for Wikidata";
 
     /// The label of the citation box for a wiki other than English: "{{UICN}} citation".
     public static string LabelCiteTemplate(string template) => $"{template} citation";

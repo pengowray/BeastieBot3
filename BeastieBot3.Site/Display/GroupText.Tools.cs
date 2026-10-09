@@ -7,7 +7,7 @@ public static partial class GroupText {
     public static string GroupInSentence(Data.GroupRow group) =>
         group.ShowRank && group.Rank != "unranked" ? $"{The} {group.Rank} {group.Name}" : group.Name;
 
-    /// The group's list page: "Wikipedia list of the family Ursidae" (menu item, link, browser title).
+    /// The group's list page: "Species list of the family Ursidae" (link, browser title).
     public static string ToolListLink(Data.GroupRow group) => ToolListLinkBefore + GroupInSentence(group);
 
     /// The help line under the list link: "The taxa in the family as a bulleted list ...".
@@ -15,11 +15,13 @@ public static partial class GroupText {
         (group.ShowRank && group.Rank != "unranked" ? $"The taxa in the {group.Rank}" : "The taxa in this group")
         + " as a bulleted list or species tables, with a choice of headings, IUCN categories and references.";
 
-    public const string ListPageLabel = "Wikipedia list";
-    /// The link back to the group page: "Group page for the family Ursidae" (with _GroupInSentence).
-    public const string GroupPageForBefore = "Group page for ";
-    /// The list link: "Wikipedia list of the family Ursidae" (with _GroupInSentence).
-    public const string ToolListLinkBefore = "Wikipedia list of ";
+    // The tabs under a group's name (PageTabs.ForGroup).
+    public const string GroupTabsLabel = "Pages for this group";
+    public const string TabGroupPage = "Group page";
+    public const string TabList = "Species list";
+
+    /// The list link: "Species list of the family Ursidae" (with _GroupInSentence).
+    public const string ToolListLinkBefore = "Species list of ";
     /// The word before a group's rank inside a sentence ("the family Ursidae").
     public const string The = "the";
 }

@@ -14,7 +14,8 @@
         && SiteFormat.TryParseDate(Db.Snapshot?.Get(BeastieBot3.Shared.SiteData.SiteDbSchema.MetaKeys.IucnApiDownloadedTo), out var apiTo)
         ? SiteFormat.DateRange(apiFrom, apiTo) : null;
     var sourceUrl = SiteOptions.Value.SourceUrl;
-    var pageTools = ViewData["PageTools"] as IReadOnlyList<(string Text, string Href)> ?? [];
+    // The tool whose link in the header is marked as the current page.
+    var toolTab = ViewData["ToolTab"] as BeastieBot3.Site.Web.ToolPaths.Tab? ?? BeastieBot3.Site.Web.ToolPaths.Tab.None;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -49,33 +50,42 @@
             @if (!hideHeaderSearch) {
                 <partial name="_SearchForm" model="@(new SearchFormModel(ViewData["Query"] as string, "header"))" />
             }
+            @* Hidden until theme.js runs (site.css), so a browser without JavaScript has no control
+               that does nothing. The server always ticks System: the choice is made in the browser,
+               so every visitor gets the same page from the output cache. The icon shown is chosen by
+               site.css from data-theme on <html>; theme.js writes the current choice into the
+               summary's hidden name. site.js closes the menu on Escape and on a click outside it. *@
+            <details class="nav-menu theme-menu">
+                <summary>
+                    <svg class="theme-icon theme-icon-system" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>
+                    <svg class="theme-icon theme-icon-light" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                    <svg class="theme-icon theme-icon-dark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                    <span class="visually-hidden" id="theme-name" data-system="@SiteText.ThemeName(SiteText.ThemeSystem)" data-light="@SiteText.ThemeName(SiteText.ThemeLight)" data-dark="@SiteText.ThemeName(SiteText.ThemeDark)">@SiteText.ThemeName(SiteText.ThemeSystem)</span>
+                </summary>
+                <fieldset class="menu-panel">
+                    <legend class="visually-hidden">@SiteText.ThemeLabel</legend>
+                    <label><input type="radio" name="theme" value="system" checked autocomplete="off"> @SiteText.ThemeSystem</label>
+                    <label><input type="radio" name="theme" value="light" autocomplete="off"> @SiteText.ThemeLight</label>
+                    <label><input type="radio" name="theme" value="dark" autocomplete="off"> @SiteText.ThemeDark</label>
+                </fieldset>
+            </details>
+        </div>
+        <div class="wrap header-nav">
+            @* The tools, the same on every page; the current tool's link is marked. *@
+            <nav class="tool-nav" aria-label="@SiteText.ToolTabsLabel">
+                <ul>
+                    @foreach (var (tab, href, text) in new[] {
+                                 (BeastieBot3.Site.Web.ToolPaths.Tab.Cite, BeastieBot3.Site.Web.ToolPaths.Cite, SiteText.ToolCite),
+                                 (BeastieBot3.Site.Web.ToolPaths.Tab.Update, BeastieBot3.Site.Web.ToolPaths.UpdateStatuses, SiteText.ToolUpdateLink),
+                                 (BeastieBot3.Site.Web.ToolPaths.Tab.List, BeastieBot3.Site.Web.ToolPaths.ListMaker, SiteText.ToolListMaker),
+                             }) {
+                        <li><a href="@href" aria-current="@(tab == toolTab ? "page" : null)">@text</a></li>
+                    }
+                </ul>
+            </nav>
             <nav class="site-nav" aria-label="Site">
-                @* A disclosure menu: the tools of the page shown (ViewData["PageTools"]), then the site's.
-                   site.js closes it on Escape and on a click outside it. *@
-                <details class="nav-menu">
-                    <summary>@SiteText.HeadingTools</summary>
-                    <ul>
-                        @foreach (var (text, href) in pageTools) {
-                            <li><a href="@href">@text</a></li>
-                        }
-                        <li><a href="@BeastieBot3.Site.Web.ToolPaths.Cite">@SiteText.ToolCite</a></li>
-                        <li><a href="@BeastieBot3.Site.Web.ToolPaths.UpdateStatuses">@SiteText.ToolUpdateLink</a></li>
-                        <li><a href="@BeastieBot3.Site.Web.ToolPaths.ListMaker">@SiteText.ToolListMaker</a></li>
-                    </ul>
-                </details>
                 <a href="/about">@SiteText.NavAbout</a>
             </nav>
-            @* Hidden until theme.js runs (site.css), so a browser without JavaScript has no control
-               that does nothing. The server always selects System: the choice is made in the browser,
-               so every visitor gets the same page from the output cache. *@
-            <div class="theme-control">
-                <label for="theme-select">@SiteText.ThemeLabel</label>
-                <select id="theme-select" autocomplete="off">
-                    <option value="system" selected>@SiteText.ThemeSystem</option>
-                    <option value="light">@SiteText.ThemeLight</option>
-                    <option value="dark">@SiteText.ThemeDark</option>
-                </select>
-            </div>
         </div>
     </header>
     <main id="main" class="wrap" tabindex="-1">

@@ -59,7 +59,21 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
     public WikidataCiteView? Wikidata { get; private set; }
 
     /// True when the reader chose {{cite Q}} and the assessment has a Wikidata item with a {{cite Q}}.
-    public bool ShowsCiteQ => Options.Template == ReferenceTemplate.CiteQ && Wikidata?.CiteQ is not null;
+    public bool ShowsCiteQ => Edition.IsEnglish && Options.Template == ReferenceTemplate.CiteQ && Wikidata?.CiteQ is not null;
+
+    /// True when the reader chose {{cite Q}} with the item's commands: the Wikidata item section is
+    /// shown below the options.
+    public bool ShowsWikidataItem => Edition.IsEnglish && Options.Template == ReferenceTemplate.CiteQ && Options.CreateItem && Wikidata is not null;
+
+    /// This page with the third citation template choice, for the link in the note shown when the
+    /// assessment has no Wikidata item.
+    public string CreateItemUrl {
+        get {
+            var targetDefault = Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected);
+            return PathFor(Taxon?.TaxonId ?? RequestedTaxonId,
+                (Options with { Template = ReferenceTemplate.CiteQ, CreateItem = true }).ToQuery(SelectedIdForLinks, targetDefault)) + "#wikidata-cite";
+        }
+    }
 
     /// This page with the current options, as a link to it would give them.
     public string CurrentOptionsUrl => OptionsUrl(SelectedIsDefault || Selected is null ? null : Selected.AssessmentId);
@@ -81,7 +95,8 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
         SelectAssessment(assessment);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
             Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames) with {
-            Template = IucnReference.FromQuery(cite),
+            Template = WikitextOptions.ReadTemplate(cite).Template,
+            CreateItem = WikitextOptions.ReadTemplate(cite).CreateItem,
             GreenStatusYear = WikitextOptions.ReadGreenStatusYear(gsyear),
             Wiki = WikitextOptions.ReadWiki(wiki),
         };
@@ -189,6 +204,9 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
 
     /// The Wikipedia the wikitext is for (Options.Wiki).
     public WikipediaEdition Edition => OtherWikipedias.Find(Options.Wiki) ?? OtherWikipedias.English;
+
+    /// The heading and the row of choices: Wikidata, then each Wikipedia with the current options.
+    public CiteForChooser Chooser => BuildChooser(Edition, WikiUrl, wikipediaLinksKeepOptions: true);
 
     /// The links to the page for each Wikipedia, with the current options.
     public string WikiUrl(WikipediaEdition edition) {

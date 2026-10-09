@@ -1,0 +1,12 @@
+@model AssessmentToolModel
+@* The top of both citations pages (Wikipedia and Wikidata): the taxon's name and the tabs. *@
+@{
+    var taxon = Model.Taxon!;
+}
+<header class="taxon-header tool-header">
+    <h1><span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</span></h1>
+    @if (taxon.CommonNameEn is not null) {
+        <p class="taxon-common-name">@taxon.CommonNameEn</p>
+    }
+    <partial name="_PageTabs" model="@PageTabs.ForTaxon(taxon.TaxonId, citations: true, Model.SelectedIdForLinks)" />
+</header>

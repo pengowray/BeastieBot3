@@ -25,13 +25,14 @@ public sealed class ThemeControlTests(SiteFactory factory) : IClassFixture<SiteF
         var header = Regex.Match(html, "<header class=\"site-header\">(.*?)</header>", RegexOptions.Singleline);
         Assert.True(header.Success, "page has no site header");
         var control = header.Groups[1].Value;
-        Assert.Contains("<div class=\"theme-control\">", control);
-        Assert.Contains("<label for=\"theme-select\">Theme</label>", control);
-        Assert.Contains("<select id=\"theme-select\" autocomplete=\"off\">", control);
-        Assert.Contains("<option value=\"system\" selected>System</option>", control);
-        Assert.Contains("<option value=\"light\">Light</option>", control);
-        Assert.Contains("<option value=\"dark\">Dark</option>", control);
-        Assert.Single(Regex.Matches(html, "id=\"theme-select\""));
+        // An icon button whose hidden name gives the current choice, and a menu of three choices.
+        Assert.Contains("<details class=\"nav-menu theme-menu\">", control);
+        Assert.Contains("data-system=\"Theme: System\" data-light=\"Theme: Light\" data-dark=\"Theme: Dark\">Theme: System</span>", control);
+        Assert.Contains("<legend class=\"visually-hidden\">Theme</legend>", control);
+        Assert.Contains("<label><input type=\"radio\" name=\"theme\" value=\"system\" checked autocomplete=\"off\"> System</label>", control);
+        Assert.Contains("<label><input type=\"radio\" name=\"theme\" value=\"light\" autocomplete=\"off\"> Light</label>", control);
+        Assert.Contains("<label><input type=\"radio\" name=\"theme\" value=\"dark\" autocomplete=\"off\"> Dark</label>", control);
+        Assert.Equal(3, Regex.Matches(html, "name=\"theme\"").Count);
     }
 
     [Theory]
@@ -97,12 +98,14 @@ public sealed class ThemeControlTests(SiteFactory factory) : IClassFixture<SiteF
 
     [Fact]
     public async Task ControlIsHiddenUntilThemeScriptHasRun() {
-        // site.css shows the control only once theme.js has set data-theme on <html>, and makes it
-        // visible once theme.js has selected the saved choice. Without JavaScript it stays hidden.
+        // site.css shows the theme menu only once theme.js has set data-theme on <html>, and makes it
+        // visible once theme.js has ticked the saved choice. Without JavaScript it stays hidden.
         var css = Regex.Replace(await _client.GetStringAsync("/site.css"), "\\s+", " ");
-        Assert.Contains(".theme-control { display: none;", css);
-        Assert.Contains(":root[data-theme] .theme-control { display: flex; visibility: hidden; }", css);
-        Assert.Contains(":root[data-theme-ready] .theme-control { visibility: visible; }", css);
+        Assert.Contains(".theme-menu { display: none;", css);
+        Assert.Contains(":root[data-theme] .theme-menu { display: block; visibility: hidden; }", css);
+        Assert.Contains(":root[data-theme-ready] .theme-menu { visibility: visible; }", css);
+        // The icon of the current choice is the one shown.
+        Assert.Contains(":root[data-theme=\"dark\"] .theme-icon-dark { display: block; }", css);
     }
 
     [Fact]

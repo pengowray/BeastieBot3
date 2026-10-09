@@ -40,16 +40,18 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.DoesNotContain("id=\"wikitext\"", html);
         Assert.DoesNotContain(">Show wikitext</a>", html);
         Assert.DoesNotContain(">Wikitext</th>", html);
-        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikitext\">Wikitext and citations for <span class=\"sci-name\"><i>Ursus maritimus</i></span></a>", Section(html, "tools"));
-        Assert.Contains("<a href=\"/taxa/genus/ursus/list\">Wikipedia list of the genus <i>Ursus</i></a>", Section(html, "tools"));
-        Assert.Contains("<a href=\"/taxa/genus/ursus/list\">", Section(html, "tools"));
-        // The Tools menu in the header has the page's own tool first.
-        var menu = html[html.IndexOf("<details class=\"nav-menu\">", StringComparison.Ordinal)..];
-        Assert.True(menu.IndexOf($"/species/{FixtureDb.PolarBear}/wikitext", StringComparison.Ordinal) < menu.IndexOf("/update", StringComparison.Ordinal));
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikitext\">Citations for <span class=\"sci-name\"><i>Ursus maritimus</i></span></a>", Section(html, "tools"));
+        Assert.Contains("<a href=\"/taxa/genus/ursus/list\">Species list of the genus <i>Ursus</i></a>", Section(html, "tools"));
+        // The tabs under the name: this page, then the citations page.
+        Assert.Contains("<nav class=\"page-tabs\" aria-label=\"Pages for this taxon\">", html);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}\" aria-current=\"page\">Taxon page</a>", html);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikitext\">Citations</a>", html);
+        Assert.True(Html.IndexOf(html, "class=\"taxon-common-name\"") < Html.IndexOf(html, "class=\"page-tabs\""));
 
         var tool = await Tool();
-        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}\">Taxon page for <span class=\"sci-name\"><i>Ursus maritimus</i></span></a>", tool);
-        Assert.Contains("<title>Wikitext and citations for Ursus maritimus | Species Check</title>", tool);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}\">Taxon page</a>", tool);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikitext\" aria-current=\"page\">Citations</a>", tool);
+        Assert.Contains("<title>Ursus maritimus (Polar bear): Citations for Wikipedia | Species Check</title>", tool);
         Assert.Contains($"<link rel=\"canonical\" href=\"http://localhost/species/{FixtureDb.PolarBear}/wikitext\">", tool);
         Assert.Contains(">Show wikitext</a>", tool);
     }

@@ -1,0 +1,11 @@
+@model PageTabs
+@* The tabs under a taxon's or group's name: its reference page and its tool page. Each page that
+   has the tabs puts them in the same place, directly under the name, so they stay put when the
+   reader switches. *@
+<nav class="page-tabs" aria-label="@Model.Label">
+    <ul>
+        @foreach (var tab in Model.Tabs) {
+            <li><a href="@tab.Href" aria-current="@(tab.Current ? "page" : null)">@tab.Text</a></li>
+        }
+    </ul>
+</nav>

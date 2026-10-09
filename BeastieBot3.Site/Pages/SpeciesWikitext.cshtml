@@ -6,7 +6,7 @@
         ViewData["Title"] = SiteText.TaxonNotFoundHeading(Model.RequestedTaxonId);
         ViewData["HideHeaderSearch"] = true;
     } else {
-        ViewData["Title"] = SiteText.WikitextPageTitle(taxon.SubpopulationName is { Length: > 0 } subpopulation ? $"{taxon.ScientificName} {subpopulation}" : taxon.ScientificName);
+        ViewData["Title"] = SiteText.CitationsPageTitle(SiteText.TaxonTitle(taxon.SubpopulationName is { Length: > 0 } subpopulation ? $"{taxon.ScientificName} {subpopulation}" : taxon.ScientificName, taxon.CommonNameEn), wikidata: false);
     }
 }
 @if (taxon is null) {
@@ -17,21 +17,10 @@
 }
 @{
     var selected = Model.Selected;
-    var nameHtml = ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName);
 }
 
-<partial name="_ToolTabs" model="BeastieBot3.Site.Web.ToolPaths.Tab.Cite" />
-<header class="taxon-header tool-header">
-    <p class="tool-label">@SiteText.WikitextPageLabel</p>
-    <h1><span class="sci-name">@Html.Raw(nameHtml)</span></h1>
-    @if (taxon.CommonNameEn is not null) {
-        <p class="taxon-common-name">@taxon.CommonNameEn</p>
-    }
-    <ul class="tool-links-inline">
-        <li><a href="/species/@taxon.TaxonId">@SiteText.TaxonPageFor<span class="sci-name">@Html.Raw(nameHtml)</span></a></li>
-        <li><a href="@AssessmentToolModel.WikidataPath(taxon.TaxonId, Model.SelectedIsDefault || selected is null ? "" : "?assessment=" + selected.AssessmentId)">@SiteText.WikidataPageFor<span class="sci-name">@Html.Raw(nameHtml)</span></a></li>
-    </ul>
-</header>
+@{ ViewData["ToolTab"] = BeastieBot3.Site.Web.ToolPaths.Tab.Cite; }
+<partial name="_CitationsHeader" model="Model" />
 
 @if (selected is null) {
     <p class="note">@SiteText.WikitextChooseAssessment(Model.Version)</p>
@@ -41,14 +30,7 @@
     <section class="wikitext" id="wikitext" aria-labelledby="wikitext-heading"
              data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed" data-copy-failed-button="@SiteText.CopyFailedButton"
              data-live-updated="@SiteText.WikitextUpdated" data-live-too-many="@SiteText.WikitextTooManyRequests" data-options-url="@Model.CurrentOptionsUrl">
-        <h2 id="wikitext-heading">@SiteText.HeadingWikitextFor(Model.Edition)</h2>
-        <nav class="wiki-chooser" aria-label="@SiteText.WikiChooserLabel">
-            <ul>
-                @foreach (var edition in BeastieBot3.Shared.Wikitext.OtherWikipedias.All) {
-                    <li>@if (edition.Code == Model.Edition.Code) {<span aria-current="page" lang="@edition.Code">@edition.NativeName</span>} else {<a href="@(Model.WikiUrl(edition))#wikitext" data-options-link="wiki-@edition.Code" lang="@edition.Code" hreflang="@edition.Code">@edition.NativeName</a>}</li>
-                }
-            </ul>
-        </nav>
+        <partial name="_CiteForChooser" model="Model.Chooser" />
         @{
             var selectedCategory = IucnCategories.Describe(selected).Label;
         }
@@ -195,8 +177,8 @@
                     </div>
                     @if (Model.ShowCiteTemplateOption) {
                         <partial name="_StatusRefTemplate" model="Model" />
-                    } else if (Model.Options.Template == ReferenceTemplate.CiteQ) {
-                        <input type="hidden" name="@IucnReference.QueryKey" value="@IucnReference.CiteQValue">
+                    } else if (Model.Options.TemplateValue != IucnReference.CiteQValue) {
+                        <input type="hidden" name="@IucnReference.QueryKey" value="@Model.Options.TemplateValue">
                     }
                     @if (Model.ShowGreenStatusYearOption) {
                         <fieldset class="option-group">
@@ -224,7 +206,13 @@
                 </fieldset>
             </form>
         }
-
+        @* The assessment's Wikidata item and its commands, when the citation template choice asks for
+           them; a live region, so it appears and goes as that option changes. *@
+        <div class="wikidata-output" id="wikidata-output" data-live-region>
+            @if (Model.ShowsWikidataItem) {
+                <partial name="_WikidataItemSection" model="@(new WikidataItemPartial(Model.Wikidata!, Model))" />
+            }
+        </div>
     </section>
 }
 

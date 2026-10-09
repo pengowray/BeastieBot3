@@ -2,6 +2,7 @@ using System.Text.Json;
 using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
+using BeastieBot3.Site.Display;
 
 namespace BeastieBot3.Site.Pages;
 
@@ -52,6 +53,21 @@ public abstract class AssessmentToolModel : TaxonPageModel {
             _logger.LogWarning(e, "The site database's {Key} cannot be read", SiteDbSchema.MetaKeys.WikidataItemModel);
             return null;
         }
+    }
+
+    /// The assessment for the Citations tab and the chooser's links: null for the default one.
+    public long? SelectedIdForLinks => SelectedIsDefault || Selected is null ? null : Selected.AssessmentId;
+
+    /// The row of choices under "Cite for": Wikidata, then each Wikipedia. The Wikidata page passes
+    /// null for the current edition. wikipediaUrl gives the link to each Wikipedia's page.
+    protected CiteForChooser BuildChooser(WikipediaEdition? current, Func<WikipediaEdition, string> wikipediaUrl, bool wikipediaLinksKeepOptions) {
+        var taxonId = Taxon?.TaxonId ?? RequestedTaxonId;
+        var links = new List<CiteForLink> {
+            new(SiteText.CiteForWikidata, null, WikidataPath(taxonId, SelectedIdForLinks is { } id ? "?assessment=" + id : "") + "#wikitext", current is null, null),
+        };
+        links.AddRange(OtherWikipedias.All.Select(e => new CiteForLink(e.NativeName, e.Code, wikipediaUrl(e) + "#wikitext", e == current,
+            wikipediaLinksKeepOptions ? "wiki-" + e.Code : null)));
+        return new CiteForChooser(current is null ? SiteText.HeadingCiteForWikidata : SiteText.HeadingCiteForWikipedia, links);
     }
 
     /// The Wikipedia page of the taxon: "/species/22732/wikitext" with the query (which starts with "?" or is empty).

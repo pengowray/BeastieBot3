@@ -28,13 +28,17 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
         Assert.Contains("Family Ursidae", html);
         Assert.Contains("rel=\"canonical\" href=\"http://localhost/taxa/family/ursidae\"", html);
         Assert.Contains("Common names in the Catalogue of Life (unchecked):", html);
-        Assert.Contains("<a href=\"/taxa/family/ursidae/list\">Wikipedia list of the family Ursidae</a>", Section(html, "tools"));
+        Assert.Contains("<a href=\"/taxa/family/ursidae/list\">Species list of the family Ursidae</a>", Section(html, "tools"));
+        Assert.Contains("<nav class=\"page-tabs\" aria-label=\"Pages for this group\">", html);
+        Assert.Contains("<a href=\"/taxa/family/ursidae\" aria-current=\"page\">Group page</a>", html);
+        Assert.Contains("<a href=\"/taxa/family/ursidae/list\">Species list</a>", html);
         Assert.Null(Html.Textarea(html, "list-wikitext"));
 
         var list = await _client.GetStringAsync("/taxa/family/ursidae/list");
         Assert.Contains("rel=\"canonical\" href=\"http://localhost/taxa/family/ursidae/list\"", list);
-        Assert.Contains("<a href=\"/taxa/family/ursidae\">Group page for the family Ursidae</a>", list);
-        Assert.Contains("<title>Wikipedia list of the family Ursidae | Species Check</title>", list);
+        Assert.Contains("<a href=\"/taxa/family/ursidae\">Group page</a>", list);
+        Assert.Contains("<a href=\"/taxa/family/ursidae/list\" aria-current=\"page\">Species list</a>", list);
+        Assert.Contains("<title>Species list of the family Ursidae | Species Check</title>", list);
         // Mammals default to common name only, with no rank headings below a family and no status sections.
         Assert.Equal("* [[Polar bear]] {{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(list, "list-wikitext"));
     }

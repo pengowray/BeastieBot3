@@ -6,7 +6,7 @@
     ViewData["Title"] = Model.Query.Length == 0 ? SiteText.ToolCite : SiteText.CiteResultsTitle(Model.Query);
     ViewData["HideHeaderSearch"] = true;
 }
-<partial name="_ToolTabs" model="ToolPaths.Tab.Cite" />
+@{ ViewData["ToolTab"] = ToolPaths.Tab.Cite; }
 <h1>@SiteText.ToolCite</h1>
 <form class="tool-form cite-form" action="@ToolPaths.Cite" method="get">
     <label for="cite-q">@SiteText.CiteInputLabel</label>

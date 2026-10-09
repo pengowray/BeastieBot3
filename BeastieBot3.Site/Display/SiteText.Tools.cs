@@ -41,28 +41,32 @@ public static partial class SiteText {
     public const string ListMakerUpdateBefore = "To update a list that is already on Wikipedia, use ";
     public const string ListMakerUpdateAfter = ".";
 
-    // The wikitext page of a taxon.
-    /// The link to it: "Wikitext and citations for " and the taxon's name.
-    public const string ToolWikitextFor = "Wikitext and citations for ";
-    public const string ToolWikitextHelp =
-        "{{cite iucn}}, {{IUCN status}} and taxobox status lines for any IUCN assessment of this taxon.";
-    public static string WikitextPageTitle(string name) => ToolWikitextFor + name;
-    public const string WikitextPageLabel = "Wikitext and citations";
-    /// The link back to the taxon page: "Taxon page for " and the taxon's name.
-    public const string TaxonPageFor = "Taxon page for ";
+    // The tabs under a taxon's name (PageTabs.ForTaxon).
+    public const string TaxonTabsLabel = "Pages for this taxon";
+    public const string TabTaxonPage = "Taxon page";
+    public const string TabCitations = "Citations";
+
+    /// The Tools section at the bottom of the taxon page: "Citations for " and the taxon's name, and
+    /// the help line after it.
+    public const string ToolCitationsFor = "Citations for ";
+    public const string ToolCitationsHelp =
+        "For any IUCN assessment of this taxon: {{cite iucn}}, {{IUCN status}} and taxobox status lines for Wikipedia, and QuickStatements commands for Wikidata.";
+
+    /// The browser title of the citations pages: "Ursus maritimus (Polar bear): Citations for Wikipedia".
+    /// name: the taxon page's title, the scientific name with the common name in brackets.
+    public static string CitationsPageTitle(string name, bool wikidata) => $"{name}: Citations for {(wikidata ? "Wikidata" : "Wikipedia")}";
+
+    /// The taxon page's title: "Ursus maritimus (Polar bear)", or the scientific name alone.
+    public static string TaxonTitle(string scientificName, string? commonName) =>
+        commonName is null ? scientificName : $"{scientificName} ({commonName})";
+
+    // The citations page for a Wikipedia.
     public static string WikitextChooseAssessment(string? version) =>
         (version is null ? "No current assessment in the IUCN Red List." : $"No current assessment in IUCN Red List version {version}.")
         + " To get wikitext, select “Show wikitext” beside one of the assessments below.";
 
-    // The Wikidata page of a taxon: the assessment's Wikidata item, the QuickStatements commands for
-    // it, and the taxon item's IUCN status (P141).
-    public const string WikidataPageLabel = "Wikidata references";
-    /// The link to the Wikidata page: "Wikidata references for " and the taxon's name.
-    public const string WikidataPageFor = "Wikidata references for ";
-    public static string WikidataPageTitle(string name) => WikidataPageFor + name;
-    public const string WikidataPageHelp =
-        "Find the Wikidata item of any IUCN assessment of this taxon, and get QuickStatements commands to create the item, add its missing statements, or update the taxon item's IUCN conservation status (P141).";
-
+    // The citations page for Wikidata: the assessment's Wikidata item, the QuickStatements commands
+    // for it, and the taxon item's IUCN status (P141).
     public const string HeadingWikidataItem = "Wikidata item of the assessment";
 
     public static string WikidataChooseAssessment(string? version) =>

@@ -6,7 +6,7 @@
     ViewData["Title"] = SiteText.ToolListMaker;
     ViewData["HideHeaderSearch"] = true;
 }
-<partial name="_ToolTabs" model="ToolPaths.Tab.List" />
+@{ ViewData["ToolTab"] = ToolPaths.Tab.List; }
 <h1>@SiteText.ToolListMaker</h1>
 <form class="tool-form" action="@ToolPaths.ListMaker" method="get">
     <label for="list-q">@SiteText.ListMakerInputLabel</label>

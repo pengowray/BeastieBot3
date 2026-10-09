@@ -158,6 +158,10 @@ public sealed record WikidataStatusView {
 /// and the Red List version ("2026-1").
 public sealed record WikidataStatusPartial(WikidataStatusView View, AssessmentRow Latest, string? Release);
 
+/// The model of _WikidataItemSection: the assessment's item and commands, and the page that shows
+/// them (for the link to the page of the assessment that owns a borrowed item).
+public sealed record WikidataItemPartial(WikidataCiteView Wikidata, AssessmentToolModel Page);
+
 /// The model of the _WikidataStatusPlan partial: one plan, its commands box and link, whether it is
 /// the other choice (shown after the first one's reference), and the Red List version.
 public sealed record WikidataStatusPlanPartial(StatusEditPlan Plan, WikitextBox? Box, string? QuickStatementsUrl, bool IsAlternative,

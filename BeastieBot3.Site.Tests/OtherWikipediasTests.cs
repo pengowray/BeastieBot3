@@ -143,7 +143,7 @@ public sealed class OtherWikipediasPageTests(SiteFactory factory) : IClassFixtur
     [Fact]
     public async Task TheWikitextPageWritesForTheChosenWikipedia() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?wiki=fr");
-        Assert.Contains("<h2 id=\"wikitext-heading\">Wikitext for French Wikipedia</h2>", html);
+        Assert.Contains("<h2 id=\"wikitext-heading\">Cite for Wikipedia</h2>", html);
         Assert.StartsWith("<ref name=\"iucn\">{{UICN|22823|''Ursus maritimus'' Phipps, 1774|consulté le=", Html.Textarea(html, "wikitext-cite"));
         Assert.Equal("{{Taxobox UICN | VU | A3c }}", Html.Textarea(html, "wikitext-speciesbox"));
         // English-only parts and options are left out.
@@ -173,6 +173,6 @@ public sealed class OtherWikipediasPageTests(SiteFactory factory) : IClassFixtur
         Assert.Contains($"href=\"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}&amp;access=none&amp;wiki=pl#wikitext\"", html);
         Assert.Contains("| status IUCN = VU\n| IUCN id = 22823", Html.Textarea(html, "wikitext-speciesbox"));
         // An unknown wiki is English.
-        Assert.Contains("Wikitext for English Wikipedia", await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?wiki=xx"));
+        Assert.Contains("<span aria-current=\"page\" lang=\"en\">English</span>", await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?wiki=xx"));
     }
 }

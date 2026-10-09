@@ -10,7 +10,7 @@
 }
 @* A textarea drops one newline straight after its start tag, so one is written there to keep a
    text that starts with a newline. *@
-<partial name="_ToolTabs" model="BeastieBot3.Site.Web.ToolPaths.Tab.Update" />
+@{ ViewData["ToolTab"] = BeastieBot3.Site.Web.ToolPaths.Tab.Update; }
 <h1>@UpdateText.Heading</h1>
 <p class="lead">@UpdateText.Intro(Model.Version)</p>
 @* The details of what is updated, one click away. *@

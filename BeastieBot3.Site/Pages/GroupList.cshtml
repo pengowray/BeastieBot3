@@ -31,9 +31,8 @@
     }
     return;
 }
-<partial name="_ToolTabs" model="ToolPaths.Tab.List" />
+@{ ViewData["ToolTab"] = ToolPaths.Tab.List; }
 <header class="taxon-header group-header tool-header">
-    <p class="tool-label">@GroupText.ListPageLabel</p>
     <h1>
         @if (group.ShowRank && group.Rank != "unranked") {
             <span class="rank-word">@GroupList.Capitalize(group.Rank)</span>
@@ -43,7 +42,7 @@
     @if (group.CommonNameEn is not null) {
         <p class="taxon-common-name">@group.CommonNameEn</p>
     }
-    <p class="tool-back"><a href="@SiteUrls.Group(group)">@GroupText.GroupPageForBefore<partial name="_GroupInSentence" model="group" /></a></p>
+    <partial name="_PageTabs" model="@PageTabs.ForGroup(group, list: true)" />
 </header>
 
 @{

@@ -43,7 +43,6 @@
     var showInfraColumn = counts.Any(c => c.Count.Infra > 0);
     var childRanks = Model.Children.Select(c => c.Group.Rank).Distinct().ToList();
     var iucnParent = above.LastOrDefault(p => !p.IsCol);
-    ViewData["PageTools"] = new List<(string, string)> { (GroupText.ToolListLink(group), SiteUrls.GroupList(group)) };
 }
 
 @if (Model.ArrivedQuery is { } arrived) {
@@ -62,6 +61,7 @@
     @if (group.CommonNameEn is not null) {
         <p class="taxon-common-name">@group.CommonNameEn</p>
     }
+    <partial name="_PageTabs" model="@PageTabs.ForGroup(group, list: false)" />
     @if (above.Count > 0) {
         <div class="classification">
             <h2 class="visually-hidden">@GroupText.HeadingClassification</h2>

@@ -6,7 +6,7 @@ using BeastieBot3.Site.Data;
 namespace BeastieBot3.Site.Pages;
 
 /// The citation options form on a taxon page, read from and written to the query string:
-///   authors=author|lastfirst   fullnames=1   access=download|today|none   ref=1   refname=...   amp=1   opts=1   cite=iucn|q
+///   authors=author|lastfirst   fullnames=1   access=download|today|none   ref=1   refname=...   amp=1   opts=1   cite=iucn|q|new
 ///   gsyear=assessed|published (the year of a Green Status citation; assessed by default)
 /// Unticked checkboxes are not sent by the browser, so the form also sends opts=1: with it, a
 /// missing ref or amp means "off" and a missing or empty refname means a plain <ref>; without it (a
@@ -29,9 +29,28 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
     /// Full given names where IUCN lists them, instead of initials (CiteIucnOptions.FullGivenNames).
     public bool FullGivenNames { get; init; }
 
-    /// The template in the taxobox status_ref: {{cite iucn}}, or {{cite Q}} when the assessment has
-    /// a Wikidata item (cite=q; IucnReference). The {{cite iucn}} and {{cite Q}} boxes do not change.
-    public ReferenceTemplate Template { get; init; }
+    /// The template in the taxobox status_ref: {{cite Q}} when the assessment has a Wikidata item (the
+    /// default), or {{cite iucn}} (cite=iucn). With {{cite Q}}, a {{cite Q}} box is added below the
+    /// {{cite iucn}} box.
+    public ReferenceTemplate Template { get; init; } = ReferenceTemplate.CiteQ;
+
+    /// With {{cite Q}}: also show the assessment's Wikidata item with the QuickStatements commands that
+    /// create it or add what it is missing (cite=new).
+    public bool CreateItem { get; init; }
+
+    /// The query value of the third citation template choice, {{cite Q}} with the item's commands.
+    public const string CiteCreateValue = "new";
+
+    /// The citation template choice a cite= value names: "iucn", "new", else {{cite Q}} (the default,
+    /// and "q", which was the only other value before {{cite Q}} became the default).
+    public static (ReferenceTemplate Template, bool CreateItem) ReadTemplate(string? value) => value?.Trim().ToLowerInvariant() switch {
+        IucnReference.CiteIucnValue => (ReferenceTemplate.CiteIucn, false),
+        CiteCreateValue => (ReferenceTemplate.CiteQ, true),
+        _ => (ReferenceTemplate.CiteQ, false),
+    };
+
+    /// The cite= value of these options' choice.
+    public string TemplateValue => Template == ReferenceTemplate.CiteIucn ? IucnReference.CiteIucnValue : CreateItem ? CiteCreateValue : IucnReference.CiteQValue;
 
     /// The year a Green Status citation gives (gsyear=published; GreenStatusYear).
     public GreenStatusYearRule GreenStatusYear { get; init; }
@@ -122,8 +141,8 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
         if (Access != AccessDownload) {
             parts.Add("access=" + Access);
         }
-        if (Template != ReferenceTemplate.CiteIucn) {
-            parts.Add(IucnReference.QueryKey + "=" + IucnReference.QueryValue(Template));
+        if (TemplateValue != IucnReference.CiteQValue) {
+            parts.Add(IucnReference.QueryKey + "=" + TemplateValue);
         }
         if (GreenStatusYear == GreenStatusYearRule.Published) {
             parts.Add(GreenStatusYearKey + "=" + GreenStatusYearPublished);

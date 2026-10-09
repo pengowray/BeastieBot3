@@ -4,7 +4,7 @@
 @{
     ViewData["Title"] = SiteText.HeadingTools;
 }
-<partial name="_ToolTabs" model="ToolPaths.Tab.None" />
+@{ ViewData["ToolTab"] = ToolPaths.Tab.None; }
 <h1>@SiteText.HeadingTools</h1>
 <ul class="tool-list">
     <li><a href="@ToolPaths.Cite">@SiteText.ToolCite</a> <span class="help">@SiteText.ToolCiteLine</span></li>

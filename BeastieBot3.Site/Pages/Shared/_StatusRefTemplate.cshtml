@@ -1,16 +1,18 @@
 @model SpeciesWikitextModel
-@* The citation template: {{cite iucn}}, or {{cite Q}} when the assessment has a Wikidata item. With
-   {{cite Q}}, its box is shown below the {{cite iucn}} box and the taxobox status_ref uses it. *@
+@* The citation template: {{cite iucn}}; {{cite Q}} when the assessment has a Wikidata item (the
+   default), with its box below the {{cite iucn}} box and in the taxobox status_ref; or that and the
+   item's QuickStatements commands, shown below the options. *@
 @{
-    var template = Model.Options.Template;
+    var value = Model.Options.TemplateValue;
     var hasItem = Model.Selected?.WikidataItemQid is { Length: > 0 };
 }
 <fieldset class="option-group">
     <legend>@SiteText.CitationTemplateLabel</legend>
-    <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteIucnValue" checked="@(template == ReferenceTemplate.CiteIucn)" aria-describedby="status-ref-help"> @SiteText.StatusRefTemplateIucn</label>
-    <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteQValue" checked="@(template == ReferenceTemplate.CiteQ)" aria-describedby="status-ref-help"> @SiteText.StatusRefTemplateQ</label>
-    @if (!hasItem && Model.Selected is { } selected && Model.Taxon is { } taxon) {
-        <p class="help">@SiteText.CiteQNoItemBefore<a href="@AssessmentToolModel.WikidataPath(taxon.TaxonId, Model.SelectedIsDefault ? "" : "?assessment=" + selected.AssessmentId)">@SiteText.CiteQNoItemLink</a>@SiteText.CiteQNoItemAfter</p>
+    <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteIucnValue" checked="@(value == IucnReference.CiteIucnValue)" aria-describedby="status-ref-help"> @SiteText.StatusRefTemplateIucn</label>
+    <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteQValue" checked="@(value == IucnReference.CiteQValue)" aria-describedby="status-ref-help"> @SiteText.StatusRefTemplateQ</label>
+    <label><input type="radio" name="@IucnReference.QueryKey" value="@WikitextOptions.CiteCreateValue" checked="@(value == WikitextOptions.CiteCreateValue)" aria-describedby="status-ref-help"> @SiteText.StatusRefTemplateQCreate</label>
+    @if (!hasItem && Model.Selected is not null) {
+        <p class="help">@SiteText.CiteQNoItem <a class="create-item-link" href="@Model.CreateItemUrl" data-options-link="cite-create">@SiteText.CiteQNoItemLink</a></p>
     }
     <p class="help" id="status-ref-help">@SiteText.CitationTemplateHelp</p>
 </fieldset>

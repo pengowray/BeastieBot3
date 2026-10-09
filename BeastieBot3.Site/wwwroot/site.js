@@ -590,23 +590,22 @@
         tip.style.top = top + "px";
     }
 
-    // The Tools menu in the header is a <details>: it opens and closes without this script. The
-    // script closes it on Escape (focus goes back to its summary) and on a click outside it.
+    // The menus in the header (the theme menu) are <details>: they open and close without this
+    // script. The script closes one on Escape (focus goes back to its summary) and on a click
+    // outside it.
     function setUpNavMenu() {
-        var menu = document.querySelector("details.nav-menu");
-        if (!menu) {
-            return;
-        }
-        document.addEventListener("click", function (event) {
-            if (menu.open && !menu.contains(event.target)) {
-                menu.open = false;
-            }
-        });
-        menu.addEventListener("keydown", function (event) {
-            if (event.key === "Escape" && menu.open) {
-                menu.open = false;
-                menu.querySelector("summary").focus();
-            }
+        document.querySelectorAll("details.nav-menu").forEach(function (menu) {
+            document.addEventListener("click", function (event) {
+                if (menu.open && !menu.contains(event.target)) {
+                    menu.open = false;
+                }
+            });
+            menu.addEventListener("keydown", function (event) {
+                if (event.key === "Escape" && menu.open) {
+                    menu.open = false;
+                    menu.querySelector("summary").focus();
+                }
+            });
         });
     }
 

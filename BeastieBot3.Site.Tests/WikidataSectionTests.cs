@@ -26,7 +26,7 @@ public sealed class WikidataSectionTests(SiteFactory factory) : IClassFixture<Si
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
         var part = Part(html);
-        Assert.Contains("<h2 id=\"wikidata-cite-heading\">Wikidata item of the assessment</h2>", part);
+        Assert.Contains("<h3 id=\"wikidata-cite-heading\">Wikidata item of the assessment</h3>", part);
         Assert.Contains($"<p class=\"wikidata-item\">Wikidata item for this assessment: <a href=\"https://www.wikidata.org/wiki/{FixtureDb.TigerLatestItem}\">{FixtureDb.TigerLatestItem}</a></p>", part);
         Assert.DoesNotContain("No Wikidata item found", part);
         Assert.DoesNotContain("QuickStatements commands to create the item", part);
@@ -106,22 +106,29 @@ public sealed class WikidataSectionTests(SiteFactory factory) : IClassFixture<Si
         var history = Html.IndexOf(html, "<section class=\"history\"");
         Assert.True(part > 0 && status > part && history > status);
         Assert.DoesNotContain("<form class=\"options-form\"", html);
-        Assert.Contains($"<a href=\"/species/{FixtureDb.Tiger}/wikitext\">Wikitext and citations for", html);
+        // The Wikidata page is the Wikidata choice of the Citations tab.
+        Assert.Contains($"<a href=\"/species/{FixtureDb.Tiger}/wikitext\" aria-current=\"page\">Citations</a>", html);
+        Assert.Contains("<h2 id=\"wikitext-heading\">Cite for Wikidata</h2>", html);
+        Assert.Contains("<span aria-current=\"page\">Wikidata</span>", html);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.Tiger}/wikitext#wikitext\" lang=\"en\" hreflang=\"en\">English</a>", html);
+        Assert.Contains("<title>Panthera tigris (Tiger): Citations for Wikidata | Species Check</title>", html);
         Assert.Contains($"<link rel=\"canonical\" href=\"http://localhost/species/{FixtureDb.Tiger}/wikidata\">", html);
         Assert.Contains(">Show Wikidata item</a>", await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikidata"));
     }
 
     [Fact]
-    public async Task TheWikipediaPageHasNoWikidataCommands_AndCiteQOnlyWhenChosen() {
+    public async Task TheWikipediaPageHasNoWikidataCommandsUnlessAsked_AndCiteQByDefault() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext");
         Assert.DoesNotContain("id=\"wikidata-cite\"", html);
         Assert.DoesNotContain("id=\"wikidata-status\"", html);
-        Assert.Null(Html.Textarea(html, WikidataCite.CiteQBoxId));
-        Assert.Contains($"<a href=\"/species/{FixtureDb.Tiger}/wikidata\">Wikidata references for", html);
+        Assert.StartsWith("<ref", Html.Textarea(html, WikidataCite.CiteQBoxId));
+        Assert.NotNull(Html.Textarea(html, "wikitext-cite"));
+        // Wikidata is the first choice of the row, with the assessment only.
+        Assert.Contains($"<a href=\"/species/{FixtureDb.Tiger}/wikidata#wikitext\">Wikidata</a>", html);
 
-        var citeQ = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?cite=q");
-        Assert.StartsWith("<ref", Html.Textarea(citeQ, WikidataCite.CiteQBoxId));
-        Assert.NotNull(Html.Textarea(citeQ, "wikitext-cite"));
+        var citeIucn = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?cite=iucn");
+        Assert.Null(Html.Textarea(citeIucn, WikidataCite.CiteQBoxId));
+        Assert.Contains("id=\"wikidata-cite\"", await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?cite=new"));
     }
 
     [Fact]

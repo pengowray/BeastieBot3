@@ -5,8 +5,8 @@
 // data-theme: "light" and "dark" override the system setting, "system" follows it. The choice is
 // kept in this browser's localStorage; the server sends the same page whatever the choice.
 //
-// The control is hidden until setUp runs (site.css), so without JavaScript there is no control
-// and the site follows the system setting. When storage is blocked the choice still applies, but
+// The theme menu in the header is hidden until setUp runs (site.css), so without JavaScript there
+// is no menu and the site follows the system setting. When storage is blocked the choice still applies, but
 // only to the page it was made on.
 (function () {
     "use strict";
@@ -42,18 +42,34 @@
     apply(read());
 
     function setUp() {
-        var select = document.getElementById("theme-select");
-        if (!select) {
+        var choices = document.querySelectorAll("input[name=\"theme\"]");
+        var name = document.getElementById("theme-name");
+        if (choices.length === 0) {
             return;
         }
-        select.value = root.getAttribute("data-theme");
-        select.addEventListener("change", function () {
-            apply(select.value);
-            save(select.value);
+        // Ticks the current choice and names it in the menu button ("Theme: Dark").
+        function show() {
+            var current = root.getAttribute("data-theme");
+            choices.forEach(function (choice) {
+                choice.checked = choice.value === current;
+            });
+            if (name && name.getAttribute("data-" + current)) {
+                name.textContent = name.getAttribute("data-" + current);
+            }
+        }
+        show();
+        choices.forEach(function (choice) {
+            choice.addEventListener("change", function () {
+                if (choice.checked) {
+                    apply(choice.value);
+                    save(choice.value);
+                    show();
+                }
+            });
         });
         function refresh() {
             apply(read());
-            select.value = root.getAttribute("data-theme");
+            show();
         }
         // A choice made in another tab of this site, or while this page was in the back/forward
         // cache.
