@@ -212,7 +212,7 @@
 
 <form class="update-form" id="update-form" method="post" action="/update#result" enctype="multipart/form-data">
     <label for="update-input">@UpdateText.InputLabel</label>
-    <textarea id="update-input" name="@UpdateModel.TextField" rows="16" spellcheck="false" autocapitalize="off" autocomplete="off" required>@("\n" + Model.Input)</textarea>
+    <textarea id="update-input" name="@UpdateModel.TextField" rows="@(result is null ? 10 : 16)" spellcheck="false" autocapitalize="off" autocomplete="off" required>@("\n" + Model.Input)</textarea>
     @* The settings are folded until there is a result: the first run needs only the text. *@
     <details class="update-settings" open="@(result is not null)">
     <summary>@UpdateText.SettingsSummary</summary>

@@ -90,7 +90,7 @@
         @foreach (var box in Model.Boxes) {
             <div class="wikitext-box">
                 <partial name="_WikitextBoxContent" model="box" />
-                @if (box.Id == "wikitext-speciesbox" && Model.TaxoboxCheck is { } taxoboxCheck) {
+                @if (box.Id == "wikitext-speciesbox" && Model.Edition.IsEnglish && Model.TaxoboxCheck is { } taxoboxCheck) {
                     <div class="taxobox-status note">
                         <strong>@SiteText.TaxoboxStatusHeading:</strong>
                         <partial name="_TaxoboxStatus" model="@(new TaxoboxStatusView(taxoboxCheck, Model.LatestGlobal))" />

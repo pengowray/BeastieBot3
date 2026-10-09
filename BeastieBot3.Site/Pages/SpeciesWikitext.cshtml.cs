@@ -146,7 +146,8 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
                     DoiSource.Resolved => SiteText.DoiResolved,
                     _ => null,
                 }
-                : SiteText.NoDoi;
+                // The other Wikipedias' citations that take no DOI (de, es, fr) get no note about one.
+                : Edition.IsEnglish ? SiteText.NoDoi : null;
             UnsplitAuthors = Parts.Authors
                 .Where(a => a.Kind == CitationAuthorKind.Verbatim && !string.IsNullOrWhiteSpace(a.Display))
                 .Select(a => a.Display.Trim())

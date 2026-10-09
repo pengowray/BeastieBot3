@@ -20,17 +20,17 @@
                 <p class="update-example-kind">@kind</p>
                 <p class="update-example-look">
                     <span class="update-example-text">@text</span>
-                    <partial name="_Badge" model="@BadgeModel.ForStatusCode(before, showLabel: true)" />
+                    <partial name="_Badge" model="@BadgeModel.ForStatusCode(before)" />
                     <span class="update-example-arrow" aria-label="@UpdateText.ExampleBecomes">→</span>
-                    <partial name="_Badge" model="@BadgeModel.ForStatusCode(after, showLabel: true)" />
+                    <partial name="_Badge" model="@BadgeModel.ForStatusCode(after)" />
                 </p>
-                <p class="update-example-code"><code>@beforeCode</code> <span aria-hidden="true">→</span> <code>@afterCode</code></p>
+                <p class="update-example-code"><code>@beforeCode</code><br><code>@afterCode</code></p>
             </li>
         }
         <li>
             <p class="update-example-kind">@UpdateText.ExampleSummaryBox</p>
             <p class="update-example-look">@UpdateText.ExampleSummaryBoxText</p>
-            <p class="update-example-code"><code>{{IUCN statuses|…|lc=16|dd=3|ne=2}}</code> <span aria-hidden="true">→</span> <code>{{IUCN statuses|…|lc=17|dd=3|ne=1}}</code></p>
+            <p class="update-example-code"><code>{{IUCN statuses|…|lc=16|dd=3|ne=2}}</code><br><code>{{IUCN statuses|…|lc=17|dd=3|ne=1}}</code></p>
         </li>
     </ul>
     <p class="help">@UpdateText.ExampleMore</p>

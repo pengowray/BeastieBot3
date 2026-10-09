@@ -37,7 +37,7 @@ public static partial class UpdateText {
     public static string IntroLimits(int maxItems) =>
         $"Limits: 2 MB of text and {Count(maxItems)} items. Items after the first {Count(maxItems)} are left as they are.";
 
-    public const string InputLabel = "Wikitext of an article or list";
+    public const string InputLabel = "Wikitext of an article or list, or its English Wikipedia address";
     public const string Submit = "Update statuses";
     public const string NotSaved = "This site does not save your text or edit Wikipedia. Copy the updated wikitext back into the article yourself.";
 
