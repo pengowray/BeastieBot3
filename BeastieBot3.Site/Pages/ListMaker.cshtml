@@ -1,0 +1,40 @@
+@page "/species-list-maker"
+@model ListMakerModel
+@using BeastieBot3.Site.Web
+@using BeastieBot3.Site.Lists
+@{
+    ViewData["Title"] = SiteText.ToolListMaker;
+    ViewData["HideHeaderSearch"] = true;
+}
+<partial name="_ToolTabs" model="ToolPaths.Tab.List" />
+<h1>@SiteText.ToolListMaker</h1>
+<form class="tool-form" action="@ToolPaths.ListMaker" method="get">
+    <label for="list-q">@SiteText.ListMakerInputLabel</label>
+    <div class="tool-input">
+        <input id="list-q" name="q" type="search" value="@Model.Query" placeholder="@SiteText.ListMakerPlaceholder" autocomplete="off" spellcheck="false" maxlength="100" required>
+        <button type="submit">@SiteText.ListMakerButton</button>
+    </div>
+</form>
+
+@if (Model.TooShort) {
+    <p>@SiteText.TooShort</p>
+} else if (Model.Species is { } species) {
+    <p>@SiteText.ListMakerSpeciesBefore<a href="/species/@species.TaxonId"><i>@species.ScientificName</i></a>@SiteText.ListMakerSpeciesAfter</p>
+    <ul class="group-choices">
+        @foreach (var group in Model.SpeciesGroups) {
+            <li><a href="@SiteUrls.GroupList(group)">@GroupText.ToolListLinkBefore<partial name="_GroupInSentence" model="group" /></a></li>
+        }
+    </ul>
+} else if (Model.Groups.Count > 1) {
+    <h2>@SiteText.ListMakerChooseGroup</h2>
+    <ul class="group-choices">
+        @foreach (var hit in Model.Groups) {
+            var group = hit.Group;
+            <li><a href="@SiteUrls.GroupList(group)">@GroupList.HeadingText(group)</a>@if (group.CommonNameEn is not null) {<text> </text><span class="help">@group.CommonNameEn</span>}</li>
+        }
+    </ul>
+} else if (Model.Searched) {
+    <p>@SiteText.ListMakerNothingFound(Model.Query)</p>
+}
+
+<p class="tool-aside">@SiteText.ListMakerUpdateBefore<a href="@ToolPaths.UpdateStatuses">@SiteText.ToolUpdateLink</a>@SiteText.ListMakerUpdateAfter</p>

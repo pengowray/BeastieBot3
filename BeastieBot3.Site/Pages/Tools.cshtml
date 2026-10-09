@@ -3,42 +3,11 @@
 @using BeastieBot3.Site.Web
 @{
     ViewData["Title"] = SiteText.HeadingTools;
-    var example = Model.ExampleTaxon;
 }
+<partial name="_ToolTabs" model="ToolPaths.Tab.None" />
 <h1>@SiteText.HeadingTools</h1>
-<p class="lead">@SiteText.ToolsIntro</p>
-
-<section class="tool-entry" aria-labelledby="tool-update-heading">
-    <h2 id="tool-update-heading"><a href="/update">@SiteText.ToolUpdateLink</a></h2>
-    <p>@SiteText.ToolsUpdateText</p>
-</section>
-
-<section class="tool-entry" aria-labelledby="tool-wikitext-heading">
-    <h2 id="tool-wikitext-heading">@SiteText.ToolsWikitextHeading</h2>
-    <p>@SiteText.ToolsWikitextText</p>
-    <p>@SiteText.ToolsWhereTaxon
-        @if (example is not null) {
-            @SiteText.ToolsExample <a href="@SpeciesWikitextModel.PathFor(example.TaxonId)"><i>@example.ScientificName</i></a>
-        }
-    </p>
-</section>
-
-<section class="tool-entry" aria-labelledby="tool-wikidata-heading">
-    <h2 id="tool-wikidata-heading">@SiteText.ToolsWikidataHeading</h2>
-    <p>@SiteText.ToolsWikidataText</p>
-    <p>@SiteText.ToolsWhereTaxon
-        @if (example is not null) {
-            @SiteText.ToolsExample <a href="@AssessmentToolModel.WikidataPath(example.TaxonId)"><i>@example.ScientificName</i></a>
-        }
-    </p>
-</section>
-
-<section class="tool-entry" aria-labelledby="tool-list-heading">
-    <h2 id="tool-list-heading">@SiteText.ToolsListHeading</h2>
-    <p>@SiteText.ToolsListText</p>
-    <p>@SiteText.ToolsWhereGroup
-        @if (Model.ExampleGenus is { } genus) {
-            @SiteText.ToolsExample <a href="@SiteUrls.GroupList(genus)">@genus.Rank <i>@genus.Name</i></a>
-        }
-    </p>
-</section>
+<ul class="tool-list">
+    <li><a href="@ToolPaths.Cite">@SiteText.ToolCite</a> <span class="help">@SiteText.ToolCiteLine</span></li>
+    <li><a href="@ToolPaths.UpdateStatuses">@SiteText.ToolUpdateLink</a> <span class="help">@SiteText.ToolUpdateLine</span></li>
+    <li><a href="@ToolPaths.ListMaker">@SiteText.ToolListMaker</a> <span class="help">@SiteText.ToolListMakerLine</span></li>
+</ul>

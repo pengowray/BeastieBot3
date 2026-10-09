@@ -1,0 +1,37 @@
+@* Shown on the status update page before any text is sent: the kinds of pages it updates, each with
+   how the part looks on Wikipedia before and after (the site's category badges) and the wikitext that
+   changes. A fixed example, not a live result: the giant panda's 2008 (EN) and 2016 (VU) assessments,
+   a species table row of Kerivoula crypta, and the counts box of a list. *@
+@{
+    var examples = new[] {
+        (UpdateText.ExampleListLine, "EN", "VU", UpdateText.ExampleListLineText,
+            "{{IUCN status|EN|712/13069561|1|year=2008}}", "{{IUCN status|VU|712/121745669|1|year=2016}}"),
+        (UpdateText.ExampleTaxobox, "EN", "VU", UpdateText.ExampleTaxoboxText,
+            "| status = EN", "| status = VU"),
+        (UpdateText.ExampleSpeciesTable, "NE", "LC", UpdateText.ExampleSpeciesTableText,
+            "|iucn-status=NE", "|iucn-status=LC"),
+    };
+}
+<section class="update-example" aria-labelledby="update-example-heading">
+    <h2 id="update-example-heading">@UpdateText.ExampleHeading</h2>
+    <ul class="update-example-list">
+        @foreach (var (kind, before, after, text, beforeCode, afterCode) in examples) {
+            <li>
+                <p class="update-example-kind">@kind</p>
+                <p class="update-example-look">
+                    <span class="update-example-text">@text</span>
+                    <partial name="_Badge" model="@BadgeModel.ForStatusCode(before, showLabel: true)" />
+                    <span class="update-example-arrow" aria-label="@UpdateText.ExampleBecomes">→</span>
+                    <partial name="_Badge" model="@BadgeModel.ForStatusCode(after, showLabel: true)" />
+                </p>
+                <p class="update-example-code"><code>@beforeCode</code> <span aria-hidden="true">→</span> <code>@afterCode</code></p>
+            </li>
+        }
+        <li>
+            <p class="update-example-kind">@UpdateText.ExampleSummaryBox</p>
+            <p class="update-example-look">@UpdateText.ExampleSummaryBoxText</p>
+            <p class="update-example-code"><code>{{IUCN statuses|…|lc=16|dd=3|ne=2}}</code> <span aria-hidden="true">→</span> <code>{{IUCN statuses|…|lc=17|dd=3|ne=1}}</code></p>
+        </li>
+    </ul>
+    <p class="help">@UpdateText.ExampleMore</p>
+</section>

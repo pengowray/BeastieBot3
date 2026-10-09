@@ -24,6 +24,9 @@ public static class SiteCachePolicies {
     /// Output cache policy of the search page.
     public const string Search = "search";
 
+    /// Output cache policy of the cite tool and the species list maker, which search.
+    public const string Cite = "cite";
+
     /// Output cache policy of /api/suggest.
     public const string Suggest = "suggest";
 
@@ -86,6 +89,14 @@ public static class SiteCachePolicies {
             .SetVaryByQuery([])
             .VaryByValue(context => new KeyValuePair<string, string>("q", SiteEndpoints.QueryText(context.Request)))
             .VaryByValue(context => new KeyValuePair<string, string>("all", SiteEndpoints.FirstQueryValue(context.Request, "all") == "1" ? "1" : "0")));
+
+        // The cite tool and the list maker repeat the query as typed, as the search page does, and the
+        // cite tool's choices of target; only 200 responses are stored, never a redirect.
+        options.AddPolicy(Cite, policy => policy
+            .Expire(Lifetime)
+            .Tag(DatabaseTag)
+            .SetVaryByQuery(["for", Pages.WikitextOptions.WikiKey])
+            .VaryByValue(context => new KeyValuePair<string, string>("q", SiteEndpoints.QueryText(context.Request))));
 
         // Suggestions never repeat the query, so spellings that fold to the same text (case,
         // accents, spaces) share one entry. The folded text decides the exact matches and the

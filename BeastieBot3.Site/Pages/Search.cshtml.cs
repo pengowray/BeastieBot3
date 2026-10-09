@@ -44,7 +44,7 @@ public sealed class SearchModel : PageModel {
 
     /// The status update page with a Wikipedia page loaded.
     public static string UpdateUrl(WikipediaPageInput page) =>
-        $"{UpdateModel.Path}?{UpdateModel.PageField}={Uri.EscapeDataString(page.Title)}"
+        $"{Web.ToolPaths.UpdateStatuses}?{UpdateModel.PageField}={Uri.EscapeDataString(page.Title)}"
         + (page.RevisionId is { } r ? $"&{UpdateModel.RevisionField}={r}" : "") + "#result";
 
     /// When the search found nothing: search texts with misspelled words corrected that find taxa

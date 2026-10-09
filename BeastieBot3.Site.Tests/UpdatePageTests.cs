@@ -22,10 +22,10 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
     private static string? Output(string html) => Html.Textarea(html, "update-output") is { } text && text.StartsWith('\n') ? text[1..] : null;
 
     [Theory]
-    [InlineData("https://en.wikipedia.org/wiki/List_of_parrots", "/update?page=List%20of%20parrots#result")]
-    [InlineData("  <https://en.m.wikipedia.org/wiki/List_of_parrots>\n", "/update?page=List%20of%20parrots#result")]
-    [InlineData("https://en.wikipedia.org/w/index.php?title=List_of_parrots&oldid=123", "/update?page=List%20of%20parrots&oldid=123#result")]
-    [InlineData("[[List of parrots]]", "/update?page=List%20of%20parrots#result")]
+    [InlineData("https://en.wikipedia.org/wiki/List_of_parrots", "/update-statuses?page=List%20of%20parrots#result")]
+    [InlineData("  <https://en.m.wikipedia.org/wiki/List_of_parrots>\n", "/update-statuses?page=List%20of%20parrots#result")]
+    [InlineData("https://en.wikipedia.org/w/index.php?title=List_of_parrots&oldid=123", "/update-statuses?page=List%20of%20parrots&oldid=123#result")]
+    [InlineData("[[List of parrots]]", "/update-statuses?page=List%20of%20parrots#result")]
     public async Task AWikipediaUrlOnItsOwnLoadsThePage(string text, string location) {
         var (response, _) = await Post(text);
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
@@ -117,7 +117,7 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
     [Fact]
     public async Task PageIsLinkedFromTheNavigationAndHome() {
         var home = await (await _client.GetAsync("/")).Content.ReadAsStringAsync();
-        Assert.Contains("<a href=\"/update\">Update IUCN statuses in wikitext</a>", home);
+        Assert.Contains("<a href=\"/update-statuses\">Update IUCN statuses in wikitext</a>", home);
         Assert.Contains("Update the IUCN statuses in an article or list", home);
         var about = await (await _client.GetAsync("/about")).Content.ReadAsStringAsync();
         Assert.Contains("status update page", Html.Text(about));

@@ -610,7 +610,21 @@
         });
     }
 
+    // The cite tool's choice of Wikipedia or Wikidata can be picked by the address: /cite#wikidata
+    // ticks the Wikidata choice (the server cannot see the part after #).
+    function setUpHashChoice() {
+        var hash = window.location.hash.replace(/^#/, "");
+        if (!hash) {
+            return;
+        }
+        var choice = document.querySelector("input[data-hash-choice=\"" + hash.replace(/[^a-z-]/g, "") + "\"]");
+        if (choice) {
+            choice.checked = true;
+        }
+    }
+
     setUpCopyButtons();
+    setUpHashChoice();
     setUpNavMenu();
     setUpInfoTips();
     setUpListType();

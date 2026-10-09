@@ -150,4 +150,18 @@ public static partial class UpdateText {
     private static string Count(int n) => SiteFormat.Number(n);
 
     private static string Items(int n) => n == 1 ? "1 item" : $"{Count(n)} items";
+
+    // The example on the page before any text is sent (_UpdateExample).
+    public const string ExampleHeading = "What it updates";
+    public const string ExampleBecomes = "becomes";
+    public const string ExampleListLine = "Lists";
+    public const string ExampleListLineText = "Giant panda";
+    public const string ExampleTaxobox = "Taxoboxes";
+    public const string ExampleTaxoboxText = "Conservation status";
+    public const string ExampleSpeciesTable = "Species tables";
+    public const string ExampleSpeciesTableText = "Kerivoula crypta";
+    public const string ExampleSummaryBox = "Status count boxes";
+    public const string ExampleSummaryBoxText = "The counts of each category are counted again.";
+    public const string ExampleMore = "It also updates the {{cite iucn}} in a taxobox's status_ref, and status columns in other wikitables. Nothing else in the text changes.";
+    public const string SettingsSummary = "Options";
 }

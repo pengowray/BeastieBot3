@@ -20,6 +20,7 @@
     var nameHtml = ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName);
 }
 
+<partial name="_ToolTabs" model="BeastieBot3.Site.Web.ToolPaths.Tab.Cite" />
 <header class="taxon-header tool-header">
     <p class="tool-label">@SiteText.WikidataPageLabel</p>
     <h1><span class="sci-name">@Html.Raw(nameHtml)</span></h1>

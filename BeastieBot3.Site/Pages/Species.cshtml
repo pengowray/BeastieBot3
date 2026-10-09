@@ -320,6 +320,6 @@
         @if (Model.GenusGroup is { } genus) {
             <li><a href="@BeastieBot3.Site.Web.SiteUrls.GroupList(genus)">@GroupText.ToolListLinkBefore<partial name="_GroupInSentence" model="genus" /></a> <span class="help">@GroupText.ToolListHelp(genus)</span></li>
         }
-        <li><a href="/update">@SiteText.ToolUpdateLink</a> <span class="help">@SiteText.ToolUpdateHelp</span></li>
+        <li><a href="/update-statuses">@SiteText.ToolUpdateLink</a> <span class="help">@SiteText.ToolUpdateHelp</span></li>
     </ul>
 </section>

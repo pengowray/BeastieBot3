@@ -1316,6 +1316,108 @@ th.num {
 .tool-header .tool-back {
     margin: 0.4rem 0 0;
 }
+/* The row of tool tabs above every tool page: plain links, the current one underlined by a bar. */
+.tool-tabs ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1.25rem;
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+    border-bottom: 1px solid var(--border);
+}
+.tool-tabs a {
+    display: inline-block;
+    padding: 0.5rem 0 0.4rem;
+    border-bottom: 3px solid transparent;
+}
+.tool-tabs a[aria-current] {
+    border-bottom-color: var(--link);
+    color: var(--fg);
+    font-weight: 700;
+}
+
+/* The one input of a tool page and its button, side by side. */
+.tool-form .tool-input {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.4rem 0 0.8rem;
+}
+.tool-form .tool-input input[type=search] {
+    flex: 1 1 18rem;
+    font: inherit;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--muted);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--fg);
+}
+.tool-form fieldset {
+    border: 0;
+    margin: 0 0 0.8rem;
+    padding: 0;
+}
+.tool-form fieldset label {
+    margin-right: 1.25rem;
+}
+
+/* The tools page: one line per tool. */
+.tool-list {
+    padding: 0;
+    list-style: none;
+}
+.tool-list li {
+    margin: 0 0 1rem;
+}
+.tool-list a {
+    font-size: 1.15em;
+    font-weight: 700;
+}
+.tool-list .help {
+    display: block;
+}
+
+/* The status update page's example of the changes it makes: for each kind of item, how it looks
+   before and after (category badges), and the wikitext that changes, small and muted. */
+.update-example {
+    margin: 1.5rem 0;
+}
+.update-example-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 0.75rem;
+    margin: 0.5rem 0;
+    padding: 0;
+    list-style: none;
+}
+.update-example-list li {
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+}
+.update-example-list p {
+    margin: 0.2rem 0;
+}
+.update-example-kind {
+    font-weight: 700;
+}
+.update-example-look {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+.update-example-code {
+    color: var(--muted);
+    font-size: 0.85em;
+}
+.update-example-code code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 /* The wikitext page's row of links to each Wikipedia; the chosen one is plain bold text. */
 .wiki-chooser ul {
     display: flex;

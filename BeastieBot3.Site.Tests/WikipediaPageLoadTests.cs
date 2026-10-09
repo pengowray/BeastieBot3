@@ -115,9 +115,9 @@ public sealed class WikipediaPageLoadTests(FakeWikipediaSiteFactory factory) : I
     private readonly HttpClient _client = factory.Client();
 
     [Theory]
-    [InlineData("https://en.wikipedia.org/wiki/List_of_bears", "/update?page=List%20of%20bears#result")]
-    [InlineData("[[List of bears]]", "/update?page=List%20of%20bears#result")]
-    [InlineData("https://en.wikipedia.org/w/index.php?title=List_of_bears&oldid=7", "/update?page=List%20of%20bears&oldid=7#result")]
+    [InlineData("https://en.wikipedia.org/wiki/List_of_bears", "/update-statuses?page=List%20of%20bears#result")]
+    [InlineData("[[List of bears]]", "/update-statuses?page=List%20of%20bears#result")]
+    [InlineData("https://en.wikipedia.org/w/index.php?title=List_of_bears&oldid=7", "/update-statuses?page=List%20of%20bears&oldid=7#result")]
     public async Task SearchingForAWikipediaPageOpensTheUpdatePage(string query, string location) {
         var response = await _client.GetAsync("/search?q=" + Uri.EscapeDataString(query));
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
@@ -132,7 +132,7 @@ public sealed class WikipediaPageLoadTests(FakeWikipediaSiteFactory factory) : I
 
     [Fact]
     public async Task ThePageIsLoadedAndUpdated() {
-        var response = await _client.GetAsync("/update?page=List%20of%20bears");
+        var response = await _client.GetAsync("/update-statuses?page=List%20of%20bears");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("Loaded from English Wikipedia: List of bears, revision 1234 of 1 October 2026, 12:30 UTC.", Html.Text(html));
@@ -143,7 +143,7 @@ public sealed class WikipediaPageLoadTests(FakeWikipediaSiteFactory factory) : I
 
     [Fact]
     public async Task AMissingPageSaysSo() {
-        var response = await _client.GetAsync("/update?page=No%20such%20page");
+        var response = await _client.GetAsync("/update-statuses?page=No%20such%20page");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Contains("English Wikipedia has no page called \"No such page\".", Html.Text(await response.Content.ReadAsStringAsync()));
     }

@@ -1,17 +1,21 @@
 @page "/update"
 @model UpdateModel
 @using BeastieBot3.Site.Update
+@inject Microsoft.Extensions.Options.IOptions<SiteOptions> SiteOpts
 @{
     ViewData["Title"] = UpdateText.Heading;
+    // The page answers at /update (where its form posts) and /update-statuses, the address to link.
+    ViewData["Canonical"] = BeastieBot3.Site.Web.SiteUrls.Absolute(SiteOpts.Value.BaseUrl, ViewContext.HttpContext.Request, BeastieBot3.Site.Web.ToolPaths.UpdateStatuses);
     var result = Model.Result;
 }
 @* A textarea drops one newline straight after its start tag, so one is written there to keep a
    text that starts with a newline. *@
+<partial name="_ToolTabs" model="BeastieBot3.Site.Web.ToolPaths.Tab.Update" />
 <h1>@UpdateText.Heading</h1>
-@* The introduction is open until there is a result to read; then it is one click away. *@
-<details class="update-intro prose" open="@(result is null)">
+<p class="lead">@UpdateText.Intro(Model.Version)</p>
+@* The details of what is updated, one click away. *@
+<details class="update-intro prose">
     <summary>@UpdateText.IntroSummary</summary>
-    <p>@UpdateText.Intro(Model.Version)</p>
     <p>@UpdateText.IntroItemsLabel</p>
     <ul>
         <li><strong>@UpdateText.IntroTemplatesTitle</strong>@UpdateText.IntroTemplates</li>
@@ -209,6 +213,9 @@
 <form class="update-form" id="update-form" method="post" action="/update#result" enctype="multipart/form-data">
     <label for="update-input">@UpdateText.InputLabel</label>
     <textarea id="update-input" name="@UpdateModel.TextField" rows="16" spellcheck="false" autocapitalize="off" autocomplete="off" required>@("\n" + Model.Input)</textarea>
+    @* The settings are folded until there is a result: the first run needs only the text. *@
+    <details class="update-settings" open="@(result is not null)">
+    <summary>@UpdateText.SettingsSummary</summary>
     <p class="update-region">
         <label for="update-region">@UpdateText.RegionLabel</label>
         <select id="update-region" name="@UpdateModel.RegionField" aria-describedby="update-region-help">
@@ -246,6 +253,7 @@
         <p class="help" id="update-refs-help">@UpdateText.OptionAddReferencesHelp</p>
         <p class="help" id="update-add-help">@UpdateText.AddOptionsHelp</p>
     </fieldset>
+    </details>
     @if (Model.LoadedPage is { } loadedPage) {
         <input type="hidden" name="@UpdateModel.PageField" value="@loadedPage.Title">
         <input type="hidden" name="@UpdateModel.RevisionField" value="@loadedPage.RevisionId">
@@ -262,3 +270,7 @@
         <p class="help">@UpdateText.NotSaved</p>
     </div>
 </form>
+
+@if (result is null) {
+    <partial name="_UpdateExample" />
+}

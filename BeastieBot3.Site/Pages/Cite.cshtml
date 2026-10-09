@@ -1,0 +1,38 @@
+@page "/cite"
+@model CiteModel
+@using BeastieBot3.Site.Web
+@using BeastieBot3.Shared.Wikitext
+@{
+    ViewData["Title"] = Model.Query.Length == 0 ? SiteText.ToolCite : SiteText.CiteResultsTitle(Model.Query);
+    ViewData["HideHeaderSearch"] = true;
+}
+<partial name="_ToolTabs" model="ToolPaths.Tab.Cite" />
+<h1>@SiteText.ToolCite</h1>
+<form class="tool-form cite-form" action="@ToolPaths.Cite" method="get">
+    <label for="cite-q">@SiteText.CiteInputLabel</label>
+    <div class="tool-input">
+        <input id="cite-q" name="q" type="search" value="@Model.Query" placeholder="@SiteText.CitePlaceholder" autocomplete="off" spellcheck="false" maxlength="100" required>
+        <button type="submit">@SiteText.CiteButton</button>
+    </div>
+    <fieldset>
+        <legend>@SiteText.CiteForLegend</legend>
+        <label><input type="radio" name="for" value="wikipedia" checked="@(!Model.ForWikidataChosen)"> @SiteText.CiteForWikipedia</label>
+        <label class="inline-select"><span class="visually-hidden">@SiteText.WikiChooserLabel</span>
+            <select name="@WikitextOptions.WikiKey">
+                @foreach (var edition in OtherWikipedias.All) {
+                    <option value="@edition.Code" selected="@(edition.Code == Model.Wiki)" lang="@edition.Code">@edition.NativeName</option>
+                }
+            </select>
+        </label>
+        <label><input type="radio" name="for" value="@CiteModel.ForWikidata" checked="@Model.ForWikidataChosen" data-hash-choice="wikidata"> @SiteText.CiteForWikidata</label>
+    </fieldset>
+</form>
+
+@if (Model.TooShort) {
+    <p>@SiteText.TooShort</p>
+} else if (Model.Searched && Model.Items.Count == 0) {
+    <p>@SiteText.CiteNothingFound(Model.Query)</p>
+} else if (Model.Items.Count > 0) {
+    <h2>@SiteText.CiteChooseTaxon</h2>
+    <partial name="_TaxonList" model="Model.Items" />
+}

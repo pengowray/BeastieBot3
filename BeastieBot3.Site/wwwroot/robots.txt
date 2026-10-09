@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /search
+Disallow: /cite?
+Disallow: /species-list-maker?
 Disallow: /api/

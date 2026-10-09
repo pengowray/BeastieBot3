@@ -50,7 +50,7 @@ public static class SiteRateLimits {
             if (path.StartsWithSegments("/api")) {
                 return PerMinute("suggest|" + client, limits.SuggestPerMinute);
             }
-            if (path.StartsWithSegments("/search")) {
+            if (IsSearch(path)) {
                 return PerMinute("search|" + client, limits.SearchPerMinute);
             }
             if (IsUpdateRun(context)) {
@@ -60,7 +60,7 @@ public static class SiteRateLimits {
         });
         var searchesAtOnce = PartitionedRateLimiter.Create<HttpContext, string>(context => {
             var path = context.Request.Path;
-            if (path.StartsWithSegments("/api") || path.StartsWithSegments("/search") || IsUpdateRun(context)) {
+            if (path.StartsWithSegments("/api") || IsSearch(path) || IsUpdateRun(context)) {
                 return RateLimitPartition.GetConcurrencyLimiter("searches", _ => new ConcurrencyLimiterOptions {
                     PermitLimit = Math.Max(1, limits.ConcurrentSearches),
                     QueueLimit = Math.Max(0, limits.SearchQueueLength),
@@ -123,4 +123,8 @@ public static class SiteRateLimits {
         Array.Clear(bytes, 8, 8);
         return new IPAddress(bytes) + "/64";
     }
+
+    // The pages that run a search: /search, and the cite tool and list maker with a query.
+    private static bool IsSearch(PathString path) =>
+        path.StartsWithSegments("/search") || path.StartsWithSegments(Web.ToolPaths.Cite) || path.StartsWithSegments(Web.ToolPaths.ListMaker);
 }

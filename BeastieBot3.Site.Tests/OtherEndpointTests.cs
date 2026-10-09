@@ -259,7 +259,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
 
     [Fact]
     public async Task PagesHaveNoInlineScriptsOrStyles() {
-        foreach (var url in new[] { "/", "/species/22823", "/species/22823/wikitext", "/species/22823/wikidata", "/taxa/family/ursidae/list", "/tools", "/search?q=Fillerus", "/about", "/no/such/page" }) {
+        foreach (var url in new[] { "/", "/species/22823", "/species/22823/wikitext", "/species/22823/wikidata", "/taxa/family/ursidae/list", "/tools", "/cite", "/cite?q=Panthera", "/update-statuses", "/species-list-maker", "/species-list-maker?q=Ursus+maritimus", "/search?q=Fillerus", "/about", "/no/such/page" }) {
             var html = await (await _client.GetAsync(url)).Content.ReadAsStringAsync();
             Assert.DoesNotMatch("<script(?![^>]*\\bsrc=)", html);
             Assert.DoesNotContain(" style=\"", html);

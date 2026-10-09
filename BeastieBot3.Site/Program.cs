@@ -40,7 +40,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options => {
 
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
 builder.Services.Configure<WebEncoderOptions>(options => options.TextEncoderSettings = new TextEncoderSettings(UnicodeRanges.All));
-builder.Services.AddRazorPages();
+// The status update page is /update-statuses too; its form still posts to /update (UpdateModel.Path).
+builder.Services.AddRazorPages(options => options.Conventions.AddPageRoute("/Update", "update-statuses"));
 builder.Services.AddSiteRateLimits();
 builder.Services.AddOutputCache(options => {
     options.SizeLimit = 128 * 1024 * 1024;

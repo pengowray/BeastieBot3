@@ -30,7 +30,7 @@
     </ul>
 </section>
 
-<p class="home-update"><a href="/update">@UpdateText.HomeLink</a></p>
+<p class="home-update"><a href="/update-statuses">@UpdateText.HomeLink</a></p>
 
 @if (snapshot?.IucnRelease is { } release && snapshot.AssessmentCount is { } assessments) {
     <p class="dataset-summary">@SiteText.DatasetSummary(release, snapshot.GlobalTaxonCount, assessments)</p>

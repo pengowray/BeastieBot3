@@ -58,8 +58,9 @@
                         @foreach (var (text, href) in pageTools) {
                             <li><a href="@href">@text</a></li>
                         }
-                        <li><a href="/update">@SiteText.ToolUpdateLink</a></li>
-                        <li><a href="/tools">@SiteText.NavToolsAll</a></li>
+                        <li><a href="@BeastieBot3.Site.Web.ToolPaths.Cite">@SiteText.ToolCite</a></li>
+                        <li><a href="@BeastieBot3.Site.Web.ToolPaths.UpdateStatuses">@SiteText.ToolUpdateLink</a></li>
+                        <li><a href="@BeastieBot3.Site.Web.ToolPaths.ListMaker">@SiteText.ToolListMaker</a></li>
                     </ul>
                 </details>
                 <a href="/about">@SiteText.NavAbout</a>
