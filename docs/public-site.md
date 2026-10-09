@@ -1688,11 +1688,57 @@ linking each to the same kind of page).
   page instead of the redirect; only 200 answers are stored.
 - A search for an assessment id that is not the taxon's first assessment goes straight to the
   wikitext page (`SearchModel.SpeciesUrl`).
+- The tools share a row of tabs (`Pages/Shared/_ToolTabs.cshtml`, addresses in `Web/ToolPaths.cs`),
+  shown on every tool page with its own tab marked: "Cite an assessment" (`/cite`; the taxon's
+  wikitext and Wikidata pages), "Update IUCN statuses" (`/update-statuses`) and "Make a species list"
+  (`/species-list-maker`; the group list pages). `/tools` is the tabs and one line per tool.
+  - `/cite` (`Pages/Cite.cshtml`, `CiteModel`): a common or scientific name or an IUCN ID, and "Cite
+    for" Wikipedia (with the Wikipedia's language, `wiki=`) or Wikidata (`for=wikidata`; `/cite#wikidata`
+    ticks it through `site.js`, `data-hash-choice`). An IUCN ID (`IdQuery`) or one exact name match
+    (`SearchModel.SingleExactMatch`) goes straight to the taxon's wikitext or Wikidata page, an
+    assessment id with `?assessment=`; several are listed (`_TaxonList`) linking those pages.
+  - `/update-statuses` is the status update page (`Program.cs` adds the route; its form still posts to
+    `/update`, `UpdateModel.Path`, the one path that takes POST; canonical `/update-statuses`). Before
+    any text is sent it folds the options (`<details class="update-settings">`) and shows "What this
+    page updates" (`_UpdateExample.cshtml`): cards with the category badges before and after and the
+    wikitext change (the giant panda's 2008 and 2016 assessments, a species table row of Kerivoula
+    crypta, an `{{IUCN statuses}}` box), a fixed example.
+  - `/species-list-maker` (`Pages/ListMaker.cshtml`): a group's name (`FindGroupsByName`); one group
+    goes straight to its list page, several are listed, and a species name offers its genus, family
+    and order. It links the update page for a list already on Wikipedia.
+  - `/cite` and `/species-list-maker` with a query count as searches for the rate limits
+    (`SiteRateLimits.IsSearch`), are kept out of `robots.txt`, and are cached by query
+    (`SiteCachePolicies.Cite`).
 - The header has a "Tools" menu (`<details class="nav-menu">` in `_Layout.cshtml`; `site.js` closes
-  it on Escape and on a click outside it): the tool of the page shown first (`ViewData["PageTools"]`,
-  set by the taxon and group pages), then the update page and "All tools" (`/tools`,
-  `Pages/Tools.cshtml`, which describes each tool and links an example taxon and genus). Strings in
-  `Display/SiteText.Tools.cs` and `GroupText.Tools.cs`.
+  it on Escape and on a click outside it): the tools of the page shown first (`ViewData["PageTools"]`,
+  set by the taxon and group pages), then the three tools. Strings in `Display/SiteText.Tools.cs`,
+  `SiteText.ToolTabs.cs`, `SiteText.WikidataPage.cs` and `GroupText.Tools.cs`.
+
+### Wikipedias other than English
+
+The wikitext page writes for nine Wikipedias (`wiki=`; `OtherWikipedias.All` in `BeastieBot3.Shared`):
+English, German, French, Spanish, Polish, Chinese, Japanese, Ukrainian and Portuguese, chosen by a row
+of links above the boxes (`nav.wiki-chooser`; each link keeps the other options). Each uses the wiki's
+own citation template and taxobox status lines (`OtherWikipedias.Citation`, `TaxoboxLines`), as found
+in each wiki's template sources, documentation and live articles on 9 October 2026 (the evidence is
+the comment at the top of `OtherWikipedias.cs`):
+
+| Wiki | Citation | Taxobox status |
+| --- | --- | --- |
+| de | `{{IUCN}}` (Year, ID, ScientificName, AssessmentID, YearAssessed, Assessor, Abruf) | none: German taxoboxes have no conservation status |
+| fr | `{{UICN|<taxon id>|''Name'' Authority|rang=|consulté le=}}` (links the current assessment) | `{{Taxobox UICN | VU | A3c }}` (PE, PEW; CD, NT, LC for LR/cd, LR/nt, LR/lc) |
+| es | `{{IUCN|título=|asesores=|año=|edición=|consultado=}}` (links P627 of the article's item) | `{{Ficha de taxón}}` status, status_system, status_ref (English codes) |
+| pl | `{{IUCN |id= |nazwa= |autor= |iucn rok= |wersja= |doi= |data dostępu=}}`, ref name "iucn" | `|status IUCN =` (EX..DD only; PE as CR, LR as NT/LC) and `|IUCN id =` |
+| zh | `{{IUCN}}` (author1.., year, id, title, errata phrase, page, doi, access-date) | the English lines |
+| ja | `{{cite iucn}}` (a copy of the English module) | `|status =` (VU2.3 style for 1994 categories), `|status_ref =`, no status_system |
+| uk | `{{Cite IUCN}}` (`|page=`) | the English lines |
+| pt | `{{citar iucn}}` (`|page=`, DOIs ending .en only) | `{{Info/Taxonomia}}` estado, sistema_estado (lower case), estado_ref |
+
+The wikis with a copy of `{{cite iucn}}` go through `CiteIucnRenderer` with a `CiteIucnDialect`
+(template name, article number parameter, DOI suffixes, ISO access date). For other wikis the page
+leaves out `{{IUCN status}}`, the Green Status citation, `{{cite Q}}`, the English taxobox check and
+the `{{cite iucn}}` DOI note, hides the options their citation does not take (keeping their values),
+and adds notes on the wiki's templates. Tests: `OtherWikipediasTests`.
 
 ### Subspecies and varieties (`infraspecific_name`, schema 27)
 
