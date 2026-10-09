@@ -11,7 +11,7 @@ public static partial class UpdateText {
     public const string HomeLink = "Update the IUCN statuses in an article or list";
 
     public static string Intro(string? version) =>
-        "Paste the wikitext of an article or list. This page gives back the same wikitext with IUCN statuses changed to match the latest global assessments"
+        "Paste the wikitext of an article or list, or the address of its English Wikipedia page. This page gives back the same wikitext with IUCN statuses changed to match the latest global assessments"
         + (version is null ? "." : $" in Red List {version}.")
         + " All other text is returned exactly as pasted.";
 

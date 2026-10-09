@@ -281,6 +281,13 @@ public sealed class UpdateModel : PageModel {
             return Failed(StatusCodes.Status413PayloadTooLarge, UpdateText.ErrorTooLarge);
         }
         Input = text;
+        // A Wikipedia URL or wikilink on its own, with nothing else but spaces and the quotation marks
+        // or angle brackets it was pasted in: load that page, as the search box does.
+        if (WikipediaPageInput.Parse(text) is { } named) {
+            return named.English
+                ? Redirect(SearchModel.UpdateUrl(named))
+                : Failed(StatusCodes.Status400BadRequest, UpdateText.ErrorNotEnglishWikipedia(named.Language));
+        }
         // The last value counts: an offer's button sends "1" after the form's own checkbox.
         bool On(string field) => form[field].LastOrDefault() == "1";
         Options = new StatusUpdateOptions {

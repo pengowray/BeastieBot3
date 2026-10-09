@@ -21,6 +21,27 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
     // The textarea starts with one newline, which a browser drops.
     private static string? Output(string html) => Html.Textarea(html, "update-output") is { } text && text.StartsWith('\n') ? text[1..] : null;
 
+    [Theory]
+    [InlineData("https://en.wikipedia.org/wiki/List_of_parrots", "/update?page=List%20of%20parrots#result")]
+    [InlineData("  <https://en.m.wikipedia.org/wiki/List_of_parrots>\n", "/update?page=List%20of%20parrots#result")]
+    [InlineData("https://en.wikipedia.org/w/index.php?title=List_of_parrots&oldid=123", "/update?page=List%20of%20parrots&oldid=123#result")]
+    [InlineData("[[List of parrots]]", "/update?page=List%20of%20parrots#result")]
+    public async Task AWikipediaUrlOnItsOwnLoadsThePage(string text, string location) {
+        var (response, _) = await Post(text);
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal(location, response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task AUrlOfAnotherWikipediaSaysSo_AndAUrlInsideWikitextIsWikitext() {
+        var (response, html) = await Post("https://de.wikipedia.org/wiki/Papageien");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Not English Wikipedia: the link is to de.wikipedia.org.", Html.Text(html));
+
+        var (inText, _) = await Post("* {{IUCN status|VU|22823/1|1}} see https://en.wikipedia.org/wiki/Polar_bear\n");
+        Assert.Equal(HttpStatusCode.OK, inText.StatusCode);
+    }
+
     [Fact]
     public async Task GetShowsTheForm() {
         var response = await _client.GetAsync("/update");

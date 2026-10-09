@@ -1806,8 +1806,10 @@ button opens its help text and Escape closes it). It is not part of `dotnet test
 ### Status update page (`/update`)
 
 A Wikipedia URL (desktop, mobile, or `index.php` with `title=` and `oldid=`) or a wikilink typed
-into the search box (`WikipediaPageInput` in `BeastieBot3.Shared`; either may be wrapped in
-quotation marks, guillemets, backticks or angle brackets, as pasted from a message) redirects to
+into the search box, or sent on its own as the update page's text (`WikipediaPageInput` in
+`BeastieBot3.Shared`; either may be wrapped in quotation marks, guillemets, backticks or angle
+brackets, as pasted from a message; a URL of another language's Wikipedia gets the "Not English
+Wikipedia" error), redirects to
 `/update?page=Title`, which loads the wikitext from English Wikipedia's action API
 (`Update/WikipediaPageSource.cs`: redirects followed, answers kept for 5 minutes, at most 2 MB)
 and runs the update as a POST would, with the categories its title names and, for a title that
