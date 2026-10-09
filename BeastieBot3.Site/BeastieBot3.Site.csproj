@@ -21,6 +21,8 @@
   <ItemGroup>
     <!-- Latin transliterations of common names in other scripts (ICU's transforms, managed port). -->
     <PackageReference Include="ICU4N.Transliterator" Version="60.1.0-alpha.356" />
+    <!-- For the scripts ICU4N's data has no Latin transform for (Ethiopic, Mongolian, syllabics ...). -->
+    <PackageReference Include="AnyAscii" Version="0.3.3" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
   </ItemGroup>
 

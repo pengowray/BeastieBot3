@@ -426,12 +426,21 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   - A name in another script has its transliteration into Latin letters under it, in grey
     (`Display/NameTransliteration.cs`): ICU's Any-Latin transform through the managed port ICU4N
     (`ICU4N.Transliterator`, an alpha release; an exception gives no transliteration). Pinyin with
-    tone marks for Chinese, Hepburn-style romaji for kana, ISO-style transliterations for Cyrillic,
-    Greek, Indic and other alphabets. Left out: names already in Latin letters; Arabic, Hebrew,
-    Syriac and Thaana, which are written without most vowels; Thai and Lao, which ICU gives only
-    with diacritics few readers know; and Chinese characters in any language but Chinese (`zh`,
-    `cmn`), because ICU reads them as Mandarin (a Japanese name with kanji would get a Chinese
-    reading). Computed when the page is made; nothing is stored.
+    tone marks for Chinese, Hepburn-style romaji for kana, the Revised Romanization's transliteration
+    form for Hangul (북극곰 "buggeuggom", not the spoken "bukgeukgom"), ISO 15919 for Indic scripts
+    (with the inherent vowel: बाघ "bāgha"), ISO-style transliterations for Cyrillic, Greek and other
+    alphabets. Malayalam's atomic chillu letters are written as consonant and virama first, because
+    ICU4N's data predates them. Letters that ICU4N's data has no transform for go through AnyAscii,
+    only in the scripts where its output keeps the vowels: the Cyrillic letters of Kazakh, Kyrgyz,
+    Bashkir, Chechen and others (ү, ө, Ӏ), Ethiopic, Canadian syllabics, Mongolian, N'Ko, Ol Chiki,
+    Tifinagh, Syloti Nagri, Meetei Mayek and Cherokee (lowered). Left out: names already in Latin
+    letters; Arabic, Hebrew and Syriac, which are written without most vowels; Thai and Lao, which ICU
+    gives only with diacritics few readers know; Myanmar, Khmer, Sinhala and Tibetan, which neither
+    library writes with their inherent vowels; and Chinese characters in any language but Chinese
+    (`zh`, `cmn`), because ICU reads them as Mandarin (a Japanese name with kanji would get a Chinese
+    reading; 2,469 of the 63,045 Japanese names in October 2026 have kanji). Of the 439,349 names in
+    other scripts in the October 2026 build, 327,077 get a transliteration. Computed when the page is
+    made (about 27 µs a name); nothing is stored.
   - These names are in `name_key` and `name_fts`, so a search in another language finds the
     taxon, but not in `name_word` (spelling suggestions use the English names only).
 - When the build reads the DOI cache, it sets the meta key `iucn_doi_checked_to` to the newest
