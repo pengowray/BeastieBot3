@@ -151,7 +151,7 @@ public sealed class SubspeciesSectionTests(SiteFactory factory) : IClassFixture<
         var section = Section(await _client.GetStringAsync($"/species/{FixtureDb.Leopard}"));
         Assert.Contains("Show all subspecies (1 more)", Html.Text(section));
         Assert.Single(Regex.Matches(section, "<tr class=\"more-item\">"));
-        Assert.Contains("<tr class=\"more-item\">\n                            <th scope=\"row\"><i>Panthera pardus tulliana</i>", section);
+        Assert.Matches("<tr class=\"more-item\">\\s*<th scope=\"row\"><i>Panthera pardus tulliana</i>", section);
         // The Amur leopard's IUCN taxon is not in the release, so orientalis is listed by CoL alone.
         Assert.DoesNotContain($"/species/{FixtureDb.AmurLeopard}\"", section);
     }
