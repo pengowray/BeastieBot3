@@ -200,7 +200,17 @@ internal static partial class ChecklistSources {
         using var taxa = Open("Taxon.tsv");
         using var distribution = Open("Distribution.tsv");
         using var synonyms = Open("Synonym.tsv");
-        return ParseReptileDatabase(names, taxa, distribution, synonyms, "ChecklistBank 1008");
+        // metadata.yaml has the dataset's version ("version: 2026-06").
+        string? release = null;
+        if (zip.GetEntry("metadata.yaml") is { } metadata) {
+            using var yaml = new StreamReader(metadata.Open(), Encoding.UTF8);
+            for (var line = yaml.ReadLine(); line is not null && release is null; line = yaml.ReadLine()) {
+                if (line.StartsWith("version:", StringComparison.Ordinal)) {
+                    release = line["version:".Length..].Trim().Trim('"', '\'') is { Length: > 0 } v ? v : null;
+                }
+            }
+        }
+        return ParseReptileDatabase(names, taxa, distribution, synonyms, release is null ? "ChecklistBank 1008" : $"ChecklistBank 1008 ({release})");
     }
 
     internal static ChecklistParse ParseReptileDatabase(TextReader names, TextReader taxa, TextReader distribution, TextReader synonyms, string? version) {
