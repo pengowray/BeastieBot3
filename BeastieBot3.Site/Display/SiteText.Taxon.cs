@@ -16,6 +16,8 @@ public static partial class SiteText {
     /// In place of HeadingRegional when every assessment in that table has no scope.
     public const string HeadingNoScope = "Assessments with no geographic scope";
     public const string HeadingNames = "Names";
+    /// The title of the grey line under a name in another script.
+    public const string TransliterationTitle = "Automatic transliteration into Latin letters";
     public const string HeadingLinks = "Links to other sites";
     /// The hidden heading of the line of groups under the taxon's name.
     public const string HeadingShortClassification = "Short classification";

@@ -1715,8 +1715,8 @@ linking each to the same kind of page).
     (`SiteCachePolicies.Cite`).
 - The header has a "Tools" menu (`<details class="nav-menu">` in `_Layout.cshtml`; `site.js` closes
   it on Escape and on a click outside it): the tools of the page shown first (`ViewData["PageTools"]`,
-  set by the taxon and group pages), then the three tools. Strings in `Display/SiteText.Tools.cs`,
-  `SiteText.ToolTabs.cs`, `SiteText.WikidataPage.cs` and `GroupText.Tools.cs`.
+  set by the taxon and group pages), then the three tools. Strings in `Display/SiteText.Tools.cs` (the menu,
+  tabs and tool pages, and the taxon's wikitext and Wikidata pages) and `GroupText.Tools.cs`.
 
 ### Wikipedias other than English
 
