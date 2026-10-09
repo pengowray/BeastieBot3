@@ -1,4 +1,4 @@
-using BeastieBot3.Taxonomy;
+using BeastieBot3.Shared.SiteData;
 using Xunit;
 
 namespace BeastieBot3.Tests;

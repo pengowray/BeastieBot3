@@ -342,7 +342,7 @@ public static class SiteDbSchema {
         -- The subspecies and varieties that the Catalogue of Life and Wikidata list under each IUCN species
         -- in the release, for the species page's list of subspecies and varieties, which adds IUCN's own
         -- (taxon rows whose parent_taxon_id is the species) and merges the three sources' rows by name
-        -- (InfraspecificNames.Key). Names only: no IUCN assessment data. source 'col': accepted and
+        -- (InfraspecificNames.MergeKey). Names only: no IUCN assessment data. source 'col': accepted and
         -- provisionally accepted name usages of rank subspecies or variety whose parentID is taxon.col_id;
         -- source 'wikidata': items of `wikidata sweep-taxa`'s table with rank subspecies (Q68947) or variety
         -- (Q767728) whose parent taxon (P171) is taxon.wikidata_qid, leaving out items that are an instance

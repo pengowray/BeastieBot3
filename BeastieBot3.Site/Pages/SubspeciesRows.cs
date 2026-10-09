@@ -5,8 +5,10 @@ using BeastieBot3.Site.Display;
 
 namespace BeastieBot3.Site.Pages;
 
-/// One record of a source: the text of its link (the record's id) and its address.
-public sealed record SubspeciesRecord(string Id, string Url);
+/// One record of a source: the text of its link (the record's id), its address, and the name as the
+/// record writes it when that is not the row's name ("Panthera leo melanochaitus" in a row named
+/// "Panthera leo melanochaita"), else null.
+public sealed record SubspeciesRecord(string Id, string Url, string? OtherName = null);
 
 /// A source that lists a subspecies or variety, with its records (usually one; two when the source has
 /// two records with the name, as Wikidata sometimes has) and, when its authority differs from the one
@@ -14,8 +16,9 @@ public sealed record SubspeciesRecord(string Id, string Url);
 public sealed record SubspeciesSource(string Source, string Label, IReadOnlyList<SubspeciesRecord> Records, string? OtherAuthority);
 
 /// One subspecies or variety on the species page: the name as the site writes it ("Panthera leo
-/// melanochaita" for an animal, "Abies alba var. acutifolia" for a plant), its rank, the authority of
-/// the first source that gives one, and the sources in SourceOrder.
+/// melanochaita" for an animal, "Abies alba var. acutifolia" for a plant) in the spelling of the first
+/// source in SourceOrder, its rank, the authority of the first source that gives one, and the sources
+/// in SourceOrder.
 public sealed record SubspeciesRow(string Name, string Rank, string? Authority, IReadOnlyList<SubspeciesSource> Sources);
 
 /// The species page's list of subspecies and varieties from IUCN, the Catalogue of Life and Wikidata:
@@ -35,27 +38,32 @@ public static class SubspeciesRows {
     public static SubspeciesList? Load(SiteQueries queries, TaxonRow taxon) =>
         taxon.Kind == TaxonKinds.Species && taxon.InRelease ? Build(queries.GetInfraspecificNames(taxon.TaxonId), taxon.Kingdom) : null;
 
-    /// One row per name (InfraspecificNames.Key: rank markers, case and spacing ignored; subspecies and
-    /// varieties kept apart), the names with most sources first, then by name. kingdom: the species' kingdom, which decides the rank
-    /// marker shown (none for an animal subspecies). Null when there are no rows.
+    /// One row per name (InfraspecificNames.MergeKey: the rank and the stem of the infraspecific
+    /// epithet, so spellings with other Latin endings or another species part are one row; subspecies
+    /// and varieties kept apart), the names with most sources first, then by name. kingdom: the
+    /// species' kingdom, which decides the rank marker shown (none for an animal subspecies). Null when
+    /// there are no rows.
     public static SubspeciesList? Build(IEnumerable<InfraspecificNameRow> rows, string? kingdom) {
         var list = rows
-            .GroupBy(r => InfraspecificNames.Key(r.Rank, r.Name) ?? r.Rank + ":" + SiteNameKey.Fold(r.Name))
+            .GroupBy(r => InfraspecificNames.MergeKey(r.Rank, r.Name) ?? FallbackKey(r))
             .Select(g => {
                 var ordered = g.OrderBy(r => SourceOrder(r.Source)).ThenBy(r => r.SourceId, StringComparer.Ordinal).ToList();
                 var first = ordered[0];
+                var shown = DisplayName(first.Name, first.Rank, kingdom);
+                string? OtherName(InfraspecificNameRow r) =>
+                    DisplayName(r.Name, r.Rank, kingdom) is var name && SiteNameKey.Fold(name) != SiteNameKey.Fold(shown) ? name : null;
                 var authority = ordered.Select(r => r.Authority).FirstOrDefault(a => !string.IsNullOrWhiteSpace(a));
                 var sources = ordered
                     .GroupBy(r => r.Source)
                     .Select(s => {
                         var own = s.Select(r => r.Authority).FirstOrDefault(a => !string.IsNullOrWhiteSpace(a));
                         var other = own is not null && authority is not null && !SameAuthority(own, authority) ? own : null;
-                        var records = s.Select(r => new SubspeciesRecord(r.SourceId, RecordUrl(r.Source, r.SourceId)))
+                        var records = s.Select(r => new SubspeciesRecord(r.SourceId, RecordUrl(r.Source, r.SourceId), OtherName(r)))
                             .DistinctBy(r => r.Id).ToList();
                         return new SubspeciesSource(s.Key, SiteText.SourceLabel(s.Key), records, other);
                     })
                     .ToList();
-                return new SubspeciesRow(DisplayName(first.Name, first.Rank, kingdom), first.Rank, authority, sources);
+                return new SubspeciesRow(shown, first.Rank, authority, sources);
             })
             .OrderByDescending(r => r.Sources.Count)
             .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
@@ -94,6 +102,11 @@ public static class SubspeciesRows {
         "col" => 2,
         _ => 3,
     };
+
+    // The key of a name InfraspecificNames.Split cannot read: the rank and the stem of the name's last
+    // word, as MergeKey gives for a name it reads.
+    private static string FallbackKey(InfraspecificNameRow row) =>
+        row.Rank + ":" + LatinNameVariant.Stem(SiteNameKey.Fold(row.Name).Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "");
 
     // Authorities that differ only in spacing, case or accents are the same.
     private static bool SameAuthority(string a, string b) => SiteNameKey.Fold(a) == SiteNameKey.Fold(b);

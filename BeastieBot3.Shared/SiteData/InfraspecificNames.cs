@@ -4,7 +4,7 @@ namespace BeastieBot3.Shared.SiteData;
 /// Wikidata write them ("Panthera pardus ssp. orientalis", "Panthera leo melanochaita",
 /// "Abies alba var. acutifolia"): their ranks, their parts, and the key under which the names from
 /// different sources are one row on the species page. `site build-db` keeps only the names Split
-/// reads, and the site merges the rows by Key.
+/// reads, and the site merges a species' rows by MergeKey.
 public static class InfraspecificNames {
     public const string Subspecies = "subspecies";
     public const string Variety = "variety";
@@ -32,11 +32,14 @@ public static class InfraspecificNames {
         return (words[0], words[1], words[2]);
     }
 
-    /// The key of a name: the rank, then genus, species and infraspecific epithet folded
-    /// (SiteNameKey.Fold), so names that differ only in the rank marker, case or spacing share it and
-    /// a subspecies and a variety of the same name do not. Null when Split gives null.
-    public static string? Key(string rank, string name) =>
-        Split(name) is { } parts ? rank + ":" + SiteNameKey.Fold($"{parts.Genus} {parts.Species} {parts.Infra}") : null;
+    /// The key under which the names in one species' list are one row: the rank and the infraspecific
+    /// epithet's stem (LatinNameVariant.Stem), so a spelling with another Latin ending or another
+    /// species part is the same row: "Panthera leo melanochaitus" with "Panthera leo melanochaita", and
+    /// the Catalogue of Life's "Acerodon macklotii floresii" with IUCN's "Acerodon mackloti floresii".
+    /// Only for names already listed under one species, whose species part says nothing more. Null when
+    /// Split gives null.
+    public static string? MergeKey(string rank, string name) =>
+        Split(name) is { } parts ? rank + ":" + LatinNameVariant.Stem(SiteNameKey.Fold(parts.Infra)) : null;
 
     /// The rank of IUCN's taxon kind, or null for a kind that is neither ("species").
     public static string? RankOfKind(string kind) => kind switch {

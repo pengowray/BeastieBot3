@@ -1698,30 +1698,34 @@ reads it as a genus, a species epithet and one more epithet, with at most one ra
 subgenus in brackets after the genus, as CoL writes many insect names, is dropped from the name).
 Hybrid names ("×", "nothosubsp.") and names with a capitalised last word are left out.
 
-The page merges the rows by `InfraspecificNames.Key`: the rank, then the three words folded, so
-"Panthera pardus ssp. orientalis" (IUCN) and "Panthera pardus orientalis" (CoL) are one row, and a
-subspecies and a variety of the same name are two. A row shows the name as the lists write it (no
-rank marker for an animal subspecies, "subsp." and "var." for other kingdoms), the authority of the
-first source that gives one, and the sources in the order of the names tables (IUCN, Wikidata,
-Catalogue of Life), each with its own authority when that differs. A source with two records of one
-name (Wikidata has two "Panthera leo leo" items) links each record by its id. The names with most
-sources come first, then by name (as in the table of names in other languages), so the subspecies
-all three sources agree on lead the list; rows after the first 10 are hidden behind a "Show all" box.
+The page merges a species' rows by `InfraspecificNames.MergeKey`: the rank and the stem of the
+infraspecific epithet (`LatinNameVariant.Stem` in `BeastieBot3.Shared`, the rule the CoL name resolver
+uses: Latin gender and genitive endings off, -ii/-i and the free Greek and Latin spellings folded). All
+the rows are under one species already, so the species part says nothing more: "Panthera pardus ssp.
+orientalis" (IUCN) and "Panthera pardus orientalis" (CoL) are one row, and so are Wikidata's "Panthera
+leo melanochaitus" and "Panthera leo melanochaita", and CoL's "Acerodon macklotii floresii" (or a CoL
+name in another genus) and IUCN's "Acerodon mackloti floresii". A subspecies and a variety of the same
+name are two rows. A row shows the name in the spelling of its first source (IUCN, Wikidata, Catalogue
+of Life), as the lists write it (no rank marker for an animal subspecies, "subsp." and "var." for other
+kingdoms), the authority of the first source that gives one, and the sources in that order, each with
+its own authority when that differs and its own spelling when that differs ("(as Panthera leo
+melanochaitus)"). A source with two records of one name (Wikidata has two "Panthera leo leo" items)
+links each record by its id. The names with most sources come first, then by name (as in the table of
+names in other languages), so the subspecies all three sources agree on lead the list; rows after the
+first 10 are hidden behind a "Show all" box.
 
-Known limits:
-
-- Names are merged only when they are spelled the same: "melanochaita" and "melanochaitus" are two
-  rows, and so are a CoL subspecies whose species part differs from IUCN's (CoL's accepted name of an
-  IUCN species may be spelled differently or be in another genus) and IUCN's or Wikidata's name for
-  it. In the October 2026 build, 4,014 CoL rows (1,394 species) and 1,355 Wikidata rows (477
-  species) have another species part than IUCN's name, such as CoL's "Acerodon macklotii alorensis"
-  under IUCN's Acerodon mackloti.
+Before the merge by stem (October 2026 build), 4,014 CoL rows (1,394 species) and 1,355 Wikidata rows
+(477 species) had another species part than IUCN's name, such as CoL's "Acerodon macklotii alorensis"
+under IUCN's Acerodon mackloti.
 
 In the October 2026 build (2026-1, COL26.7 XR), 25,624 species have a list (14,100 with names from
 two or more sources): 3,076 IUCN subspecies and varieties, 55,184 CoL rows (46,789 subspecies and
 8,395 varieties, 16,792 species) and 75,048 Wikidata rows (54,655 subspecies and 20,393 varieties,
 22,436 species; 1,009 items named as a synonym and 178 synonym or fossil items left out). Both
 readers take about 4 seconds.
+
+Known limits:
+
 - The checklists store keeps no subspecies. The Mammal Diversity Database's species file has a
   `subspecies` column (1,429 of 6,904 species in v2.5: each subspecies with its authority, its
   synonyms and a fossil or recently extinct note), and the Reptile Database's ColDP export has 7,667

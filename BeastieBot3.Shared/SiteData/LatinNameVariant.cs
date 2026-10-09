@@ -24,9 +24,9 @@ using System.Text.RegularExpressions;
 // Callers use this to offer an article title or a cross-reference, so a false positive is a wrong
 // link on a published page. When in doubt this says no.
 
-namespace BeastieBot3.Taxonomy;
+namespace BeastieBot3.Shared.SiteData;
 
-internal static class LatinNameVariant {
+public static class LatinNameVariant {
     /// True when the two names are the same name under Latin gender agreement and the standard
     /// orthographic variants. False for anything else, including names that differ in word count,
     /// in genus, or by a genuine change of epithet.
@@ -67,10 +67,11 @@ internal static class LatinNameVariant {
             .Where(p => p.Length > 0 && !p.EndsWith('.') && !p.Equals("x", StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
-    // Folds an epithet to the part that carries its meaning: the gendered ending comes off, and the
-    // spellings that vary without changing the word are normalised. Order matters, so the digraphs
-    // are folded before the endings.
-    private static string Stem(string epithet) {
+    /// Folds an epithet to the part that carries its meaning: the gendered ending comes off, and the
+    /// spellings that vary without changing the word are normalised ("melanochaita" and "melanochaitus",
+    /// "macklotii" and "mackloti" give one stem). Order matters, so the digraphs are folded before the
+    /// endings.
+    public static string Stem(string epithet) {
         var s = epithet.ToLowerInvariant();
         s = new string(s.Where(char.IsLetter).ToArray());   // drops hyphens: montis-everesti / montiseveresti
 

@@ -5,6 +5,7 @@ using System.Net;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 using BeastieBot3.Taxonomy;
+using BeastieBot3.Shared.SiteData;
 
 // Per-taxon Catalogue of Life name resolution shared by the Wikipedia list pipeline: given an IUCN
 // name it answers two questions the Red List lists care about:

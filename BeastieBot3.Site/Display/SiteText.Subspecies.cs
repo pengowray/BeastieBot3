@@ -18,6 +18,12 @@ public static partial class SiteText {
     public const string SubspeciesListWikidataOnly =
         "A name listed only by Wikidata may be an older name that current classifications treat as a synonym.";
 
+    /// After a source whose record spells the name another way: " (as " + the record's name + ")".
+    public const string SourceNameBefore = " (as ";
+    public const string SourceNameAfter = ")";
+    /// After the id of one of a source's records that spells the name another way: " as " + its name.
+    public const string RecordNameBefore = " as ";
+
     public static string ShowMoreSubspecies(int n, bool subspecies, bool varieties) =>
         $"Show all {HeadingSubspeciesList(subspecies, varieties).ToLowerInvariant()} ({SiteFormat.Number(n)} more)";
 }

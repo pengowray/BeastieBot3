@@ -1,7 +1,8 @@
 @model SubspeciesList
 @* The species' subspecies and varieties from the IUCN Red List, the Catalogue of Life and Wikidata, one
    row per name (SubspeciesRows.Build). Each source links to its record; a source with two records of
-   the name links each by its id. Rows after the first SpeciesModel.ShortListLength are "more-item",
+   the name links each by its id. A record that spells the name another way gives its spelling
+   ("(as Panthera leo melanochaitus)"). Rows after the first SpeciesModel.ShortListLength are "more-item",
    hidden until the box below the table is ticked. *@
 @{
     var subspecies = Model.HasSubspecies;
@@ -28,8 +29,9 @@
                             <td>@for (var j = 0; j < row.Sources.Count; j++) {
                                     var source = row.Sources[j];
                                     if (j > 0) {<text>, </text>}
-                                    if (source.Records.Count == 1) {<a href="@source.Records[0].Url">@source.Label</a>}
-                                    else {@source.Label<text> (</text>for (var k = 0; k < source.Records.Count; k++) {if (k > 0) {<text>, </text>}<a href="@source.Records[k].Url">@source.Records[k].Id</a>}<text>)</text>}
+                                    @* One line per branch: a line break here would put a space before the commas. *@
+                                    if (source.Records.Count == 1) {<a href="@source.Records[0].Url">@source.Label</a>if (source.Records[0].OtherName is { } otherName) {@SiteText.SourceNameBefore<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToSynonymHtml(otherName))</span>@SiteText.SourceNameAfter}}
+                                    else {@source.Label<text> (</text>for (var k = 0; k < source.Records.Count; k++) {if (k > 0) {<text>, </text>}<a href="@source.Records[k].Url">@source.Records[k].Id</a>if (source.Records[k].OtherName is { } otherName) {@SiteText.RecordNameBefore<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToSynonymHtml(otherName))</span>}}<text>)</text>}
                                     if (source.OtherAuthority is not null) {@SiteText.SourceAuthorityBefore<span class="authority">@source.OtherAuthority</span>@SiteText.SourceAuthorityAfter}
                                 }</td>
                         </tr>

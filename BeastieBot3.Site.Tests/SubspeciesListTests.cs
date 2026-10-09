@@ -64,6 +64,26 @@ public sealed class SubspeciesRowsTests {
     }
 
     [Fact]
+    public void MergesSpellingsWithAnotherLatinEndingOrSpeciesPart_AndGivesEachRecordsSpelling() {
+        var list = SubspeciesRows.Build([
+            Row("iucn", "1", "Acerodon mackloti ssp. floresii"),
+            Row("col", "C1", "Acerodon macklotii floresii"),
+            Row("wikidata", "Q1", "Panthera leo melanochaita"),
+            Row("wikidata", "Q2", "Panthera leo melanochaitus"),
+            // Another word, not another spelling: its own row.
+            Row("wikidata", "Q3", "Acerodon mackloti flavus"),
+        ], "ANIMALIA")!;
+
+        Assert.Equal(["Acerodon mackloti floresii", "Acerodon mackloti flavus", "Panthera leo melanochaita"], list.Rows.Select(r => r.Name));
+        var floresii = list.Rows[0];
+        Assert.Equal(["iucn", "col"], floresii.Sources.Select(s => s.Source));
+        Assert.Null(floresii.Sources[0].Records.Single().OtherName);
+        Assert.Equal("Acerodon macklotii floresii", floresii.Sources[1].Records.Single().OtherName);
+        var melanochaita = list.Rows[2].Sources.Single();
+        Assert.Equal([null, "Panthera leo melanochaitus"], melanochaita.Records.Select(r => r.OtherName));
+    }
+
+    [Fact]
     public void ListsEachRecordOfASourceWithTwoRecordsOfTheName() {
         var row = SubspeciesRows.Build([
             Row("wikidata", "Q56289810", "Panthera leo leo"),
