@@ -20,7 +20,7 @@ on the taxon's Wikidata item up to date. Instructions for deploying it to an Ora
 | IUCN citations | `BeastieBot3/Iucn/Citations/` | Code the site build and the Wikidata dry run share: `CreditNameSplitter` (splits a credit's `full` string into names), `IucnAuthorNameParser` (reads one name as a person, an organisation, or a name kept as IUCN wrote it), `AssessorNamePool` (repairs names with a letter lost to an encoding error), `AssessorGivenNames` (finds a person's full given names in the assessor credit's `value[]` list; see [Full given names](#full-given-names)) and `IucnCitationText` (removes IUCN's "Accessed on" sentence and reads the DOI in IUCN's citation text). |
 | DOI lookup | `BeastieBot3/Iucn/Doi/` | `iucn resolve-dois` looks for DOIs that IUCN's citation text, GBIF and Wikidata do not give, in Crossref's list of IUCN DOIs and at doi.org, and saves them in the DOI cache (`Datastore:IUCN_doi_cache_sqlite`). See [Missing DOIs](#missing-dois-iucn-resolve-dois). |
 | Site build | `BeastieBot3/SiteBuild/` | `site build-db` builds the site database; `site check-citations` writes a read-only report. Citation code: `IucnCitationPartsParser` (title annotations, and putting the parts together), `IucnDoiSelector` (choosing a DOI), `IucnTaxaHeaders` (each taxon's list of assessments). `SiteApiTaxaReader` reads the taxa that are only in the API cache. `SiteBuildRules.ClassifySpratName` matches SPRAT profiles to taxa, both whole-taxon profiles and population profiles. `SiteWikidataItems` chooses each assessment's Wikidata item. `SiteBuildRules.DescribesAnotherKingdom` decides whether a Wikidata item matched to a taxon by name is left out of `taxon.wikidata_qid`: it is left out when the item's English description names a group in another kingdom. `SiteLinkReaders` reads the taxon items' IUCN conservation status (P141) statements, and `P141JsonReferences` reads the parts of their references that the Wikidata cache's index does not record: later stated in items and reference URLs (see [IUCN conservation status on Wikidata](#iucn-conservation-status-on-wikidata)). |
-| Site | `BeastieBot3.Site/` (net10.0, Razor Pages) | Opens the site database read-only and reads no other data. Taxon and group pages are reference pages; the wikitext tools are on their own pages (see [Taxon pages, wikitext pages and the Tools menu](#taxon-pages-wikitext-pages-and-the-tools-menu)). `Pages/WikitextOptions.cs` reads and writes the citation options; `Pages/WikidataCite.cs` builds the `{{cite Q}}` part and the IUCN conservation status part of the wikitext section, which the partials `Pages/Shared/_WikidataName.cshtml`, `_WikidataItemChanges.cshtml`, `_WikidataMainSubject.cshtml`, `_WikidataStatus.cshtml` and `_WikidataStatusPlan.cshtml` show; `wwwroot/site.js` updates the wikitext when an option changes (see [Citation options](#citation-options)). `wwwroot/theme.js` and the tokens at the top of `wwwroot/site.css` make the light and dark themes (see [Theme](#theme)). Tests in `BeastieBot3.Site.Tests/`, and a Playwright check of the wikitext updates in `BeastieBot3.Site.Tests/browser/live-update.cjs`. |
+| Site | `BeastieBot3.Site/` (net10.0, Razor Pages) | Opens the site database read-only and reads no other data. Taxon and group pages are reference pages; the wikitext tools are on their own pages (see [Taxon pages, citations pages and the header's tools](#taxon-pages-citations-pages-and-the-headers-tools)). `Pages/WikitextOptions.cs` reads and writes the citation options; `Pages/WikidataCite.cs` builds the `{{cite Q}}` part and the IUCN conservation status part of the wikitext section, which the partials `Pages/Shared/_WikidataName.cshtml`, `_WikidataItemChanges.cshtml`, `_WikidataMainSubject.cshtml`, `_WikidataStatus.cshtml` and `_WikidataStatusPlan.cshtml` show; `wwwroot/site.js` updates the wikitext when an option changes (see [Citation options](#citation-options)). `wwwroot/theme.js` and the tokens at the top of `wwwroot/site.css` make the light and dark themes (see [Theme](#theme)). Tests in `BeastieBot3.Site.Tests/`, and a Playwright check of the wikitext updates in `BeastieBot3.Site.Tests/browser/live-update.cjs`. |
 | Deployment | `deploy/oracle/` | Server setup, app and database deploys, rollback, status. |
 
 `BeastieBot3.Site` references only `BeastieBot3.Shared`, never the `BeastieBot3` project, because
@@ -1205,13 +1205,15 @@ name-list-style to CS1, so `apa` cannot be combined with `amp`.
 - one author name string (P2093) for each author, as IUCN's citation prints the name (never the
   full given names), with a series ordinal (P1545) qualifier. A second author with the same
   printed name is written with `!P2093`, so that its ordinal goes on a new statement and not on
-  the first author's. When `AssessorGivenNames` found a person's full given names, the statement
-  also has author last names (P9688) and author given names (P9687) qualifiers ("Sayer",
-  "Catherine"; joined initials are spaced, "John C. Z." for IUCN's "John C.Z."). `{{cite Q}}`
-  passes these to the citation as `|last=` and `|first=`, so it shows the full given names, or the
-  initials with `|name-list-style=apa`, which makes an initial of each space-separated word ("J. C.
-  Z."; unspaced "John C.Z." would give "J. C."). A name with a suffix ("Lowry, P.P., II") gets neither qualifier, because
-  `{{cite Q}}` would leave the suffix out;
+  the first author's. A person's statement also has author last names (P9688) and author given
+  names (P9687) qualifiers: the full given names when `AssessorGivenNames` found them ("Sayer",
+  "Catherine"), else the initials as printed ("Lajus", "D."), with joined initials spaced ("John
+  C. Z." for IUCN's "John C.Z."). `{{cite Q}}` passes these to the citation as `|last=` and
+  `|first=`; since October 2026 it puts a page in a tracking category for an author without them
+  (and its sandbox adds an error message). It shows the given names as they are, or initials with
+  `|name-list-style=apa`, which makes an initial of each space-separated word ("J. C. Z.";
+  unspaced "John C.Z." would give "J. C."). A name with a suffix ("Lowry, P.P., II") gets neither
+  qualifier, because `{{cite Q}}` would leave the suffix out;
 - author (P50) instead of an author name string for an organisation listed in `IucnAuthorItems`
   (`BeastieBot3.Shared/Wikitext/IucnAuthorItems.cs`: BirdLife International, BGCI, UNEP-WCMC,
   ICMBio, NatureServe and a few others, checked on Wikidata on 2026-10-08), with the series
@@ -1650,39 +1652,51 @@ template's "Rank: name" lines (Latin ranks in English, as for Wikipedia's templa
 out comments, `<noinclude>` parts and the templates' "summary" blocks. A taxon gets a Wikispecies
 column only when its page's last taxonavigation line names the page itself.
 
-### Taxon pages, wikitext pages and the Tools menu
+### Taxon pages, citations pages and the header's tools
 
 A taxon page (`/species/{id}`, `Pages/Species.cshtml`, `SpeciesModel`) is a reference page: status,
 assessment tables, IUCN's subspecies and subpopulations, Green Status, other statuses, names,
 classifications, links, and a "Tools" section at the bottom. The status section has IUCN's own
-citation text and the credits of the assessment it shows. Each taxon has two tool pages, both for
-one of its assessments (`?assessment=`, else the one the taxon page shows first), each with the same
-assessment tables plus a column that picks the assessment:
+citation text and the credits of the assessment it shows. Under the taxon's name, a row of tabs
+(`_PageTabs.cshtml`, `PageTabs.ForTaxon`) links "Taxon page" and "Citations"; every page with the
+tabs puts them in the same place, directly under the name and common name. The Citations tab is
+two pages, both for one of the taxon's assessments (`?assessment=`, else the one the taxon page
+shows first), each with the same assessment tables plus a column that picks the assessment. Both
+start with `_CitationsHeader.cshtml` (name and tabs) and `_CiteForChooser.cshtml`: the heading
+"Cite for Wikidata" or "Cite for Wikipedia" and a row of choices, Wikidata first, then the
+Wikipedias (`AssessmentToolModel.BuildChooser`). The links to the Wikipedias keep the citation
+options (`data-options-link`); the Wikidata link and the links from the Wikidata page keep only the
+assessment.
 
-- The wikitext page (Wikipedia; `/species/{id}/wikitext`, `Pages/SpeciesWikitext.cshtml`,
+- The Wikipedia choice (`/species/{id}/wikitext`, `Pages/SpeciesWikitext.cshtml`,
   `SpeciesWikitextModel`): `{{cite iucn}}`, `{{IUCN status}}`, the taxobox status lines (with the
   taxobox status check under them), the Green Status citation and the citation options. The option
-  "Citation template" (`cite=iucn|q`) chooses `{{cite Q}}`: with it, and when the assessment has a
-  Wikidata item, the `{{cite Q}}` box is shown below the `{{cite iucn}}` box and status_ref uses it;
-  without an item, the option says so and links the Wikidata page's commands to create one. Column
+  "Citation template" (`_StatusRefTemplate.cshtml`; `WikitextOptions.ReadTemplate`) has three
+  choices: `cite=iucn`; `{{cite Q}}` when the assessment has a Wikidata item (the default, no
+  `cite=`; `cite=q` means the same), which adds the `{{cite Q}}` box below the `{{cite iucn}}` box
+  and puts `{{cite Q}}` in status_ref; and `cite=new`, the same plus the Wikidata item section
+  (`_WikidataItemSection.cshtml`) in a live region below the options, with the commands that create
+  the item or add what it lacks. When the assessment has no item, the option says so and links the
+  third choice (the link is hidden by CSS while that choice is ticked). The group page's species
+  tables and lists keep `{{cite iucn}}` as their default (`IucnReference.FromQuery`). Column
   "Wikitext", links "Show wikitext".
-- The Wikidata references page (`/species/{id}/wikidata`, `Pages/SpeciesWikidata.cshtml`,
-  `SpeciesWikidataModel`): the assessment's Wikidata item, the QuickStatements commands that create
-  it or add what it lacks, and for the latest global assessment the taxon item's IUCN status (P141)
-  with its commands (`_WikidataStatus.cshtml`). No options and no form: nothing on it depends on the
-  date, so its output cache varies only by `assessment` (`SiteCachePolicies.SpeciesWikidata`).
-  Column "Wikidata", links "Show Wikidata item".
+- The Wikidata choice (`/species/{id}/wikidata`, `Pages/SpeciesWikidata.cshtml`,
+  `SpeciesWikidataModel`): the assessment's Wikidata item section, and for the latest global
+  assessment the taxon item's IUCN status (P141) with its commands (`_WikidataStatus.cshtml`). No
+  options and no form: nothing on it depends on the date, so its output cache varies only by
+  `assessment` (`SiteCachePolicies.SpeciesWikidata`). Column "Wikidata", links "Show Wikidata item".
 
-`TaxonPageModel` reads the taxon and its assessment tables; `AssessmentToolModel` (both tool pages)
-picks the assessment, builds the Wikidata part (`WikidataCite.Build`, `BuildStatus`) and names the
-tables' column and links. The tables are one partial (`_AssessmentTables.cshtml`, with
-`_CombinedHistory.cshtml`) that adds the column when its model is an `AssessmentToolModel`. Each tool
-page's header links the taxon page and the other tool page for the same assessment.
+`TaxonPageModel` reads the taxon and its assessment tables; `AssessmentToolModel` (both citations
+pages) picks the assessment, builds the Wikidata part (`WikidataCite.Build`, `BuildStatus`) and the
+chooser, and names the tables' column and links. The tables are one partial
+(`_AssessmentTables.cshtml`, with `_CombinedHistory.cshtml`) that adds the column when its model is
+an `AssessmentToolModel`.
 
 A group page (`/taxa/{rank}/{name}`, `GroupModel`) and its list page
-(`/taxa/{rank}/{name}/list`, `Pages/GroupList.cshtml`, `GroupListModel`) split the same way; both
-derive from `GroupPageModel`, which finds the group (or lists the groups with that rank and name,
-linking each to the same kind of page).
+(`/taxa/{rank}/{name}/list`, `Pages/GroupList.cshtml`, `GroupListModel`) split the same way, with
+the tabs "Group page" and "Species list" (`PageTabs.ForGroup`); both derive from `GroupPageModel`,
+which finds the group (or lists the groups with that rank and name, linking each to the same kind of
+page).
 
 - An address of a taxon page with a wikitext option (`SiteCachePolicies.SpeciesQueryKeys`:
   `assessment`, `authors`, `fullnames`, `access`, `opts`, `ref`, `refname`, `amp`, `cite`,
@@ -1692,10 +1706,12 @@ linking each to the same kind of page).
   page instead of the redirect; only 200 answers are stored.
 - A search for an assessment id that is not the taxon's first assessment goes straight to the
   wikitext page (`SearchModel.SpeciesUrl`).
-- The tools share a row of tabs (`Pages/Shared/_ToolTabs.cshtml`, addresses in `Web/ToolPaths.cs`),
-  shown on every tool page with its own tab marked: "Cite an assessment" (`/cite`; the taxon's
-  wikitext and Wikidata pages), "Update IUCN statuses" (`/update-statuses`) and "Make a species list"
-  (`/species-list-maker`; the group list pages). `/tools` is the tabs and one line per tool.
+- The header (`_Layout.cshtml`) has two rows: the site name, the search box and the theme menu; then
+  the tool links and About. The tool links (`nav.tool-nav`, addresses in `Web/ToolPaths.cs`) are on
+  every page; a page marks its own tool with `ViewData["ToolTab"]`: "Cite an assessment" (`/cite`;
+  the citations pages), "Update IUCN statuses" (`/update-statuses`) and "Make a species list"
+  (`/species-list-maker`; the group list pages). `/tools` lists the tools, one line each; no page
+  links it.
   - `/cite` (`Pages/Cite.cshtml`, `CiteModel`): a common or scientific name or an IUCN ID, and "Cite
     for" Wikipedia (with the Wikipedia's language, `wiki=`) or Wikidata (`for=wikidata`; `/cite#wikidata`
     ticks it through `site.js`, `data-hash-choice`). An IUCN ID (`IdQuery`) or one exact name match
@@ -1713,10 +1729,11 @@ linking each to the same kind of page).
   - `/cite` and `/species-list-maker` with a query count as searches for the rate limits
     (`SiteRateLimits.IsSearch`), are kept out of `robots.txt`, and are cached by query
     (`SiteCachePolicies.Cite`).
-- The header has a "Tools" menu (`<details class="nav-menu">` in `_Layout.cshtml`; `site.js` closes
-  it on Escape and on a click outside it): the tools of the page shown first (`ViewData["PageTools"]`,
-  set by the taxon and group pages), then the three tools. Strings in `Display/SiteText.Tools.cs` (the menu,
-  tabs and tool pages, and the taxon's wikitext and Wikidata pages) and `GroupText.Tools.cs`.
+- The theme menu is a `<details class="nav-menu theme-menu">` with an icon (sun, moon, or a
+  half-filled circle for System; `site.css` shows the one for `data-theme` on `<html>`) and three
+  radio buttons. `theme.js` applies and saves the choice and writes it into the button's hidden name
+  ("Theme: Dark"); `site.js` closes the menu on Escape and on a click outside it. Strings in
+  `Display/SiteText.Tools.cs` (tool links, tabs, citations pages) and `GroupText.Tools.cs`.
 
 ### Wikipedias other than English
 

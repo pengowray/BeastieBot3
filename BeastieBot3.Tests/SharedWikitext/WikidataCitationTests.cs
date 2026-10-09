@@ -80,8 +80,9 @@ public class WikidataCitationTests {
             L("LAST", "P953", "\"https://www.iucnredlist.org/species/196579964/196580951\""),
             L("LAST", "P577", "+2023-00-00T00:00:00Z/9"),
             L("LAST", "P356", "\"10.2305/IUCN.UK.2023-1.RLTS.T196579964A196580951.EN\""),
-            L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"1\""),
-            L("LAST", "P2093", "\"Lajus, D.\"", "P1545", "\"2\""),
+            L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"1\"", "P9688", "\"Sayer\"", "P9687", "\"C.\""),
+            // Without full given names, the initials as printed.
+            L("LAST", "P2093", "\"Lajus, D.\"", "P1545", "\"2\"", "P9688", "\"Lajus\"", "P9687", "\"D.\""),
         }, commands);
     }
 
@@ -140,9 +141,9 @@ public class WikidataCitationTests {
         var parts = Salmon with { Authors = [Person("Alemu", "S."), Person("Alemu", "S."), Person("Abebe", "T.")] };
         var authors = WikidataCitation.CreateItemCommands(parts, null, Model).Where(c => c.Contains("P2093", StringComparison.Ordinal)).ToList();
         Assert.Equal(new[] {
-            L("LAST", "P2093", "\"Alemu, S.\"", "P1545", "\"1\""),
-            L("LAST", "!P2093", "\"Alemu, S.\"", "P1545", "\"2\""),
-            L("LAST", "P2093", "\"Abebe, T.\"", "P1545", "\"3\""),
+            L("LAST", "P2093", "\"Alemu, S.\"", "P1545", "\"1\"", "P9688", "\"Alemu\"", "P9687", "\"S.\""),
+            L("LAST", "!P2093", "\"Alemu, S.\"", "P1545", "\"2\"", "P9688", "\"Alemu\"", "P9687", "\"S.\""),
+            L("LAST", "P2093", "\"Abebe, T.\"", "P1545", "\"3\"", "P9688", "\"Abebe\"", "P9687", "\"T.\""),
         }, authors);
     }
 
@@ -162,7 +163,8 @@ public class WikidataCitationTests {
         var authors = WikidataCitation.CreateItemCommands(parts, null, Model).Where(c => c.Contains("P2093", StringComparison.Ordinal)).ToList();
         Assert.Equal(new[] {
             L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"1\"", "P9688", "\"Sayer\"", "P9687", "\"Catherine\""),
-            L("LAST", "P2093", "\"Lajus, D.\"", "P1545", "\"2\""),
+            // Without full given names, the initials as printed.
+            L("LAST", "P2093", "\"Lajus, D.\"", "P1545", "\"2\"", "P9688", "\"Lajus\"", "P9687", "\"D.\""),
             // Spaced, so that |name-list-style=apa gives "J. C. Z." and not "J. C.".
             L("LAST", "P2093", "\"Woinarski, J.C.Z.\"", "P1545", "\"3\"", "P9688", "\"Woinarski\"", "P9687", "\"John C. Z.\""),
             // {{cite Q}} has no place for the suffix, so the name string is left to carry it.
@@ -180,7 +182,7 @@ public class WikidataCitationTests {
             .Where(c => c.Contains("P2093", StringComparison.Ordinal) || c.Contains("P50", StringComparison.Ordinal)).ToList();
         Assert.Equal(new[] {
             L("LAST", "P50", "Q210108", "P1545", "\"1\"", "P1932", "\"BirdLife International\""),
-            L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"2\""),
+            L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"2\"", "P9688", "\"Sayer\"", "P9687", "\"C.\""),
             L("LAST", "!P50", "Q210108", "P1545", "\"3\"", "P1932", "\"BirdLife International\""),
         }, authors);
     }
@@ -231,8 +233,8 @@ public class WikidataCitationTests {
         Assert.Equal(new[] {
             L("Q56502866", "P921", "Q188879"),
             L("Q56502866", "P953", "\"https://www.iucnredlist.org/species/196579964/196580951\""),
-            L("Q56502866", "P2093", "\"Sayer, C.\"", "P1545", "\"1\""),
-            L("Q56502866", "P2093", "\"Lajus, D.\"", "P1545", "\"2\""),
+            L("Q56502866", "P2093", "\"Sayer, C.\"", "P1545", "\"1\"", "P9688", "\"Sayer\"", "P9687", "\"C.\""),
+            L("Q56502866", "P2093", "\"Lajus, D.\"", "P1545", "\"2\"", "P9688", "\"Lajus\"", "P9687", "\"D.\""),
         }, commands);
     }
 

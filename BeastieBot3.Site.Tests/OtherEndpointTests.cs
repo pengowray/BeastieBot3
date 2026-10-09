@@ -119,8 +119,8 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("Pengo Wray's Species Check is an unofficial website for looking up IUCN Red List assessments and citing them on English Wikipedia.", text);
         Assert.Contains("contact User talk:Example on English Wikipedia. Include the address of the page.", text);
         Assert.Contains("its earlier global assessments, and its latest assessment in each region", text);
-        Assert.Contains("These pages show the taxon's earlier assessments, and their wikitext pages give wikitext for each.", text);
-        Assert.Contains("Each taxon also has two tool pages, linked from the Tools menu at the top of its page and the Tools section at the bottom.", text);
+        Assert.Contains("These pages show the taxon's earlier assessments, and their Citations tabs give wikitext for each.", text);
+        Assert.Contains("Each taxon also has a Citations tab, beside the Taxon page tab under its name, and linked from the Tools section at the bottom of the taxon page.", text);
         Assert.Contains("Version 2026-1. Assessment details downloaded from the IUCN Red List API between 18 August and 1 September 2026.", text);
         Assert.Contains("COL26.7 XR", text);
         Assert.Contains("1 October 2026", text);

@@ -134,7 +134,7 @@ public sealed class WikidataSectionTests(SiteFactory factory) : IClassFixture<Si
     [Fact]
     public async Task AboutPageSaysWhatThePartDoes() {
         var text = Html.Text(await _client.GetStringAsync("/about"));
-        Assert.Contains("the Wikidata references page has the assessment's Wikidata item, or QuickStatements commands to create that item", text);
+        Assert.Contains("the Wikidata choice has the assessment's Wikidata item, or QuickStatements commands to create that item", text);
         Assert.Contains("Citing through Wikidata.", text);
         Assert.Contains("QuickStatements makes the edits with your own Wikidata account. This site never edits Wikidata.", text);
         Assert.Contains("don't use it in an article whose citations mostly give authors as “Last, First” or in Vancouver style.", text);

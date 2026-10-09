@@ -33,15 +33,17 @@ namespace BeastieBot3.Shared.Wikitext;
 //                        constraint, and two items with one DOI would be a duplicate to merge.
 //   P2093 author name    each author as IUCN's citation prints the name ("Sayer, C.", "BirdLife
 //                        International"), never the full given names, with a P1545 series ordinal
-//                        qualifier ("1", "2" ...). Names before an "et al." only. A person whose full
-//                        given names are known (CitationAuthor.GivenNames) also gets P9688 author last
-//                        names ("Sayer") and P9687 author given names ("Catherine", "John C. Z.",
-//                        with a space between joined initials). {{cite Q}} then passes |last= and
-//                        |first= to the citation, showing the full given names by default and
-//                        "Sayer, C." with |name-list-style=apa, which makes an initial of each
-//                        space-separated word ("J. C. Z."; without the space, "J. C."). A person whose initials
-//                        end with a suffix ("Lowry, P.P., II") gets neither, because {{cite Q}} has no
-//                        place for the suffix and would leave it out.
+//                        qualifier ("1", "2" ...). Names before an "et al." only. A person also gets
+//                        P9688 author last names ("Sayer") and P9687 author given names: the full
+//                        given names when they are known (CitationAuthor.GivenNames: "Catherine",
+//                        "John C. Z."), else the initials as printed ("C. N."), with a space between
+//                        joined initials. {{cite Q}} passes them as |last= and |first=; an author
+//                        without them goes in |author= and puts the page in a tracking category
+//                        (Module:Cite Q, October 2026). With |name-list-style=apa, {{cite Q}} makes
+//                        an initial of each space-separated word of the given names ("J. C. Z.";
+//                        without the space, "J. C."). A person whose initials end with a suffix
+//                        ("Lowry, P.P., II") gets neither qualifier, because {{cite Q}} has no place
+//                        for the suffix and would leave it out.
 //   P50 author           instead of P2093 for an organisation listed in IucnAuthorItems ("BirdLife
 //                        International"), with the P1545 ordinal and P1932 "object named as" holding
 //                        the name as printed, which {{cite Q}} shows.
@@ -466,14 +468,14 @@ public static partial class WikidataCitation {
         }
     }
 
-    // The last name and full given names of a person whose given names are known; null for anyone
-    // else, and for a name with a suffix (see the file comment).
+    // The last name and given names of a person: the full given names when they are known, else the
+    // initials. Null for anyone else, and for a name with a suffix (see the file comment).
     private static (string Last, string Given)? NameParts(CitationAuthor author) {
         if (author.Kind != CitationAuthorKind.Person || NameSuffix().IsMatch(author.Initials ?? string.Empty)) {
             return null;
         }
         var last = CleanValue(EtAlInName().Replace(author.Last ?? string.Empty, string.Empty));
-        var given = JoinedInitials().Replace(CleanValue(author.GivenNames), ". ");
+        var given = JoinedInitials().Replace(CleanValue(string.IsNullOrWhiteSpace(author.GivenNames) ? author.Initials : author.GivenNames), ". ");
         return last.Length > 0 && given.Length > 0 ? (last, given) : null;
     }
 
