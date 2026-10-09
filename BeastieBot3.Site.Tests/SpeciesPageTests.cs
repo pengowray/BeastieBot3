@@ -49,7 +49,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
         var tool = await Tool();
         Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}\">Taxon page for <span class=\"sci-name\"><i>Ursus maritimus</i></span></a>", tool);
-        Assert.Contains("<title>Wikitext and citations for Ursus maritimus | Beastie Bot Species Status</title>", tool);
+        Assert.Contains("<title>Wikitext and citations for Ursus maritimus | Species Check</title>", tool);
         Assert.Contains($"<link rel=\"canonical\" href=\"http://localhost/species/{FixtureDb.PolarBear}/wikitext\">", tool);
         Assert.Contains(">Show wikitext</a>", tool);
     }
@@ -89,7 +89,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("Data from Red List version 2026-1", text);
         Assert.Contains("<a href=\"https://www.iucnredlist.org/species/22823/14871490\">Read the full assessment on the IUCN Red List website</a>", html);
         Assert.Contains($"<link rel=\"canonical\" href=\"http://localhost/species/{FixtureDb.PolarBear}\">", html);
-        Assert.Contains("<title>Ursus maritimus (Polar bear) | Beastie Bot Species Status</title>", html);
+        Assert.Contains("<title>Ursus maritimus (Polar bear) | Species Check</title>", html);
     }
 
     [Fact]
@@ -558,7 +558,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var text = Html.Text(await response.Content.ReadAsStringAsync());
         Assert.Contains("No taxon with IUCN id 999999999", text);
-        Assert.Contains("This id is not in IUCN Red List version 2026-1, and this site has no earlier assessments with this id. Check the id, or search for the taxon by name.", text);
+        Assert.Contains("This id is not in IUCN Red List version 2026-1, and Species Check has no earlier assessments with this id. Check the id, or search for the taxon by name.", text);
         Assert.Contains("Search for a taxon", text);
     }
 

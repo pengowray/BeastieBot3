@@ -937,7 +937,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "public-site",
             Title = "Update the public species site",
-            Description = "Build the database of the public species site (Beastie Bot Species Status) and upload it to the server. `site build-db` reads the IUCN data, the caches and the other databases as they are when it runs, so after a new Red List release, update them first (1 · Inputs). Each input step is the same step as in the Import IUCN data workflow or the Wikipedia reports pipeline. The SPRAT (EPBC) database changes rarely; the Australian threatened-species lists (SPRAT) workflow updates it.",
+            Description = "Build the database of the public species site (Pengo Wray's Species Check) and upload it to the server. `site build-db` reads the IUCN data, the caches and the other databases as they are when it runs, so after a new Red List release, update them first (1 · Inputs). Each input step is the same step as in the Import IUCN data workflow or the Wikipedia reports pipeline. The SPRAT (EPBC) database changes rarely; the Australian threatened-species lists (SPRAT) workflow updates it.",
             Steps = new[] {
                 // ===== 1 · Inputs: the same steps as in the other flows, for their lights =====
                 new FlowStep {

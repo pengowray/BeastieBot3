@@ -16,7 +16,7 @@ public static partial class UpdateText {
     public const string EditOnWikipedia = "Edit on Wikipedia";
 
     public static string ErrorNotEnglishWikipedia(string language) =>
-        $"Not English Wikipedia: the link is to {language}.wikipedia.org. This site loads pages from en.wikipedia.org only.";
+        $"Not English Wikipedia: the link is to {language}.wikipedia.org. Species Check loads pages from en.wikipedia.org only.";
 
     public static string ErrorPageNotFound(string title, long? revisionId) => revisionId is { } r
         ? $"Revision not found: English Wikipedia has no revision {r.ToString(CultureInfo.InvariantCulture)}."
@@ -27,7 +27,7 @@ public static partial class UpdateText {
 
     public const string ErrorLoadingBusy = "Too many pages loaded: this site loads a limited number of pages from Wikipedia each minute, for all visitors together. Try again in a minute, or paste the page's wikitext.";
 
-    public const string ErrorLoadingNotSetUp = "Loading not available: this site is not set up to load pages from Wikipedia. Paste the page's wikitext instead.";
+    public const string ErrorLoadingNotSetUp = "Loading not available: Species Check is not set up to load pages from Wikipedia. Paste the page's wikitext instead.";
 
     public static string ErrorPageNotLoaded(string title) =>
         $"Could not load page: Wikipedia did not answer or returned an error for \"{title}\". Try again in a moment, or paste the page's wikitext.";

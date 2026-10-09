@@ -289,7 +289,7 @@ public sealed class StatusUpdaterAddTests {
         Assert.Equal(StatusOutcome.NotUpdated, missing.Outcome);
         Assert.Contains(missing.Notes, n => n.Kind == StatusNoteKind.EmptyCellAdded);
         Assert.Equal("''[[Panthera tigris]]'' || {{IUCN status|EN}}", result.Findings[1].After);
-        Assert.Equal("IUCN Red List 2026-1: IUCN status column added (3 statuses) (assisted by Beastie Bot Species Status)", EditSummary.For(result, "2026-1"));
+        Assert.Equal("IUCN Red List 2026-1: IUCN status column added (3 statuses) (assisted by Species Check)", EditSummary.For(result, "2026-1"));
     }
 
     [Fact]

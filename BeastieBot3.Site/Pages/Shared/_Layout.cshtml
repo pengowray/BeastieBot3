@@ -2,7 +2,7 @@
 @inject Microsoft.Extensions.Options.IOptions<SiteOptions> SiteOptions
 @{
     var title = ViewData["Title"] as string;
-    var pageTitle = string.IsNullOrEmpty(title) ? SiteText.SiteName : $"{title} | {SiteText.SiteName}";
+    var pageTitle = string.IsNullOrEmpty(title) ? SiteText.SiteName : $"{title} | {SiteText.SiteShortName}";
     var hideHeaderSearch = ViewData["HideHeaderSearch"] is true;
     var canonical = ViewData["Canonical"] as string;
     var version = Db.Snapshot?.IucnRelease;
@@ -45,7 +45,7 @@
     <a class="skip-link" href="#main">@SiteText.SkipToContent</a>
     <header class="site-header">
         <div class="wrap header-row">
-            <a class="site-name" href="/"><img class="site-logo" src="/logo-80.png" width="40" height="40" alt="">@SiteText.SiteName</a>
+            <a class="site-name" href="/"><img class="site-logo" src="/logo-80.png" width="40" height="40" alt=""><span><span class="site-name-owner">@SiteText.SiteNameOwner</span>@SiteText.SiteShortName</span></a>
             @if (!hideHeaderSearch) {
                 <partial name="_SearchForm" model="@(new SearchFormModel(ViewData["Query"] as string, "header"))" />
             }

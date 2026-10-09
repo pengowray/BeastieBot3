@@ -115,8 +115,8 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
     public async Task AboutPage() {
         var html = await _client.GetStringAsync("/about");
         var text = Html.Text(html);
-        Assert.Contains("About Beastie Bot Species Status", text);
-        Assert.Contains("Beastie Bot Species Status is an unofficial website for looking up IUCN Red List assessments and citing them on English Wikipedia.", text);
+        Assert.Contains("About Pengo Wray's Species Check", text);
+        Assert.Contains("Pengo Wray's Species Check is an unofficial website for looking up IUCN Red List assessments and citing them on English Wikipedia.", text);
         Assert.Contains("contact User talk:Example on English Wikipedia. Include the address of the page.", text);
         Assert.Contains("its earlier global assessments, and its latest assessment in each region", text);
         Assert.Contains("These pages show the taxon's earlier assessments, and their wikitext pages give wikitext for each.", text);

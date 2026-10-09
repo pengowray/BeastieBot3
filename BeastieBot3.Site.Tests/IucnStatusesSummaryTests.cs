@@ -123,7 +123,7 @@ public sealed class IucnStatusesSummaryTests {
     public void Edit_summary_says_the_box_changed() {
         var input = List("{{IUCN statuses|lc=0}}\n", Rows);
         var result = IucnStatusesSummary.Apply(input, Result(input), add: false);
-        Assert.Equal("IUCN Red List 2026-1: {{IUCN statuses}} counts updated (assisted by Beastie Bot Species Status)",
+        Assert.Equal("IUCN Red List 2026-1: {{IUCN statuses}} counts updated (assisted by Species Check)",
             EditSummary.For(result, "2026-1"));
     }
 }

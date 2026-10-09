@@ -113,7 +113,7 @@ internal sealed class SpeciesListReport {
             .ThenBy(r => r.Result.Title, StringComparer.Ordinal)
             .ToList();
         doc.Heading(2, $"Pages with statuses to update or check ({statusPages.Count:N0})");
-        doc.Paragraph("Sorted by the number of statuses with a different category, then by the number of other statuses to update, most first. To get a page's updated wikitext, paste the page's wikitext into the update page on Beastie Bot Species Status.");
+        doc.Paragraph("Sorted by the number of statuses with a different category, then by the number of other statuses to update, most first. To get a page's updated wikitext, paste the page's wikitext into the update page on Species Check.");
         doc.Table(["Page", "Different category", "CR(PE) or CR(PEW)", "Same category, new trend", "Same category, older assessment", "Up to date", "Id of another taxon", "Not matched", "Compared with IUCN group"],
             [false, true, true, true, true, true, true, true, false],
             statusPages.Select(row => {

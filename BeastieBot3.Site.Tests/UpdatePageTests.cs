@@ -62,7 +62,7 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
         Assert.Contains("<input type=\"radio\" name=\"show\" id=\"show-changed\" checked=\"checked\"> Changed (1)", html);
         Assert.Contains("id=\"show-left\"> Left as is (0)", html);
         Assert.Contains("id=\"show-all\"> All items (2)", html);
-        Assert.Equal("IUCN Red List 2026-1: Ursus maritimus EN\u2192VU (assisted by Beastie Bot Species Status)",
+        Assert.Equal("IUCN Red List 2026-1: Ursus maritimus EN\u2192VU (assisted by Species Check)",
             Html.Textarea(html, "update-edit-summary"));
     }
 

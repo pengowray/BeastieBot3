@@ -8,14 +8,19 @@ namespace BeastieBot3.Site.Display;
 // noted; every other string is plain text and is HTML-encoded where it is used.
 
 public static partial class SiteText {
-    public const string SiteName = "Beastie Bot Species Status";
+    public const string SiteName = "Pengo Wray's Species Check";
+    /// The short name, for page titles ("Tremarctos ornatus (Spectacled bear) | Species Check") and
+    /// wherever the full name does not fit or would be too much.
+    public const string SiteShortName = "Species Check";
+    /// The part of SiteName before SiteShortName, which the header leaves out on narrow screens.
+    public const string SiteNameOwner = "Pengo Wray's ";
     public const string Description =
         "Unofficial site for looking up the IUCN Red List category of any species and copying wikitext to cite the assessment on Wikipedia.";
 
     // Layout
     public const string SkipToContent = "Skip to main content";
     public const string NavAbout = "About";
-    public const string FooterLine1 = "This site is unofficial and is not affiliated with or endorsed by IUCN.";
+    public const string FooterLine1 = "Species Check is unofficial and is not affiliated with or endorsed by IUCN.";
     public const string SourceCode = "Source code";
 
     // Layout: theme control in the header. theme.js shows it and keeps the choice in the browser;
@@ -60,11 +65,11 @@ public static partial class SiteText {
     /// "P31 is the Wikidata property “instance of”.", with the id linked to Wikidata.
     public static string WikidataTermAfter(bool property, string label) =>
         $" is the Wikidata {(property ? "property" : "item")} “{label}”.";
-    public static string WikidataPropertyNotUsed(string pid) => $"This site does not use Wikidata property {pid}.";
+    public static string WikidataPropertyNotUsed(string pid) => $"Species Check does not use Wikidata property {pid}.";
     public static string WikidataItemNotFound(string qid) =>
-        $"This site has no taxon or assessment with Wikidata item {qid}.";
+        $"Species Check has no taxon or assessment with Wikidata item {qid}.";
     public static string AssessmentIdNotFound(long assessmentId) =>
-        $"This site has no assessment with IUCN assessment ID {assessmentId.ToString(CultureInfo.InvariantCulture)}.";
+        $"Species Check has no assessment with IUCN assessment ID {assessmentId.ToString(CultureInfo.InvariantCulture)}.";
     public static string NoResults(string query) =>
         $"No taxa found for “{query}”. Check the spelling, or search for the scientific name. If the spelling is right, the taxon may not be on the IUCN Red List.";
     /// Before the links to searches with a misspelled word corrected, when a search found nothing.
@@ -154,9 +159,9 @@ public static partial class SiteText {
     public const string NotFoundLine = "Check the address, or search for a taxon.";
     public static string TaxonNotFoundHeading(long id) => $"No taxon with IUCN id {id}";
     public static string TaxonNotFoundLine(string version) =>
-        $"This id is not in IUCN Red List version {version}, and this site has no earlier assessments with this id. Check the id, or search for the taxon by name.";
+        $"This id is not in IUCN Red List version {version}, and Species Check has no earlier assessments with this id. Check the id, or search for the taxon by name.";
     public const string TaxonNotFoundLineNoVersion =
-        "This site has no assessments with this id. Check the id, or search for the taxon by name.";
+        "Species Check has no assessments with this id. Check the id, or search for the taxon by name.";
     public const string TooManyHeading = "Too many requests";
     public const string TooManyLine = "Try again in a minute.";
     /// The wait before the limit lets this address in again, from the Retry-After header.

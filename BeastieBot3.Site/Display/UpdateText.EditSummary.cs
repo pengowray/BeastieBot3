@@ -8,7 +8,7 @@ namespace BeastieBot3.Site.Display;
 
 public static partial class UpdateText {
     /// "IUCN Red List 2026-1: Panthera tigris VU→EN, Ursus maritimus EN→VU; 3 other IUCN statuses updated
-    /// (ids, years, references or trends); 2 IUCN citations updated (assisted by Beastie Bot Species Status)".
+    /// (ids, years, references or trends); 2 IUCN citations updated (assisted by Species Check)".
     /// With more changes than fit in EditSummary.MaxListLength: "42 IUCN statuses changed (12 to EN,
     /// 20 to VU, 10 to LC)". Null when nothing changed. addedSpeciesOnly, removedSpeciesOnly: the taxa
     /// added or taken out are all species ("2 species added"), else "2 taxa added".

@@ -1,4 +1,4 @@
-// Beastie Bot Species Status: copy buttons for the wikitext boxes, wikitext that updates as the
+// Pengo Wray's Species Check: copy buttons for the wikitext boxes, wikitext that updates as the
 // citation options change, and name suggestions for the search boxes. The pages work without this
 // file; it only adds these conveniences.
 (function () {

@@ -115,9 +115,9 @@ internal static partial class JapanRedList {
     public const string Citation =
         "Source: Red List 2020 (環境省レッドリスト2020) and 5th Red List (環境省第５次レッドリスト), Ministry of the Environment, Japan. "
         + "The lists are used under the Public Data License (Version 1.0). "
-        + "Beastie Bot Species Status edited them: it converted the categories to letter codes and matched the names to species on this site. "
+        + "Pengo Wray's Species Check edited them: it converted the categories to letter codes and matched the names to species on this site. "
         + "出典：「環境省レッドリスト2020」（環境省）（" + PdfUrl + "）及び「環境省第５次レッドリスト」（環境省）（https://ikilog.biodic.go.jp/）"
-        + "を加工してBeastie Bot Species Statusが作成";
+        + "を加工してPengo Wray's Species Checkが作成";
 
     /// Reads the nine files in <paramref name="folder"/>. Throws InvalidDataException when a file is
     /// missing, because the import replaces every Japanese row, or when a file has no rows.

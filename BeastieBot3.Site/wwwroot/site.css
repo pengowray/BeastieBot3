@@ -1,4 +1,4 @@
-/* Beastie Bot Species Status. No external fonts or frameworks. */
+/* Pengo Wray's Species Check. No external fonts or frameworks. */
 
 :root {
     --bg: #ffffff;
@@ -349,6 +349,11 @@ h3 {
     .site-name {
         grid-row: 1;
         grid-column: 1;
+    }
+
+    /* The short name only, so the name, Tools and About fit on one line. */
+    .site-name-owner {
+        display: none;
     }
 
     .site-nav {

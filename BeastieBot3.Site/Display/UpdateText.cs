@@ -39,7 +39,7 @@ public static partial class UpdateText {
 
     public const string InputLabel = "Wikitext of an article or list, or its English Wikipedia address";
     public const string Submit = "Update statuses";
-    public const string NotSaved = "This site does not save your text or edit Wikipedia. Copy the updated wikitext back into the article yourself.";
+    public const string NotSaved = "Species Check does not save your text or edit Wikipedia. Copy the updated wikitext back into the article yourself.";
 
     public const string OptionsLegend = "Also change";
     public const string OptionPossiblyExtinct = "CR to CR(PE) or CR(PEW) in table cells and species tables, for possibly extinct taxa";
@@ -94,7 +94,7 @@ public static partial class UpdateText {
     public const string EditSummaryLabel = "Edit summary";
     public const string CopyEditSummaryAccessible = "Copy edit summary";
     public const string EditSummaryHelp = "A starting point for the edit summary on Wikipedia. Check it before you save.";
-    public const string EditSummaryCredit = "assisted by Beastie Bot Species Status";
+    public const string EditSummaryCredit = "assisted by Species Check";
     public const string EditSummaryStatusesUpdated = "{{IUCN statuses}} counts updated";
     public const string EditSummaryStatusesAdded = "{{IUCN statuses}} added";
 

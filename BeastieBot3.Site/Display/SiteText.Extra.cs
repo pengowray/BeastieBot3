@@ -41,7 +41,7 @@ public static partial class SiteText {
 
     // Not found
     public static string ColIdNotFoundHeading(string colId) => $"No taxon with Catalogue of Life ID {colId}";
-    public const string ColIdNotFoundLine = "This site has no taxon with this Catalogue of Life ID.";
+    public const string ColIdNotFoundLine = "Species Check has no taxon with this Catalogue of Life ID.";
     public static string WikidataNotFoundHeading(string qid) => $"No taxon with Wikidata item {qid}";
-    public const string WikidataNotFoundLine = "This site has no taxon with this Wikidata item.";
+    public const string WikidataNotFoundLine = "Species Check has no taxon with this Wikidata item.";
 }

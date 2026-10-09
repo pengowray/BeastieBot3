@@ -13,7 +13,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         var html = await response.Content.ReadAsStringAsync();
         var text = Html.Text(html);
 
-        Assert.Contains("<h1>Beastie Bot Species Status</h1>", html);
+        Assert.Contains("<h1>Pengo Wray&#x27;s Species Check</h1>", html);
         Assert.Contains("Unofficial site for looking up the IUCN Red List category of any species", text);
         Assert.Contains("<form class=\"search-form search-form-main\" action=\"/search\" method=\"get\"", html);
         Assert.Contains("Search for a taxon", text);
@@ -26,7 +26,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("assessments in total", text);
         // The home page has its own search box, so the header has none.
         Assert.DoesNotContain("search-form-header", html);
-        Assert.Contains("This site is unofficial and is not affiliated with or endorsed by IUCN.", text);
+        Assert.Contains("Species Check is unofficial and is not affiliated with or endorsed by IUCN.", text);
         Assert.Contains("Data from IUCN Red List version 2026-1, used under the IUCN Red List Terms of Use, and from the other sources listed on the About page.", text);
     }
 
@@ -201,7 +201,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         var text = Html.Text(html);
         Assert.Contains("Search term too short. Enter at least 2 letters or digits.", text);
         Assert.DoesNotContain("Results for", text);
-        Assert.Contains("<title>Search for a taxon | Beastie Bot Species Status</title>", html);
+        Assert.Contains("<title>Search for a taxon | Species Check</title>", html);
 
         using var suggest = JsonDocument.Parse(await _client.GetStringAsync("/api/suggest?q=" + Uri.EscapeDataString(query)));
         Assert.Equal(0, suggest.RootElement.GetArrayLength());
@@ -356,7 +356,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         var response = await _client.GetAsync("/search?q=Q999999999");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var text = Html.Text(await response.Content.ReadAsStringAsync());
-        Assert.Contains("This site has no taxon or assessment with Wikidata item Q999999999.", text);
+        Assert.Contains("Species Check has no taxon or assessment with Wikidata item Q999999999.", text);
         Assert.DoesNotContain("Check the spelling", text);
     }
 
@@ -377,7 +377,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     [Fact]
     public async Task AWikidataPropertyTheSiteDoesNotUseSaysSo() {
         var text = Html.Text(await _client.GetStringAsync("/search?q=P999999"));
-        Assert.Contains("This site does not use Wikidata property P999999.", text);
+        Assert.Contains("Species Check does not use Wikidata property P999999.", text);
     }
 
     [Fact]
@@ -398,7 +398,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         var response = await _client.GetAsync($"/search?q=T{FixtureDb.PolarBear}A999999999");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var text = Html.Text(await response.Content.ReadAsStringAsync());
-        Assert.Contains("This site has no assessment with IUCN assessment ID 999999999.", text);
+        Assert.Contains("Species Check has no assessment with IUCN assessment ID 999999999.", text);
         Assert.Contains($"Matched IUCN taxon ID: {FixtureDb.PolarBear}", text);
     }
 

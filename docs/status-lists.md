@@ -671,7 +671,7 @@ The Ministry's terms of use (https://www.env.go.jp/mail.html, "利用規約・�
 
 The `japan` row of `status_source` has the title "Red List of the Ministry of the Environment, Japan (環境省レッドリスト)", the URL of the Ministry's Red List page, the licence "Public Data License (Version 1.0) (PDL1.0)", the folder imported as `version`, and this citation, which the site shows with the download date (each row's `list_version` and `list_year` say which edition the row comes from):
 
-> Source: Red List 2020 (環境省レッドリスト2020) and 5th Red List (環境省第５次レッドリスト), Ministry of the Environment, Japan. The lists are used under the Public Data License (Version 1.0). Beastie Bot Species Status edited them: it converted the categories to letter codes and matched the names to species on this site. 出典：「環境省レッドリスト2020」（環境省）（https://www.env.go.jp/content/900515981.pdf）及び「環境省第５次レッドリスト」（環境省）（https://ikilog.biodic.go.jp/）を加工してBeastie Bot Species Statusが作成
+> Source: Red List 2020 (環境省レッドリスト2020) and 5th Red List (環境省第５次レッドリスト), Ministry of the Environment, Japan. The lists are used under the Public Data License (Version 1.0). Pengo Wray's Species Check edited them: it converted the categories to letter codes and matched the names to species on this site. 出典：「環境省レッドリスト2020」（環境省）（https://www.env.go.jp/content/900515981.pdf）及び「環境省第５次レッドリスト」（環境省）（https://ikilog.biodic.go.jp/）を加工してPengo Wray's Species Checkが作成
 
 ### The download
 

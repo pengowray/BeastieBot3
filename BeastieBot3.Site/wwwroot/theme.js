@@ -1,4 +1,4 @@
-// Beastie Bot Species Status: the theme setting in the header (System, Light or Dark).
+// Pengo Wray's Species Check: the theme setting in the header (System, Light or Dark).
 //
 // The layout loads this file in <head> without defer, so data-theme is set on <html> before the
 // page is drawn and a visitor who chose Dark never sees the light colours first. site.css reads
