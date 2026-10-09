@@ -21,8 +21,8 @@ public sealed class ClassificationComparisonTests {
         // Feliformia: one row for both sources that have it.
         var suborder = rows.Single(r => r.RankLabel == "suborder");
         Assert.Equal(["CoL", "Wikidata"], suborder.Cells.Select((c, i) => c.Step is null ? null : new[] { "IUCN", "CoL", "Wikidata" }[i]).OfType<string>());
-        // The rows above order are hidden at first; every row from order down is shown.
-        Assert.Equal(["domain", "kingdom", "phylum", "class", "subclass", "no rank"], rows.Where(r => r.AboveCut).Select(r => r.RankLabel));
+        // The rows above order other than kingdom, phylum and class are hidden at first; every row from order down is shown.
+        Assert.Equal(["domain", "subclass", "no rank"], rows.Where(r => r.AboveCut).Select(r => r.RankLabel));
         Assert.DoesNotContain(rows, r => r.Cells.Any(c => c.Differs));
     }
 
@@ -31,7 +31,7 @@ public sealed class ClassificationComparisonTests {
         var a = new LadderColumn("A", null, [S("kingdom", "Plantae"), S("class", "Magnoliopsida"), S("superfamily", "X"), S("family", "Poaceae"),
             S("genus", "Bromus")], Backbone: true);
         var rows = ClassificationComparison.Build([a, a with { Title = "B" }]);
-        Assert.Equal(["kingdom", "class", "superfamily"], rows.Where(r => r.AboveCut).Select(r => r.RankLabel));
+        Assert.Equal(["superfamily"], rows.Where(r => r.AboveCut).Select(r => r.RankLabel));
     }
 
     [Fact]

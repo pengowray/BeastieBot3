@@ -13,8 +13,8 @@ public sealed record LadderColumn(string Title, string? Url, IReadOnlyList<Ladde
 /// A row of the comparison: one group, in every column that has it. RankLabel: the main rank
 /// (kingdom to species), else the rank a backbone column gives, else the rank most of its cells
 /// give ("no rank" for none). AboveCut: a row above the order row (above family or genus when no
-/// column has an order), hidden until the reader asks for it: the lower ranks are the ones that
-/// differ between sources.
+/// column has an order) that is not a main rank, hidden until the reader asks for it: kingdom,
+/// phylum and class are always shown, and the lower ranks are the ones that differ between sources.
 public sealed record ComparisonRow(string RankLabel, bool IsMain, bool AboveCut, IReadOnlyList<ComparisonCell> Cells);
 
 /// Step: the column's group in this row, or null. Differs: a main rank whose name is not the first
@@ -30,7 +30,8 @@ public static class ClassificationComparison {
 
     public const string NoRank = "no rank";
 
-    /// The rows above the first of these main ranks that the columns have are hidden at first.
+    /// The rows above the first of these main ranks that the columns have, other than main ranks,
+    /// are hidden at first.
     public static readonly string[] CutRanks = ["order", "family", "genus"];
 
     private static string? MainRankOf(string? rank) => rank?.Trim().ToLowerInvariant() switch {
@@ -64,7 +65,7 @@ public static class ClassificationComparison {
                 : steps.Where((s, i) => s is not null && columns[i].Backbone).Select(s => Rank(s!.Rank)).FirstOrDefault()
                     ?? steps.OfType<LadderStep>().GroupBy(s => Rank(s.Rank)).OrderByDescending(g => g.Count()).First().Key;
             var first = isMain ? steps.FirstOrDefault(s => s is not null)?.Name : null;
-            rows.Add(new ComparisonRow(label, isMain, index < cut, [.. steps.Select(s => new ComparisonCell(s,
+            rows.Add(new ComparisonRow(label, isMain, !isMain && index < cut, [.. steps.Select(s => new ComparisonCell(s,
                 isMain && s is not null && first is not null && !string.Equals(Clean(s.Name), Clean(first), StringComparison.OrdinalIgnoreCase),
                 s is not null && !isMain && Rank(s.Rank) != label))]));
         }

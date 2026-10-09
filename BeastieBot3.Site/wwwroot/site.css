@@ -1784,7 +1784,7 @@ th.num {
 .ranks-table .other-rank {
     display: block;
 }
-/* The rows above order are hidden until the box is ticked. */
+/* The rows above order, other than kingdom, phylum and class, are hidden until the box is ticked. */
 .comparative-classification .above-rank {
     display: none;
 }

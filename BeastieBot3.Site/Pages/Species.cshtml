@@ -200,12 +200,12 @@
 @if (Model.ComparativeClassification.Count > 0) {
     var differences = Model.ComparativeClassification.Sum(r => r.Cells.Count(c => c.Differs));
     var aboveRows = Model.ComparativeClassification.Where(r => r.AboveCut).ToList();
-    var firstShown = Model.ComparativeClassification.FirstOrDefault(r => !r.AboveCut)?.RankLabel ?? "";
+    var cutRank = Model.ComparativeClassification.FirstOrDefault(r => r.IsMain && ClassificationComparison.CutRanks.Contains(r.RankLabel))?.RankLabel ?? "";
     <section class="comparative-classification" id="comparative-classification" aria-labelledby="comparative-classification-heading">
         <h2 id="comparative-classification-heading">@SiteText.HeadingComparativeClassification</h2>
         <p>@SiteText.RanksIntro(differences)</p>
         @if (aboveRows.Count > 0) {
-            <p class="ranks-toggle"><label><input type="checkbox" class="show-above-ranks" autocomplete="off"> @SiteText.RanksShowAbove(aboveRows.Count, firstShown, aboveRows.Sum(r => r.Cells.Count(c => c.Differs)))</label></p>
+            <p class="ranks-toggle"><label><input type="checkbox" class="show-above-ranks" autocomplete="off"> @SiteText.RanksShowAbove(aboveRows.Count, cutRank)</label></p>
         }
         <div class="table-scroll">
             <table class="ranks-table" aria-labelledby="comparative-classification-heading">
