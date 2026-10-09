@@ -55,6 +55,13 @@ public class WikidataCitationTests {
             WikidataCitation.CiteQ("Q1", new CiteQOptions { WrapInRef = true, RefName = "7" }));
     }
 
+    [Fact]
+    public void CiteQ_Initials_IsNameListStyleApa() {
+        // {{cite Q}} then shows the initials of each author's P9687 given names.
+        Assert.Equal("{{cite Q|Q141678321 |access-date=3 October 2026 |name-list-style=apa}}",
+            WikidataCitation.CiteQ("Q141678321", new CiteQOptions { AccessDate = new DateOnly(2026, 10, 3), ItemHasUrl = true, Initials = true }));
+    }
+
     // ------------------------------------------------------------ create batch
 
     [Fact]
@@ -147,6 +154,7 @@ public class WikidataCitationTests {
             Authors = [
                 Person("Sayer", "C.") with { GivenNames = "Catherine" },
                 Person("Lajus", "D."),
+                Person("Woinarski", "J.C.Z.") with { GivenNames = "John C.Z." },
                 Person("Lowry", "P.P., II") with { GivenNames = "Porter P." },
                 new CitationAuthor(CitationAuthorKind.Organisation, "Royal Botanic Gardens, Kew", GivenNames: "Kew"),
             ],
@@ -155,9 +163,11 @@ public class WikidataCitationTests {
         Assert.Equal(new[] {
             L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"1\"", "P9688", "\"Sayer\"", "P9687", "\"Catherine\""),
             L("LAST", "P2093", "\"Lajus, D.\"", "P1545", "\"2\""),
+            // Spaced, so that |name-list-style=apa gives "J. C. Z." and not "J. C.".
+            L("LAST", "P2093", "\"Woinarski, J.C.Z.\"", "P1545", "\"3\"", "P9688", "\"Woinarski\"", "P9687", "\"John C. Z.\""),
             // {{cite Q}} has no place for the suffix, so the name string is left to carry it.
-            L("LAST", "P2093", "\"Lowry, P.P., II\"", "P1545", "\"3\""),
-            L("LAST", "P2093", "\"Royal Botanic Gardens, Kew\"", "P1545", "\"4\""),
+            L("LAST", "P2093", "\"Lowry, P.P., II\"", "P1545", "\"4\""),
+            L("LAST", "P2093", "\"Royal Botanic Gardens, Kew\"", "P1545", "\"5\""),
         }, authors);
     }
 

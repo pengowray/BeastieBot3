@@ -35,9 +35,11 @@ namespace BeastieBot3.Shared.Wikitext;
 //                        International"), never the full given names, with a P1545 series ordinal
 //                        qualifier ("1", "2" ...). Names before an "et al." only. A person whose full
 //                        given names are known (CitationAuthor.GivenNames) also gets P9688 author last
-//                        names ("Sayer") and P9687 author given names ("Catherine"). {{cite Q}} then
-//                        passes |last= and |first= to the citation, showing the full given names by
-//                        default and "Sayer, C." with |name-list-style=apa. A person whose initials
+//                        names ("Sayer") and P9687 author given names ("Catherine", "John C. Z.",
+//                        with a space between joined initials). {{cite Q}} then passes |last= and
+//                        |first= to the citation, showing the full given names by default and
+//                        "Sayer, C." with |name-list-style=apa, which makes an initial of each
+//                        space-separated word ("J. C. Z."; without the space, "J. C."). A person whose initials
 //                        end with a suffix ("Lowry, P.P., II") gets neither, because {{cite Q}} has no
 //                        place for the suffix and would leave it out.
 //   P50 author           instead of P2093 for an organisation listed in IucnAuthorItems ("BirdLife
@@ -115,6 +117,11 @@ public sealed record CiteQOptions {
 
     /// Name for <ref name="...">; ignored unless WrapInRef. Null or blank gives a plain <ref>.
     public string? RefName { get; init; }
+
+    /// Writes |name-list-style=apa, with which {{cite Q}} shows the initials of the given names in
+    /// an author's P9687 qualifier ("Sayer, C.") instead of the full given names ("Sayer, Catherine").
+    /// {{cite Q}} reads this value itself and passes no name-list-style to the citation.
+    public bool Initials { get; init; }
 }
 
 /// One title (P1476) statement of an item: its monolingual text, language code and rank
@@ -199,6 +206,9 @@ public static partial class WikidataCitation {
         var sb = new StringBuilder("{{cite Q|").Append(itemQid.Trim());
         if (options.ItemHasUrl && options.AccessDate is { } accessed) {
             sb.Append(" |access-date=").Append(accessed.ToString("d MMMM yyyy", CultureInfo.InvariantCulture));
+        }
+        if (options.Initials) {
+            sb.Append(" |name-list-style=apa");
         }
         sb.Append("}}");
         var template = sb.ToString();
@@ -463,7 +473,7 @@ public static partial class WikidataCitation {
             return null;
         }
         var last = CleanValue(EtAlInName().Replace(author.Last ?? string.Empty, string.Empty));
-        var given = CleanValue(author.GivenNames);
+        var given = JoinedInitials().Replace(CleanValue(author.GivenNames), ". ");
         return last.Length > 0 && given.Length > 0 ? (last, given) : null;
     }
 
@@ -552,6 +562,12 @@ public static partial class WikidataCitation {
     // An "et al." written inside a name ("Jaffré, T. <i>et al.</i>"), as CiteIucnRenderer removes it.
     [GeneratedRegex(@"[;,]?\s*(?:<i>)?\s*\bet\.?\s*al(?:ii|ia|iae)?\.?\s*(?:</i>)?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex EtAlInName();
+
+    // The full stop between two joined initials ("John C.Z."). {{cite Q}}'s name-list-style=apa takes
+    // the first letter of each space-separated word, so "John C.Z." would become "J. C.", while
+    // "John C. Z." becomes "J. C. Z.", which is also how MOS:INITIALS spaces initials.
+    [GeneratedRegex(@"(?<=\b\p{Lu})\.(?=\p{Lu}\.)")]
+    private static partial Regex JoinedInitials();
 
     // A generational suffix after the initials ("P.P., II"), as CiteIucnRenderer.TrailingSuffix reads it.
     [GeneratedRegex(@"\s*,\s*(?:Jr|Jnr|Sr|Snr|II|III|IV)\.?$")]
