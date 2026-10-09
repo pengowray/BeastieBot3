@@ -2,17 +2,20 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
+using BeastieBot3.Shared.SiteData;
 using CsvHelper;
 using CsvHelper.Configuration;
 
 // The country checklists `checklists import` reads, each with where to download it, its licence,
 // and a parser that turns the file into ChecklistArea rows (and synonyms):
 //   mdd          Mammal Diversity Database (Zenodo, CC BY 4.0): countryDistribution, country names
-//                separated by "|", "?" for uncertain.
+//                separated by "|", "?" for uncertain; each species' id and its subspecies column
+//                (MddSubspecies).
 //   wcvp         World Checklist of Vascular Plants (Kew, CC BY): wcvp_distribution.csv, TDWG level-3
 //                areas with introduced / extinct / location_doubtful flags; synonyms from wcvp_names.csv.
 //   reptiledb    The Reptile Database on ChecklistBank (dataset 1008, ColDP, CC BY): Distribution.tsv,
-//                free text ("N China (W Xinjiang), Kyrgyzstan") split into place names.
+//                free text ("N China (W Xinjiang), Kyrgyzstan") split into place names; the accepted
+//                subspecies (Taxon.tsv rows of rank subspecies under a species) with their authorship.
 //   amphibiaweb  AmphibiaWeb's names file (CC BY-NC 4.0): isocc and intro_isocc, ISO alpha-2 codes.
 //                AmphibiaWeb asks to be contacted before large downloads; the default URL is the
 //                monthly snapshot they publish on GitHub.
@@ -23,6 +26,14 @@ internal sealed record ChecklistParse(string? Version, IReadOnlyList<ChecklistAr
     IReadOnlyList<string> Notes) {
     /// English common names and synonyms of the source's species.
     public IReadOnlyList<ChecklistName> Names { get; init; } = [];
+
+    /// The source's accepted species with their record ids (mdd and reptiledb).
+    public IReadOnlyList<ChecklistSpecies> Species { get; init; } = [];
+
+    /// The subspecies the source lists under its species (mdd and reptiledb), and the number of
+    /// subspecies entries the parser could not read.
+    public IReadOnlyList<ChecklistInfraspecific> Infraspecific { get; init; } = [];
+    public int InfraspecificNotRead { get; init; }
 }
 
 /// ExtraFiles: more files the parser reads from the same folder (published path, URL).
@@ -98,9 +109,17 @@ internal static partial class ChecklistSources {
         csv.ReadHeader();
         var rows = new List<ChecklistArea>();
         var names = new List<ChecklistName>();
+        var species = new List<ChecklistSpecies>();
+        var subspecies = new List<ChecklistInfraspecific>();
+        var subspeciesNotRead = 0;
         while (csv.Read()) {
             var name = csv.GetField("sciName")?.Replace('_', ' ').Trim();
             if (!string.IsNullOrEmpty(name)) {
+                // id: the species' MDD id, which its page on the MDD website has in its address.
+                species.Add(new ChecklistSpecies(name, csv.GetField("id")?.Trim() is { Length: > 0 } id && id != "NA" ? id : null));
+                var (read, notRead) = MddSubspecies.Parse(name, csv.GetField("subspecies"));
+                subspecies.AddRange(read);
+                subspeciesNotRead += notRead;
                 // English names: mainCommonName, then otherCommonNames separated by "|".
                 var common = new[] { csv.GetField("mainCommonName") }.Concat((csv.GetField("otherCommonNames") ?? "").Split('|'));
                 foreach (var c in common.Select(c => c?.Trim()).Where(c => c is { Length: > 0 } && c != "NA").Distinct()) {
@@ -119,7 +138,9 @@ internal static partial class ChecklistSources {
                 rows.Add(new ChecklistArea(name, part.TrimEnd('?').Trim(), ChecklistSchemes.Name, uncertain ? ChecklistOrigins.Uncertain : ChecklistOrigins.Native));
             }
         }
-        return new ChecklistParse(version, rows, [], []) { Names = names };
+        return new ChecklistParse(version, rows, [], []) {
+            Names = names, Species = species, Infraspecific = subspecies, InfraspecificNotRead = subspeciesNotRead,
+        };
     }
 
     // ---------------------------------------------------------------- WCVP
@@ -183,20 +204,44 @@ internal static partial class ChecklistSources {
     }
 
     internal static ChecklistParse ParseReptileDatabase(TextReader names, TextReader taxa, TextReader distribution, TextReader synonyms, string? version) {
-        var nameText = new Dictionary<string, (string Name, string Rank)>(StringComparer.Ordinal);
+        var nameText = new Dictionary<string, (string Name, string Rank, string? Authorship)>(StringComparer.Ordinal);
         var h = Header(names.ReadLine(), '\t');
+        var authorshipColumn = h.GetValueOrDefault("authorship", -1);
         for (var line = names.ReadLine(); line is not null; line = names.ReadLine()) {
             var f = line.Split('\t');
             if (f.Length > Math.Max(h["scientific_name"], h["rank"])) {
-                nameText[f[h["id"]]] = (f[h["scientific_name"]], f[h["rank"]]);
+                var authorship = authorshipColumn >= 0 && authorshipColumn < f.Length && f[authorshipColumn].Trim() is { Length: > 0 } a ? a : null;
+                nameText[f[h["id"]]] = (f[h["scientific_name"]], f[h["rank"]], authorship);
             }
         }
         var taxonName = new Dictionary<string, string>(StringComparer.Ordinal);
+        var species = new List<ChecklistSpecies>();
+        // Accepted subspecies: Taxon.tsv rows of rank subspecies (taxon id, parent taxon id, name).
+        // The names of rank subspecies in Synonym.tsv are synonyms and are left out.
+        var subspeciesTaxa = new List<(string Parent, string Name, string? Authorship)>();
         h = Header(taxa.ReadLine(), '\t');
+        var parentColumn = h.GetValueOrDefault("parent_id", -1);
+        var linkColumn = h.GetValueOrDefault("link", -1);
         for (var line = taxa.ReadLine(); line is not null; line = taxa.ReadLine()) {
             var f = line.Split('\t');
-            if (f.Length > h["name_id"] && nameText.TryGetValue(f[h["name_id"]], out var n) && n.Rank == "species") {
+            if (f.Length <= h["name_id"] || !nameText.TryGetValue(f[h["name_id"]], out var n)) {
+                continue;
+            }
+            if (n.Rank == "species") {
                 taxonName[f[h["id"]]] = n.Name;
+                var link = linkColumn >= 0 && linkColumn < f.Length ? f[linkColumn] : null;
+                species.Add(new ChecklistSpecies(n.Name, ReptileDatabaseRecordId(link, n.Name)));
+            } else if (n.Rank is "subspecies" or "subsp." && parentColumn >= 0 && parentColumn < f.Length) {
+                subspeciesTaxa.Add((f[parentColumn], n.Name.Trim(), n.Authorship));
+            }
+        }
+        var subspecies = new List<ChecklistInfraspecific>();
+        var subspeciesNotRead = 0;
+        foreach (var (parent, name, authorship) in subspeciesTaxa) {
+            if (taxonName.TryGetValue(parent, out var speciesName) && name.Length > 0) {
+                subspecies.Add(new ChecklistInfraspecific(speciesName, name, InfraspecificNames.Subspecies, authorship));
+            } else {
+                subspeciesNotRead++;
             }
         }
         var rows = new List<ChecklistArea>();
@@ -219,7 +264,22 @@ internal static partial class ChecklistSources {
                 synonymList.Add((syn.Name, acceptedName));
             }
         }
-        return new ChecklistParse(version, rows, synonymList, []);
+        return new ChecklistParse(version, rows, synonymList, []) {
+            Species = species, Infraspecific = subspecies, InfraspecificNotRead = subspeciesNotRead,
+        };
+    }
+
+    public const string ReptileDatabaseSpeciesUrl = "https://reptile-database.reptarium.cz/species?";
+
+    /// The query of a species' page on the Reptile Database ("genus=Ablepharus&species=alaicus"), the
+    /// id that Wikidata's Reptile Database ID (P5473) holds: from the taxon's link, else from its name.
+    internal static string? ReptileDatabaseRecordId(string? link, string speciesName) {
+        if (link?.Trim() is { Length: > 0 } url && url.StartsWith(ReptileDatabaseSpeciesUrl, StringComparison.OrdinalIgnoreCase)
+            && url[ReptileDatabaseSpeciesUrl.Length..] is { Length: > 0 } query) {
+            return query;
+        }
+        var words = speciesName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length == 2 ? $"genus={words[0]}&species={words[1]}" : null;
     }
 
     /// The places a free-text distribution names: "N China (W Xinjiang), Kyrgyzstan, NE Uzbekistan"

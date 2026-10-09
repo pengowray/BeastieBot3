@@ -86,10 +86,17 @@ internal sealed class ChecklistsImportCommand : AsyncCommand<ChecklistsImportCom
                 }
                 AnsiConsole.MarkupLineInterpolated($"[grey]Reading[/] {file}");
                 var parse = source.Parse(file);
-                store.Replace(source.Key, parse.Version, source.Licence, source.Url, parse.Rows, parse.Synonyms, parse.Names);
+                store.Replace(source.Key, parse.Version, source.Licence, source.Url, parse.Rows, parse.Synonyms, parse.Names, parse.Species, parse.Infraspecific);
                 var taxa = parse.Rows.Select(r => r.ScientificName).Distinct(StringComparer.Ordinal).Count();
                 AnsiConsole.MarkupLineInterpolated(
                     $"[green]{source.Title}:[/] {ChecklistStore.Count(parse.Rows.Count)} taxon and area rows for {ChecklistStore.Count(taxa)} taxa, {ChecklistStore.Count(parse.Synonyms.Count)} synonyms for matching, {ChecklistStore.Count(parse.Names.Count(n => n.NameType == ChecklistNameTypes.Common))} English names and {ChecklistStore.Count(parse.Names.Count(n => n.NameType == ChecklistNameTypes.Synonym))} synonyms for the site. Licence: {source.Licence}.");
+                if (parse.Infraspecific.Count > 0 || parse.InfraspecificNotRead > 0) {
+                    var withSubspecies = parse.Infraspecific.Select(i => i.SpeciesName).Distinct(StringComparer.Ordinal).Count();
+                    var notes = parse.Infraspecific.Where(i => i.Note is not null).GroupBy(i => i.Note!).OrderBy(g => g.Key, StringComparer.Ordinal)
+                        .Select(g => $"{g.Key} {ChecklistStore.Count(g.Count())}").ToList();
+                    AnsiConsole.MarkupLineInterpolated(
+                        $"  Subspecies: {ChecklistStore.Count(parse.Infraspecific.Count)} of {ChecklistStore.Count(withSubspecies)} species, {ChecklistStore.Count(parse.InfraspecificNotRead)} entries not read{(notes.Count > 0 ? "; notes: " + string.Join(", ", notes) : "")}.");
+                }
             } catch (Exception e) when (e is HttpRequestException or IOException or InvalidDataException or KeyNotFoundException or TaskCanceledException) {
                 AnsiConsole.MarkupLineInterpolated($"[red]{source.Title} not imported:[/] {e.Message}");
                 failed = true;
@@ -171,10 +178,10 @@ internal sealed class ChecklistsStatusCommand : Command<ChecklistsStatusCommand.
             AnsiConsole.MarkupLineInterpolated($"[yellow]No checklists imported yet[/] ({storePath ?? "no datastore folder set"}). Run checklists import.");
             return 0;
         }
-        var table = new Table().AddColumns("Source", "Version", "Licence", "Taxa", "Rows", "Imported");
+        var table = new Table().AddColumns("Source", "Version", "Licence", "Taxa", "Rows", "Subspecies", "Imported");
         foreach (var s in store.Sources()) {
             table.AddRow(Markup.Escape(ChecklistSources.TitleOf(s.Source)), Markup.Escape(s.Version ?? ""), Markup.Escape(s.Licence ?? ""),
-                ChecklistStore.Count(s.Taxa), ChecklistStore.Count(s.Rows), s.ImportedAt?.ToString("yyyy-MM-dd HH:mm") ?? "");
+                ChecklistStore.Count(s.Taxa), ChecklistStore.Count(s.Rows), ChecklistStore.Count(s.Subspecies), s.ImportedAt?.ToString("yyyy-MM-dd HH:mm") ?? "");
         }
         AnsiConsole.Write(table);
         return 0;
