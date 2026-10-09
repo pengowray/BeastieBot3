@@ -73,7 +73,8 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
     public IActionResult OnGet(long taxonId, long? assessment, string? authors, string? access, string? opts,
         [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? fullnames,
         [FromQuery(Name = IucnReference.QueryKey)] string? cite = null,
-        [FromQuery(Name = WikitextOptions.GreenStatusYearKey)] string? gsyear = null) {
+        [FromQuery(Name = WikitextOptions.GreenStatusYearKey)] string? gsyear = null,
+        [FromQuery(Name = WikitextOptions.WikiKey)] string? wiki = null) {
         if (!LoadTaxon(taxonId)) {
             return Page();
         }
@@ -82,6 +83,7 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
             Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames) with {
             Template = IucnReference.FromQuery(cite),
             GreenStatusYear = WikitextOptions.ReadGreenStatusYear(gsyear),
+            Wiki = WikitextOptions.ReadWiki(wiki),
         };
         Taxobox = TaxoboxTemplate.For(Taxon!.Kind, Taxon.Kingdom);
         BuildWikitext();
@@ -133,8 +135,9 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
             DownloadDateText = downloaded is { } d ? SiteFormat.Date(d) : null;
             citeOptions = Options.ToCiteIucnOptions(today, downloaded);
             GivenNames = GivenNamesCoverage.Of(Parts);
-            var cite = CiteIucnRenderer.Render(Parts, citeOptions);
-            boxes.Add(new WikitextBox("wikitext-cite", SiteText.LabelCite, "{{cite iucn}}", cite, Rows: 5));
+            var cite = Edition.IsEnglish ? CiteIucnRenderer.Render(Parts, citeOptions) : OtherWikipedias.Citation(Edition.Code, Parts, Facts(), citeOptions);
+            var citeTemplate = OtherWikipedias.CitationTemplate(Edition.Code);
+            boxes.Add(new WikitextBox("wikitext-cite", Edition.IsEnglish ? SiteText.LabelCite : SiteText.LabelCiteTemplate(citeTemplate), citeTemplate, cite, Rows: 5));
 
             DoiNote = cite.Contains("|doi=", StringComparison.Ordinal)
                 ? Parts.DoiSource switch {
@@ -148,6 +151,12 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
                 .Where(a => a.Kind == CitationAuthorKind.Verbatim && !string.IsNullOrWhiteSpace(a.Display))
                 .Select(a => a.Display.Trim())
                 .ToList();
+        }
+
+        if (!Edition.IsEnglish) {
+            BuildOtherWiki(boxes, citeOptions);
+            Boxes = boxes;
+            return;
         }
 
         if (IucnCategories.HasStatusTemplateCode(Selected)) {
@@ -175,6 +184,64 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
         Boxes = boxes;
 
         Wikidata = BuildWikidataCite(Options.ToCiteQOptions(today, downloaded));
+    }
+
+    /// The Wikipedia the wikitext is for (Options.Wiki).
+    public WikipediaEdition Edition => OtherWikipedias.Find(Options.Wiki) ?? OtherWikipedias.English;
+
+    /// The links to the page for each Wikipedia, with the current options.
+    public string WikiUrl(WikipediaEdition edition) {
+        var target = SelectedIsDefault || Selected is null ? (long?)null : Selected.AssessmentId;
+        var targetDefault = Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected);
+        return PathFor(Taxon?.TaxonId ?? RequestedTaxonId, (Options with { Wiki = edition.Code }).ToQuery(target, targetDefault));
+    }
+
+    /// Notes about the chosen Wikipedia's templates, shown under its boxes.
+    public IReadOnlyList<string> WikiNotes { get; private set; } = [];
+
+    /// The options that apply to the chosen Wikipedia's citation: the author format and |name-list-style=
+    /// for the wikis whose citation is a copy of {{cite iucn}}, {{cite Q}} and the Green Status year for English only.
+    public bool ShowAuthorOptions => Edition.Code is "en" or "pt" or "uk" or "ja";
+    public bool ShowAmpOption => ShowAuthorOptions;
+    public bool ShowCiteTemplateOption => Edition.IsEnglish;
+    public bool ShowGreenStatusYearOption => Edition.IsEnglish && GreenStatus is not null;
+
+    private AssessmentFacts Facts() => new(Selected!.Category, Selected.PossiblyExtinct, Selected.PossiblyExtinctInTheWild,
+        Selected.CriteriaVersion, Selected.Criteria, SiteFormat.TryParseDate(Selected.AssessmentDate, out var assessed) ? assessed.Year : null,
+        Taxon?.Authority, Taxon?.Kind ?? TaxonKinds.Species);
+
+    // The taxobox lines and notes of a Wikipedia other than English.
+    private void BuildOtherWiki(List<WikitextBox> boxes, CiteIucnOptions? citeOptions) {
+        var notes = new List<string>();
+        var code = Edition.Code;
+        var facts = Facts();
+        if (OtherWikipedias.TaxoboxTemplate(code) is not { } taxobox) {
+            notes.Add(SiteText.WikiNoTaxoboxStatus(Edition.Name));
+        } else if (Parts is not null && citeOptions is not null && IucnCategories.HasTaxoboxCode(Selected!)) {
+            var statusRef = OtherWikipedias.Citation(code, Parts, facts, citeOptions with { WrapInRef = true });
+            if (OtherWikipedias.TaxoboxLines(code, facts, Selected!.TaxonId, statusRef) is { } lines) {
+                boxes.Add(new WikitextBox("wikitext-speciesbox", SiteText.TaxoboxLabel(taxobox), taxobox, lines, Rows: 4));
+            }
+            var taxoboxCode = SpeciesboxStatus.ToStatusCode(facts.Category, facts.PossiblyExtinct, facts.PossiblyExtinctInTheWild);
+            if (code == "pl" && OtherWikipedias.PolishCode(taxoboxCode) is { } plCode && plCode != taxoboxCode) {
+                notes.Add(SiteText.WikiPolishCode(taxoboxCode, plCode));
+            }
+            if (code == "pl" && OtherWikipedias.PolishCode(taxoboxCode) is null) {
+                notes.Add(SiteText.WikiPolishNoCode(taxoboxCode));
+            }
+        }
+        switch (code) {
+            case "fr":
+                notes.Add(SiteText.WikiFrenchCurrentAssessment);
+                break;
+            case "es":
+                notes.Add(SiteText.WikiSpanishWikidataLink);
+                break;
+            case "pl":
+                notes.Add(SiteText.WikiPolishRefName);
+                break;
+        }
+        WikiNotes = notes;
     }
 
     /// The ref name of the Green Status citation, beside the Red List assessment's "iucn".

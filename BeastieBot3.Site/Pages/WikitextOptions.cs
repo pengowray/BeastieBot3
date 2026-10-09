@@ -36,6 +36,14 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
     /// The year a Green Status citation gives (gsyear=published; GreenStatusYear).
     public GreenStatusYearRule GreenStatusYear { get; init; }
 
+    /// The Wikipedia the wikitext is for (OtherWikipedias.All: "en", "fr", ...); wiki=fr in the query.
+    public string Wiki { get; init; } = OtherWikipedias.English.Code;
+
+    public const string WikiKey = "wiki";
+
+    /// The Wikipedia a query value names, else English.
+    public static string ReadWiki(string? value) => OtherWikipedias.Find(value)?.Code ?? OtherWikipedias.English.Code;
+
     public const string GreenStatusYearKey = "gsyear";
     public const string GreenStatusYearPublished = "published";
 
@@ -117,6 +125,9 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
         }
         if (GreenStatusYear == GreenStatusYearRule.Published) {
             parts.Add(GreenStatusYearKey + "=" + GreenStatusYearPublished);
+        }
+        if (Wiki != OtherWikipedias.English.Code) {
+            parts.Add(WikiKey + "=" + Wiki);
         }
         var name = CustomRefName ?? targetDefaultRefName;
         if (WrapInRef != Default.WrapInRef || Amp != Default.Amp || name != targetDefaultRefName) {

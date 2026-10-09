@@ -1316,6 +1316,19 @@ th.num {
 .tool-header .tool-back {
     margin: 0.4rem 0 0;
 }
+/* The wikitext page's row of links to each Wikipedia; the chosen one is plain bold text. */
+.wiki-chooser ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    margin: 0 0 0.8rem;
+    padding: 0;
+    list-style: none;
+}
+.wiki-chooser [aria-current] {
+    font-weight: 700;
+}
+
 /* The links of a tool page's header: the taxon page and the other tool page. */
 .tool-links-inline {
     display: flex;

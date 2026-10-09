@@ -40,7 +40,14 @@
     <section class="wikitext" id="wikitext" aria-labelledby="wikitext-heading"
              data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed" data-copy-failed-button="@SiteText.CopyFailedButton"
              data-live-updated="@SiteText.WikitextUpdated" data-live-too-many="@SiteText.WikitextTooManyRequests" data-options-url="@Model.CurrentOptionsUrl">
-        <h2 id="wikitext-heading">@SiteText.HeadingWikitext</h2>
+        <h2 id="wikitext-heading">@SiteText.HeadingWikitextFor(Model.Edition)</h2>
+        <nav class="wiki-chooser" aria-label="@SiteText.WikiChooserLabel">
+            <ul>
+                @foreach (var edition in BeastieBot3.Shared.Wikitext.OtherWikipedias.All) {
+                    <li>@if (edition.Code == Model.Edition.Code) {<span aria-current="page" lang="@edition.Code">@edition.NativeName</span>} else {<a href="@(Model.WikiUrl(edition))#wikitext" data-options-link="wiki-@edition.Code" lang="@edition.Code" hreflang="@edition.Code">@edition.NativeName</a>}</li>
+                }
+            </ul>
+        </nav>
         @{
             var selectedCategory = IucnCategories.Describe(selected).Label;
         }
@@ -123,6 +130,9 @@
                 </div>
             </div>
         }
+        @foreach (var note in Model.WikiNotes) {
+            <p class="note wiki-note">@note</p>
+        }
         @if (Model.Credits is { } creditsWithoutCitation && !Model.Boxes.Any(b => b.Id == "wikitext-cite")) {
             <div class="citation-notes">
                 <partial name="_AssessmentCredits" model="creditsWithoutCitation" />
@@ -135,9 +145,13 @@
                 <fieldset>
                     <legend>@SiteText.OptionsLegend</legend>
                     <input type="hidden" name="opts" value="1">
+                    @if (!Model.Edition.IsEnglish) {
+                        <input type="hidden" name="@WikitextOptions.WikiKey" value="@Model.Edition.Code">
+                    }
                     @if (!Model.SelectedIsDefault) {
                         <input type="hidden" name="assessment" value="@selected.AssessmentId">
                     }
+                    @if (Model.ShowAuthorOptions) {
                     <fieldset class="option-group">
                         <legend>@SiteText.AuthorsLabel</legend>
                         <label><input type="radio" name="authors" value="author" checked="@(Model.Options.AuthorStyle == CiteAuthorStyle.AuthorN)"> @Html.Raw(SiteText.AuthorsAuthorHtml)</label>
@@ -150,6 +164,13 @@
                             <input type="hidden" name="fullnames" value="1">
                         }
                     </fieldset>
+                    } else {
+                        @* Kept for the other Wikipedias, whose citations take them. *@
+                        <input type="hidden" name="authors" value="@(Model.Options.AuthorStyle == CiteAuthorStyle.AuthorN ? "author" : "lastfirst")">
+                        @if (Model.Options.FullGivenNames) {
+                            <input type="hidden" name="fullnames" value="1">
+                        }
+                    }
                     <fieldset class="option-group">
                         <legend>@SiteText.AccessLabel</legend>
                         @if (Model.DownloadDateText is not null) {
@@ -166,8 +187,12 @@
                         <label class="ref-name">@SiteText.RefName <input type="text" name="refname" value="@Model.Options.RefName" maxlength="@WikitextOptions.MaxRefNameLength" size="20" spellcheck="false" aria-describedby="refname-help"></label>
                         <p class="help" id="refname-help">@SiteText.RefNameHelp</p>
                     </div>
-                    <partial name="_StatusRefTemplate" model="Model" />
-                    @if (Model.GreenStatus is not null) {
+                    @if (Model.ShowCiteTemplateOption) {
+                        <partial name="_StatusRefTemplate" model="Model" />
+                    } else if (Model.Options.Template == ReferenceTemplate.CiteQ) {
+                        <input type="hidden" name="@IucnReference.QueryKey" value="@IucnReference.CiteQValue">
+                    }
+                    @if (Model.ShowGreenStatusYearOption) {
                         <fieldset class="option-group">
                             <legend>@SiteText.GreenStatusYearLegend</legend>
                             <label><input type="radio" name="@WikitextOptions.GreenStatusYearKey" value="assessed" checked="@(Model.Options.GreenStatusYear == GreenStatusYearRule.Assessed)" aria-describedby="gsyear-help"> @SiteText.GreenStatusYearAssessed</label>
@@ -178,10 +203,14 @@
                         @* Kept for the next page shown, which may have a Green Status. *@
                         <input type="hidden" name="@WikitextOptions.GreenStatusYearKey" value="@WikitextOptions.GreenStatusYearPublished">
                     }
-                    <div class="option-group">
-                        <label><input type="checkbox" name="amp" value="1" checked="@Model.Options.Amp" aria-describedby="amp-help"> @Html.Raw(SiteText.AmpHtml)</label>
-                        <p class="help" id="amp-help">@SiteText.AmpHelp</p>
-                    </div>
+                    @if (Model.ShowAmpOption) {
+                        <div class="option-group">
+                            <label><input type="checkbox" name="amp" value="1" checked="@Model.Options.Amp" aria-describedby="amp-help"> @Html.Raw(SiteText.AmpHtml)</label>
+                            <p class="help" id="amp-help">@SiteText.AmpHelp</p>
+                        </div>
+                    } else if (Model.Options.Amp) {
+                        <input type="hidden" name="amp" value="1">
+                    }
                     @* site.js hides the button and updates the wikitext as soon as an option changes,
                        saying so in the status line. *@
                     <button type="submit">@SiteText.UpdateWikitext</button>

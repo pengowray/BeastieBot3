@@ -112,3 +112,40 @@ public sealed class OtherWikipediasTests {
     [InlineData(null, null)]
     public void RedListVersionComesFromTheDoi(string? doi, string? version) => Assert.Equal(version, OtherWikipedias.RedListVersion(doi));
 }
+
+public sealed class OtherWikipediasPageTests(SiteFactory factory) : IClassFixture<SiteFactory> {
+    private readonly HttpClient _client = factory.Client();
+
+    [Fact]
+    public async Task TheWikitextPageWritesForTheChosenWikipedia() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?wiki=fr");
+        Assert.Contains("<h2 id=\"wikitext-heading\">Wikitext for French Wikipedia</h2>", html);
+        Assert.StartsWith("<ref name=\"iucn\">{{UICN|22823|''Ursus maritimus'' Phipps, 1774|consulté le=", Html.Textarea(html, "wikitext-cite"));
+        Assert.Equal("{{Taxobox UICN | VU | A3c }}", Html.Textarea(html, "wikitext-speciesbox"));
+        // English-only parts and options are left out.
+        Assert.Null(Html.Textarea(html, "wikitext-status"));
+        Assert.DoesNotContain("name=\"authors\" value=\"lastfirst\" checked", html);
+        Assert.Contains("<input type=\"hidden\" name=\"wiki\" value=\"fr\">", html);
+        Assert.Contains("{{UICN}} always links IUCN&#x27;s current assessment of the taxon", html);
+        // The row of Wikipedias: French is the current one; English links back with the options.
+        Assert.Contains("<span aria-current=\"page\" lang=\"fr\">Français</span>", html);
+        Assert.Contains($"href=\"/species/{FixtureDb.PolarBear}/wikitext#wikitext\" data-options-link=\"wiki-en\"", html);
+    }
+
+    [Fact]
+    public async Task GermanHasNoTaxoboxLines() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?wiki=de");
+        Assert.StartsWith("<ref name=\"iucn\">{{IUCN |Year=2015 |ID=22823 |ScientificName=Ursus maritimus |AssessmentID=14871490", Html.Textarea(html, "wikitext-cite"));
+        Assert.Null(Html.Textarea(html, "wikitext-speciesbox"));
+        Assert.Contains("German Wikipedia&#x27;s taxoboxes have no conservation status", html);
+    }
+
+    [Fact]
+    public async Task TheWikiChoiceStaysWithTheOtherOptions() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?wiki=pl&access=none");
+        Assert.Contains($"href=\"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}&amp;access=none&amp;wiki=pl#wikitext\"", html);
+        Assert.Contains("| status IUCN = VU\n| IUCN id = 22823", Html.Textarea(html, "wikitext-speciesbox"));
+        // An unknown wiki is English.
+        Assert.Contains("Wikitext for English Wikipedia", await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?wiki=xx"));
+    }
+}
