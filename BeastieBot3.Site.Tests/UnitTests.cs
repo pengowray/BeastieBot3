@@ -413,10 +413,9 @@ public sealed class WikitextOptionsTests {
     public void CiteQOptionsUseTheSameAccessDateAndRef() {
         var today = new DateOnly(2026, 10, 3);
         var options = WikitextOptions.Default with { Access = WikitextOptions.AccessToday, RefName = "tiger" };
-        Assert.Equal(new CiteQOptions { AccessDate = today, WrapInRef = true, RefName = "tiger", Initials = true }, options.ToCiteQOptions(today, null));
-        Assert.Equal(new CiteQOptions { AccessDate = null, WrapInRef = false, RefName = string.Empty, Initials = true },
+        Assert.Equal(new CiteQOptions { AccessDate = today, WrapInRef = true, RefName = "tiger" }, options.ToCiteQOptions(today, null));
+        Assert.Equal(new CiteQOptions { AccessDate = null, WrapInRef = false, RefName = string.Empty },
             (options with { Access = WikitextOptions.AccessNone, WrapInRef = false, RefName = string.Empty }).ToCiteQOptions(today, today));
-        Assert.False((options with { FullGivenNames = true }).ToCiteQOptions(today, null).Initials);
     }
 }
 

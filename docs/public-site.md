@@ -1177,10 +1177,7 @@ the stored JSON cannot be read.
 `CiteQ` writes `{{cite Q|Q56227924}}`. When the ref option is on, it wraps the template in a
 `<ref>` and cleans the ref name as `{{cite iucn}}` does. It writes `|access-date=` only when
 `CiteQOptions.ItemHasUrl` is true, because `{{cite Q}}` takes its URL from the item and CS1 reports
-an access date without a URL as an error. With `CiteQOptions.Initials` it adds
-`|name-list-style=apa`, with which `{{cite Q}}` (Module:Cite Q) turns the given names in each
-author's P9687 qualifier into initials, one for each space-separated word; it then passes no
-name-list-style to CS1, so `apa` cannot be combined with `amp`.
+an access date without a URL as an error.
 
 `CreateItemCommands` writes QuickStatements v1 commands that create an item. The first command is
 `CREATE`; each command after it starts with `LAST` (the item just created) and adds, in this order:
@@ -1206,13 +1203,15 @@ name-list-style to CS1, so `apa` cannot be combined with `amp`.
   full given names), with a series ordinal (P1545) qualifier. A second author with the same
   printed name is written with `!P2093`, so that its ordinal goes on a new statement and not on
   the first author's. A person's statement also has author last names (P9688) and author given
-  names (P9687) qualifiers: the full given names when `AssessorGivenNames` found them ("Sayer",
-  "Catherine"), else the initials as printed ("Lajus", "D."), with joined initials spaced ("John
-  C. Z." for IUCN's "John C.Z."). `{{cite Q}}` passes these to the citation as `|last=` and
-  `|first=`; since October 2026 it puts a page in a tracking category for an author without them
-  (and its sandbox adds an error message). It shows the given names as they are, or initials with
-  `|name-list-style=apa`, which makes an initial of each space-separated word ("J. C. Z.";
-  unspaced "John C.Z." would give "J. C."). A name with a suffix ("Lowry, P.P., II") gets neither
+  names (P9687) qualifiers: the last name and the initials as IUCN's citation prints them, with
+  joined initials spaced ("Woinarski", "J. C. Z." for IUCN's "Woinarski, J.C.Z."). `{{cite Q}}`
+  passes these to the citation as `|last=` and `|first=`, so a plain `{{cite Q|Q…}}` gives the
+  authors as IUCN does; since October 2026 it puts a page in a tracking category for an author
+  without them (and its sandbox adds an error message). The full given names that IUCN's credits
+  give are not written, because `{{cite Q}}` reads one given names qualifier and shows it as it is;
+  their place on Wikidata would be an author item linked with author (P50). (Module:Cite Q also has
+  an undocumented `|name-list-style=apa`, which makes an initial of each space-separated word of
+  P9687.) A name with a suffix ("Lowry, P.P., II") gets neither
   qualifier, because `{{cite Q}}` would leave the suffix out;
 - author (P50) instead of an author name string for an organisation listed in `IucnAuthorItems`
   (`BeastieBot3.Shared/Wikitext/IucnAuthorItems.cs`: BirdLife International, BGCI, UNEP-WCMC,
@@ -1877,10 +1876,7 @@ links to other assessments of the taxon keep the options.
   hidden field, so it still applies on the next assessment.
 - The `{{cite Q}}` box uses the same ref options as `{{cite iucn}}` (`ToCiteQOptions`). The access
   date option applies to it only when the item has a URL: `WikidataCite.Build` sets
-  `CiteQOptions.ItemHasUrl` when the item's `wikidata_item_properties` include P953. Unless "Full
-  given names instead of initials" is ticked, it has `|name-list-style=apa`, so an item whose
-  authors have author given names (P9687) qualifiers is cited with initials, as `{{cite iucn}}` is.
-  The Wikidata references page uses the default options, so its `{{cite Q}}` has it too.
+  `CiteQOptions.ItemHasUrl` when the item's `wikidata_item_properties` include P953.
 - "Citation in taxobox status_ref" (`cite=q`, off by default): the taxobox lines' `status_ref` holds
   `{{cite Q}}` instead of `{{cite iucn}}` when the assessment has a Wikidata item. The `{{cite iucn}}`
   and `{{cite Q}}` boxes do not change. `Pages/IucnReference.cs` makes the choice for every page

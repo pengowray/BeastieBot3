@@ -111,14 +111,12 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
     };
 
     /// {{cite Q}} takes the same ref options as {{cite iucn}}, and the access date when the item has a
-    /// URL (WikidataCite sets ItemHasUrl). Its authors come from the Wikidata item, so of the author
-    /// options only the full given names apply: without them, |name-list-style=apa makes {{cite Q}}
-    /// show initials, as {{cite iucn}} does.
+    /// URL (WikidataCite sets ItemHasUrl). Its authors come from the Wikidata item, so the author
+    /// options do not apply.
     public CiteQOptions ToCiteQOptions(DateOnly today, DateOnly? downloaded) => new() {
         AccessDate = AccessDate(today, downloaded),
         WrapInRef = WrapInRef,
         RefName = RefName,
-        Initials = !FullGivenNames,
     };
 
     /// The ref name the visitor chose, or null when it is this page's default.

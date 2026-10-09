@@ -55,13 +55,6 @@ public class WikidataCitationTests {
             WikidataCitation.CiteQ("Q1", new CiteQOptions { WrapInRef = true, RefName = "7" }));
     }
 
-    [Fact]
-    public void CiteQ_Initials_IsNameListStyleApa() {
-        // {{cite Q}} then shows the initials of each author's P9687 given names.
-        Assert.Equal("{{cite Q|Q141678321 |access-date=3 October 2026 |name-list-style=apa}}",
-            WikidataCitation.CiteQ("Q141678321", new CiteQOptions { AccessDate = new DateOnly(2026, 10, 3), ItemHasUrl = true, Initials = true }));
-    }
-
     // ------------------------------------------------------------ create batch
 
     [Fact]
@@ -148,9 +141,9 @@ public class WikidataCitationTests {
     }
 
     [Fact]
-    public void CreateItemCommands_FullGivenNames_AreLastAndGivenNameQualifiers() {
-        // {{cite Q}} passes P9688/P9687 as |last=/|first=; |name-list-style=apa turns the given names
-        // back into initials. The name string stays as IUCN prints it.
+    public void CreateItemCommands_People_HaveLastNameAndInitialsQualifiers() {
+        // {{cite Q}} passes P9688/P9687 as |last=/|first=, so a plain {{cite Q}} gives the initials as
+        // IUCN prints them. Full given names are not written. The name string stays as IUCN prints it.
         var parts = Salmon with {
             Authors = [
                 Person("Sayer", "C.") with { GivenNames = "Catherine" },
@@ -162,11 +155,11 @@ public class WikidataCitationTests {
         };
         var authors = WikidataCitation.CreateItemCommands(parts, null, Model).Where(c => c.Contains("P2093", StringComparison.Ordinal)).ToList();
         Assert.Equal(new[] {
-            L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"1\"", "P9688", "\"Sayer\"", "P9687", "\"Catherine\""),
+            L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"1\"", "P9688", "\"Sayer\"", "P9687", "\"C.\""),
             // Without full given names, the initials as printed.
             L("LAST", "P2093", "\"Lajus, D.\"", "P1545", "\"2\"", "P9688", "\"Lajus\"", "P9687", "\"D.\""),
-            // Spaced, so that |name-list-style=apa gives "J. C. Z." and not "J. C.".
-            L("LAST", "P2093", "\"Woinarski, J.C.Z.\"", "P1545", "\"3\"", "P9688", "\"Woinarski\"", "P9687", "\"John C. Z.\""),
+            // Joined initials are spaced, as MOS:INITIALS writes them.
+            L("LAST", "P2093", "\"Woinarski, J.C.Z.\"", "P1545", "\"3\"", "P9688", "\"Woinarski\"", "P9687", "\"J. C. Z.\""),
             // {{cite Q}} has no place for the suffix, so the name string is left to carry it.
             L("LAST", "P2093", "\"Lowry, P.P., II\"", "P1545", "\"4\""),
             L("LAST", "P2093", "\"Royal Botanic Gardens, Kew\"", "P1545", "\"5\""),
