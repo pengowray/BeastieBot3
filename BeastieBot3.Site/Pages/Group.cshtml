@@ -43,7 +43,7 @@
     var showInfraColumn = counts.Any(c => c.Count.Infra > 0);
     var childRanks = Model.Children.Select(c => c.Group.Rank).Distinct().ToList();
     var iucnParent = above.LastOrDefault(p => !p.IsCol);
-    ViewData["PageTools"] = new List<(string, string)> { (GroupText.ToolListLink(GroupList.InSentence(group)), SiteUrls.GroupList(group)) };
+    ViewData["PageTools"] = new List<(string, string)> { (GroupText.ToolListLink(group), SiteUrls.GroupList(group)) };
 }
 
 @if (Model.ArrivedQuery is { } arrived) {
@@ -192,7 +192,7 @@
 <section class="tools" id="tools" aria-labelledby="tools-heading">
     <h2 id="tools-heading">@SiteText.HeadingTools</h2>
     <ul class="tool-links">
-        <li><a href="@SiteUrls.GroupList(group)">@GroupText.ToolListLink(GroupList.InSentence(group))</a> <span class="help">@GroupText.ToolListHelp</span></li>
+        <li><a href="@SiteUrls.GroupList(group)">@GroupText.ToolListLinkHtml(group)</a> <span class="help">@GroupText.ToolListHelp(group)</span></li>
         <li><a href="/update">@SiteText.ToolUpdateLink</a> <span class="help">@SiteText.ToolUpdateHelp</span></li>
     </ul>
 </section>

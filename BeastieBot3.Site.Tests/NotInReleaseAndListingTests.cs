@@ -38,7 +38,7 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
             Assert.Contains($"href=\"/species/{FixtureDb.AmurLeopard}/wikitext?assessment={id}", tool);
         }
         Assert.DoesNotContain("id=\"wikitext\"", tool);
-        Assert.Contains("Choose an assessment in the tables below to get its wikitext.", Html.Text(tool));
+        Assert.Contains("No current assessment in IUCN Red List version 2026-1. To get wikitext, select \u201cShow wikitext\u201d beside one of the assessments below.", Html.Text(tool));
         Assert.Null(Html.Textarea(tool, "wikitext-status"));
     }
 

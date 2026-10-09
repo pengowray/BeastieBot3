@@ -10,11 +10,11 @@ public static partial class SiteText {
             ? "1 main rank has another name than in IUCN's classification (marked ≠)."
             : $"{differences} main ranks have another name than in IUCN's classification (marked ≠).");
 
-    /// The box that shows the rows above order ("Show 6 ranks above order, 1 marked ≠"). rank: the
-    /// first row shown (order, else family or genus).
+    /// The box that shows the rows above order: "Show the 6 ranks above order (1 name marked ≠)".
+    /// rank: the first row shown (order, else family or genus).
     public static string RanksShowAbove(int rows, string rank, int differences) =>
-        (rows == 1 ? $"Show 1 rank above {rank}" : $"Show {rows} ranks above {rank}")
-        + (differences == 0 ? "" : $", {differences} marked ≠");
+        (rows == 1 ? $"Show the rank above {rank}" : $"Show the {rows} ranks above {rank}")
+        + (differences switch { 0 => "", 1 => " (1 name marked ≠)", _ => $" ({differences} names marked ≠)" });
 
     public const string RanksIucn = "IUCN";
     public const string RanksCol = "Catalogue of Life";

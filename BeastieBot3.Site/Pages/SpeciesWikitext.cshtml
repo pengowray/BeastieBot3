@@ -6,7 +6,7 @@
         ViewData["Title"] = SiteText.TaxonNotFoundHeading(Model.RequestedTaxonId);
         ViewData["HideHeaderSearch"] = true;
     } else {
-        ViewData["Title"] = SiteText.WikitextPageTitle(taxon.ScientificName);
+        ViewData["Title"] = SiteText.WikitextPageTitle(taxon.SubpopulationName is { Length: > 0 } subpopulation ? $"{taxon.ScientificName} {subpopulation}" : taxon.ScientificName);
     }
 }
 @if (taxon is null) {
@@ -26,11 +26,11 @@
     @if (taxon.CommonNameEn is not null) {
         <p class="taxon-common-name">@taxon.CommonNameEn</p>
     }
-    <p class="tool-back"><a href="/species/@taxon.TaxonId">@SiteText.BackToTaxonPage</a></p>
+    <p class="tool-back"><a href="/species/@taxon.TaxonId">@SiteText.TaxonPageFor<span class="sci-name">@Html.Raw(nameHtml)</span></a></p>
 </header>
 
 @if (selected is null) {
-    <p class="note">@SiteText.WikitextChooseAssessment</p>
+    <p class="note">@SiteText.WikitextChooseAssessment(Model.Version)</p>
 }
 
 @if (selected is not null) {

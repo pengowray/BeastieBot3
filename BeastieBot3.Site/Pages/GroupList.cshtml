@@ -10,7 +10,7 @@
             : GroupText.NotFoundHeading(Model.RequestedRank.ToLowerInvariant(), Model.RequestedName);
         ViewData["NoIndex"] = true;
     } else {
-        ViewData["Title"] = GroupText.ListPageTitle(GroupList.InSentence(group));
+        ViewData["Title"] = GroupText.ToolListLink(group);
     }
 }
 @if (group is null) {
@@ -42,7 +42,7 @@
     @if (group.CommonNameEn is not null) {
         <p class="taxon-common-name">@group.CommonNameEn</p>
     }
-    <p class="tool-back"><a href="@SiteUrls.Group(group)">@GroupText.BackToGroupPage</a></p>
+    <p class="tool-back"><a href="@SiteUrls.Group(group)">@GroupText.GroupPageForHtml(group)</a></p>
 </header>
 
 @{

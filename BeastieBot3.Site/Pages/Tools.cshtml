@@ -14,7 +14,7 @@
 </section>
 
 <section class="tool-entry" aria-labelledby="tool-wikitext-heading">
-    <h2 id="tool-wikitext-heading">@SiteText.ToolWikitextLink</h2>
+    <h2 id="tool-wikitext-heading">@SiteText.ToolsWikitextHeading</h2>
     <p>@SiteText.ToolsWikitextText</p>
     <p>@SiteText.ToolsWhereTaxon
         @if (example is not null) {
@@ -28,7 +28,7 @@
     <p>@SiteText.ToolsListText</p>
     <p>@SiteText.ToolsWhereGroup
         @if (Model.ExampleGenus is { } genus) {
-            @SiteText.ToolsExample <a href="@SiteUrls.GroupList(genus)">@GroupText.ToolListLink(BeastieBot3.Site.Lists.GroupList.InSentence(genus))</a>
+            @SiteText.ToolsExample <a href="@SiteUrls.GroupList(genus)">@genus.Rank <i>@genus.Name</i></a>
         }
     </p>
 </section>

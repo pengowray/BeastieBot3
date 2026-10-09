@@ -18,7 +18,8 @@
 @{
     var status = Model.StatusAssessment;
     var parentPrefix = SiteText.ParentLinePrefix(taxon.Kind);
-    ViewData["PageTools"] = new List<(string, string)> { (SiteText.ToolWikitextLink, SpeciesWikitextModel.PathFor(taxon.TaxonId)) };
+    var plainName = taxon.SubpopulationName is { Length: > 0 } subpopulation ? $"{taxon.ScientificName} {subpopulation}" : taxon.ScientificName;
+    ViewData["PageTools"] = new List<(string, string)> { (SiteText.WikitextPageTitle(plainName), SpeciesWikitextModel.PathFor(taxon.TaxonId)) };
     var ranks = new[] { taxon.Kingdom, taxon.Phylum, taxon.ClassName, taxon.OrderName, taxon.Family, taxon.Genus };
 }
 
@@ -384,9 +385,9 @@
 <section class="tools" id="tools" aria-labelledby="tools-heading">
     <h2 id="tools-heading">@SiteText.HeadingTools</h2>
     <ul class="tool-links">
-        <li><a href="@SpeciesWikitextModel.PathFor(taxon.TaxonId)">@SiteText.ToolWikitextLink</a> <span class="help">@SiteText.ToolWikitextHelp</span></li>
+        <li><a href="@SpeciesWikitextModel.PathFor(taxon.TaxonId)">@SiteText.ToolWikitextFor<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</span></a> <span class="help">@SiteText.ToolWikitextHelp</span></li>
         @if (Model.GenusGroup is { } genus) {
-            <li><a href="@BeastieBot3.Site.Web.SiteUrls.GroupList(genus)">@SiteText.ToolGenusListLink(genus.Name)</a> <span class="help">@SiteText.ToolGenusListHelp</span></li>
+            <li><a href="@BeastieBot3.Site.Web.SiteUrls.GroupList(genus)">@GroupText.ToolListLinkHtml(genus)</a> <span class="help">@GroupText.ToolListHelp(genus)</span></li>
         }
         <li><a href="/update">@SiteText.ToolUpdateLink</a> <span class="help">@SiteText.ToolUpdateHelp</span></li>
     </ul>

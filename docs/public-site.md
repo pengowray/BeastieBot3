@@ -1616,7 +1616,7 @@ Catalogue of Life groups between its ranks), in the Catalogue of Life, Wikidata,
 Wikipedia and Wikispecies, row by main rank (kingdom to species; `Display/ClassificationComparison.cs`).
 `site build-db` writes each source's nodes to `ladder_node` (`SiteBuild/SiteLadders.cs`); the page
 climbs `parent_id` from the taxon's start node. The rows above the order row (above family, or
-genus, when no source has an order) are hidden until the reader ticks "Show N ranks above order"
+genus, when no source has an order) are hidden until the reader ticks "Show the N ranks above order"
 (`ComparisonRow.AboveCut`; CSS only, `:has`); the label also counts the hidden cells marked ≠.
 Every row from order down is shown, including groups that only Wikidata, Wikipedia or Wikispecies
 has, because the lower ranks are the ones that differ between sources.

@@ -28,12 +28,13 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
         Assert.Contains("Family Ursidae", html);
         Assert.Contains("rel=\"canonical\" href=\"http://localhost/taxa/family/ursidae\"", html);
         Assert.Contains("Common names in the Catalogue of Life (unchecked):", html);
-        Assert.Contains("<a href=\"/taxa/family/ursidae/list\">", Section(html, "tools"));
+        Assert.Contains("<a href=\"/taxa/family/ursidae/list\">Wikipedia list of the family Ursidae</a>", Section(html, "tools"));
         Assert.Null(Html.Textarea(html, "list-wikitext"));
 
         var list = await _client.GetStringAsync("/taxa/family/ursidae/list");
         Assert.Contains("rel=\"canonical\" href=\"http://localhost/taxa/family/ursidae/list\"", list);
-        Assert.Contains("<a href=\"/taxa/family/ursidae\">", list);
+        Assert.Contains("<a href=\"/taxa/family/ursidae\">Group page for the family Ursidae</a>", list);
+        Assert.Contains("<title>Wikipedia list of the family Ursidae | Beastie Bot Species Status</title>", list);
         // Mammals default to common name only, with no rank headings below a family and no status sections.
         Assert.Equal("* [[Polar bear]] {{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(list, "list-wikitext"));
     }

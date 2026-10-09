@@ -20,7 +20,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
             "class=\"classification",
             ">Latest global assessment</h2>",
             ">Assessment history</h2>",
-            ">Subspecies and subpopulations (IUCN)</h2>",
+            ">Subspecies and subpopulations assessed by IUCN</h2>",
             ">Names</h2>",
             ">Links to other sites</h2>",
             ">Tools</h2>",
@@ -40,14 +40,16 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.DoesNotContain("id=\"wikitext\"", html);
         Assert.DoesNotContain(">Show wikitext</a>", html);
         Assert.DoesNotContain(">Wikitext</th>", html);
-        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikitext\">Wikitext and citations</a>", Section(html, "tools"));
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikitext\">Wikitext and citations for <span class=\"sci-name\"><i>Ursus maritimus</i></span></a>", Section(html, "tools"));
+        Assert.Contains("<a href=\"/taxa/genus/ursus/list\">Wikipedia list of the genus <i>Ursus</i></a>", Section(html, "tools"));
         Assert.Contains("<a href=\"/taxa/genus/ursus/list\">", Section(html, "tools"));
         // The Tools menu in the header has the page's own tool first.
         var menu = html[html.IndexOf("<details class=\"nav-menu\">", StringComparison.Ordinal)..];
         Assert.True(menu.IndexOf($"/species/{FixtureDb.PolarBear}/wikitext", StringComparison.Ordinal) < menu.IndexOf("/update", StringComparison.Ordinal));
 
         var tool = await Tool();
-        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}\">", tool);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}\">Taxon page for <span class=\"sci-name\"><i>Ursus maritimus</i></span></a>", tool);
+        Assert.Contains("<title>Wikitext and citations for Ursus maritimus | Beastie Bot Species Status</title>", tool);
         Assert.Contains($"<link rel=\"canonical\" href=\"http://localhost/species/{FixtureDb.PolarBear}/wikitext\">", tool);
         Assert.Contains(">Show wikitext</a>", tool);
     }
@@ -459,20 +461,20 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains($"<a href=\"/species/{FixtureDb.Tiger}\"><i>Panthera tigris</i></a>", Section(html, "related"));
 
         var tiger = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}");
-        Assert.Contains("<h2 id=\"related-heading\">Subspecies (IUCN)</h2>", tiger);
+        Assert.Contains("<h2 id=\"related-heading\">Subspecies assessed by IUCN</h2>", tiger);
         Assert.Contains($"<a href=\"/species/{FixtureDb.SumatranTiger}\">", Section(tiger, "related"));
 
         var lion = await _client.GetStringAsync($"/species/{FixtureDb.Lion}");
-        Assert.Contains("<h2 id=\"related-heading\">Subpopulations (IUCN)</h2>", lion);
+        Assert.Contains("<h2 id=\"related-heading\">Subpopulations assessed by IUCN</h2>", lion);
     }
 
     [Fact]
     public async Task SpeciesWithNoSubspeciesSaysSo() {
         var bear = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}"));
-        Assert.Contains("Subspecies and subpopulations (IUCN) IUCN has not assessed any subspecies or subpopulations of this species.", bear);
+        Assert.Contains("Subspecies and subpopulations assessed by IUCN IUCN has not assessed any subspecies or subpopulations of this species.", bear);
 
         var brome = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.Bromus}"));
-        Assert.Contains("Subspecies, varieties and subpopulations (IUCN) IUCN has not assessed any subspecies, varieties or subpopulations of this species.", brome);
+        Assert.Contains("Subspecies, varieties and subpopulations assessed by IUCN IUCN has not assessed any subspecies, varieties or subpopulations of this species.", brome);
     }
 
     [Fact]

@@ -29,7 +29,7 @@ public sealed class NameTransliterationTests(SiteFactory factory) : IClassFixtur
     [Fact]
     public async Task TheTaxonPageShowsTheTransliterationUnderTheName() {
         var html = await factory.Client().GetStringAsync($"/species/{FixtureDb.Tiger}");
-        Assert.Contains("<td lang=\"ja\">トラ <span class=\"transliteration\" lang=\"ja-Latn\" title=\"Transliteration into Latin letters\">tora</span></td>", html);
+        Assert.Contains("<td lang=\"ja\">トラ <span class=\"transliteration\" lang=\"ja-Latn\" title=\"Automatic transliteration into Latin letters\">tora</span></td>", html);
         Assert.Contains("<td lang=\"de\">Tiger</td>", html);
     }
 }
