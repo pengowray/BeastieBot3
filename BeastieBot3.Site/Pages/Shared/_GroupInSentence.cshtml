@@ -1,0 +1,4 @@
+@model BeastieBot3.Site.Data.GroupRow
+@* A group named inside a sentence: "the family Ursidae", "the genus <i>Ursus</i>", or the name alone
+   for a group whose rank is not shown ("Cetacea"). GroupText.GroupInSentence is the plain-text form. *@
+@if (Model.ShowRank && Model.Rank != "unranked") {<text>@GroupText.The @Model.Rank </text>}@if (Model.IsGenus) {<i>@Model.Name</i>} else {@Model.Name}

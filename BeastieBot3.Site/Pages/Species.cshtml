@@ -314,7 +314,7 @@
     <ul class="tool-links">
         <li><a href="@SpeciesWikitextModel.PathFor(taxon.TaxonId)">@SiteText.ToolWikitextFor<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</span></a> <span class="help">@SiteText.ToolWikitextHelp</span></li>
         @if (Model.GenusGroup is { } genus) {
-            <li><a href="@BeastieBot3.Site.Web.SiteUrls.GroupList(genus)">@GroupText.ToolListLinkHtml(genus)</a> <span class="help">@GroupText.ToolListHelp(genus)</span></li>
+            <li><a href="@BeastieBot3.Site.Web.SiteUrls.GroupList(genus)">@GroupText.ToolListLinkBefore<partial name="_GroupInSentence" model="genus" /></a> <span class="help">@GroupText.ToolListHelp(genus)</span></li>
         }
         <li><a href="/update">@SiteText.ToolUpdateLink</a> <span class="help">@SiteText.ToolUpdateHelp</span></li>
     </ul>
