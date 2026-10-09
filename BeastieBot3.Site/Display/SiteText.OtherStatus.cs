@@ -299,8 +299,8 @@ public static partial class SiteText {
     /// List CSV file), which says what the link opens.
     public const string OtherStatusJapanRecordLink = "Ministry of the Environment";
     public static string JapanRecordLink(string? url) =>
-        url is not null && url.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ? "Ministry of the Environment (CSV, in Japanese)"
-        : url is not null && url.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "Ministry of the Environment (PDF, in Japanese)"
+        url is not null && url.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ? "Ministry of the Environment (CSV)"
+        : url is not null && url.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) ? "Ministry of the Environment (PDF)"
         : OtherStatusJapanRecordLink;
     /// The note under the tables when they have rows from Japan's Red List. The Public Data License asks
     /// for the source and a note of what was changed; the Japanese part is the source line in the form
