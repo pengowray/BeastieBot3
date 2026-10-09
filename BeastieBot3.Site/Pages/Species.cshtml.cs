@@ -145,6 +145,10 @@ public sealed class SpeciesModel : TaxonPageModel {
     public IReadOnlyList<LanguageGroup> OtherLanguages { get; private set; } = [];
     public IReadOnlyList<SynonymRow> Synonyms { get; private set; } = [];
 
+    /// For a species in the release: its subspecies and varieties from IUCN, the Catalogue of Life and
+    /// Wikidata; null for any other taxon and when no source lists one.
+    public SubspeciesList? SubspeciesList { get; private set; }
+
     /// For a subspecies, variety or subpopulation: its species, with that species' latest global assessment.
     public RelatedTaxonRow? SpeciesRow { get; private set; }
 
@@ -193,6 +197,7 @@ public sealed class SpeciesModel : TaxonPageModel {
             StatusCredits = CreditsView.Build(_queries.GetCredits(status.AssessmentId));
         }
         LoadNames();
+        SubspeciesList = SubspeciesRows.Load(_queries, Taxon);
         LoadRelatedTaxa();
         LoadArrival(q);
         ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, $"/species/{taxon.TaxonId}");

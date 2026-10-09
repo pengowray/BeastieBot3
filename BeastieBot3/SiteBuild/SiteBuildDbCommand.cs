@@ -324,6 +324,22 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Names after merging the sources' rows (per taxon, language and name)", s.OtherLanguageNamesMerged);
         Row("Languages", s.OtherLanguages.Count);
 
+        Section("Subspecies and varieties of the species (species page list)");
+        var sub = s.Subspecies;
+        Row("Species with a list from any source", sub.SpeciesWithList);
+        Row("Of those, with names from two or more sources", sub.SpeciesWithSeveralSources);
+        Row("IUCN subspecies and varieties in the release under a species in the release (read by the site from the taxon table)", sub.IucnRows);
+        Row("Catalogue of Life: species with a CoL ID read", sub.ColSpeciesRead);
+        Row("Catalogue of Life: accepted subspecies and varieties stored", sub.ColRows);
+        Row("Catalogue of Life: species with one or more", sub.ColSpecies.Count);
+        Row("Catalogue of Life: names left out (not genus, species and one more epithet)", sub.ColUnreadable);
+        Row("Wikidata: subspecies and variety items in the taxon sweep", sub.WikidataItemsRead);
+        Row("Wikidata: rows stored (one per species the item is under)", sub.WikidataRows);
+        Row("Wikidata: species with one or more", sub.WikidataSpecies.Count);
+        Row("Wikidata: items under a site species left out as an instance of synonym, fossil taxon, unavailable or original combination", sub.WikidataLeftOutByInstance);
+        Row("Wikidata: items under a site species left out because another item names them as a taxon synonym (P1420)", sub.WikidataLeftOutAsSynonym);
+        Row("Wikidata: names left out (not genus, species and one more epithet)", sub.WikidataUnreadable);
+
         Section("Links");
         Row("Taxa with an English Wikipedia article", s.EnwikiTitles);
         Row("Taxa with a Wikidata item that states their IUCN taxon id (P627)", s.QidsFromP627);

@@ -1,0 +1,44 @@
+@model SubspeciesList
+@* The species' subspecies and varieties from the IUCN Red List, the Catalogue of Life and Wikidata, one
+   row per name (SubspeciesRows.Build). Each source links to its record; a source with two records of
+   the name links each by its id. Rows after the first SpeciesModel.ShortListLength are "more-item",
+   hidden until the box below the table is ticked. *@
+@{
+    var subspecies = Model.HasSubspecies;
+    var varieties = Model.HasVarieties;
+    var hidden = Math.Max(0, Model.Rows.Count - SpeciesModel.ShortListLength);
+}
+<section class="subspecies-list" id="subspecies-list" aria-labelledby="subspecies-list-heading">
+    <h2 id="subspecies-list-heading">@SiteText.HeadingSubspeciesList(subspecies, varieties)</h2>
+    <p>@SiteText.SubspeciesListIntro(subspecies, varieties)@if (Model.HasWikidataOnlyRows) {<text> @SiteText.SubspeciesListWikidataOnly</text>}</p>
+    <div class="more-list">
+        <div class="table-scroll">
+            <table class="names-table subspecies-table">
+                <thead>
+                    <tr>
+                        <th scope="col">@SiteText.ColName</th>
+                        <th scope="col">@SiteText.ColSource</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < Model.Rows.Count; i++) {
+                        var row = Model.Rows[i];
+                        <tr class="@(i >= SpeciesModel.ShortListLength ? "more-item" : null)">
+                            <th scope="row">@Html.Raw(ScientificNameMarkup.ToSynonymHtml(row.Name))@if (row.Authority is not null) {<text> </text><span class="authority">@row.Authority</span>}</th>
+                            <td>@for (var j = 0; j < row.Sources.Count; j++) {
+                                    var source = row.Sources[j];
+                                    if (j > 0) {<text>, </text>}
+                                    if (source.Records.Count == 1) {<a href="@source.Records[0].Url">@source.Label</a>}
+                                    else {@source.Label<text> (</text>for (var k = 0; k < source.Records.Count; k++) {if (k > 0) {<text>, </text>}<a href="@source.Records[k].Url">@source.Records[k].Id</a>}<text>)</text>}
+                                    if (source.OtherAuthority is not null) {@SiteText.SourceAuthorityBefore<span class="authority">@source.OtherAuthority</span>@SiteText.SourceAuthorityAfter}
+                                }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (hidden > 0) {
+            <p class="more-toggle"><label><input type="checkbox" class="show-more" autocomplete="off"> @SiteText.ShowMoreSubspecies(hidden, subspecies, varieties)</label></p>
+        }
+    </div>
+</section>

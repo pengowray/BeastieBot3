@@ -18,7 +18,8 @@ using Spectre.Console;
 //   6. Common names store: English names, the best English name, CoL synonyms.
 //   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT
 //      (with the EPBC Act and state and territory statuses of its profiles).
-//   8. Parents, then the taxon, name and taxon link rows, then meta.
+//   8. Parents, then the taxon, name and taxon link rows, the classification in other sources, the
+//      subspecies and varieties of each species in CoL and Wikidata (SiteSubspecies), then meta.
 //   9. Name keys, indexes, full-text index, ANALYZE, VACUUM.
 //
 // The database is written to "<output>.building" and moved over the output only when every phase
@@ -347,6 +348,33 @@ internal sealed class SiteDbBuild {
             writer.InsertRows(ladderInsert, ladderParameters, nodes.Select(n => new object?[] { n.Source, n.Id, n.ParentId, n.Rank, n.Name }));
             return $"{nodes.Count(n => n.Id.StartsWith(SiteLadders.PagePrefix, StringComparison.Ordinal) && !n.Id.Contains('#')):N0} taxon pages, {nodes.Count:N0} nodes";
         });
+
+        // The subspecies and varieties of each species in the Catalogue of Life and Wikidata, for the
+        // species page's list, which adds IUCN's own from the taxon table.
+        var subspecies = _stats.Subspecies;
+        Optional("Catalogue of Life database: subspecies and varieties", _inputs.ColDatabase, path => {
+            var rows = SiteSubspecies.ReadCol(path, taxonList, subspecies, ct);
+            writer.InsertRows(SiteSubspecies.Insert, SiteSubspecies.InsertParameters, rows.Select(SiteSubspecies.InsertValues));
+            return $"{subspecies.ColRows:N0} subspecies and varieties of {subspecies.ColSpecies.Count:N0} species "
+                + $"({subspecies.ColSpeciesRead:N0} species with a CoL ID read, {subspecies.ColUnreadable:N0} names not read)";
+        });
+        Optional("Wikidata cache: subspecies and varieties", _inputs.WikidataCache, path => {
+            var rows = SiteSubspecies.ReadWikidata(path, taxonList, subspecies, out var warning, ct);
+            if (warning is not null) {
+                _stats.Warnings.Add(warning);
+            }
+            if (rows is null) {
+                return "no taxon sweep";
+            }
+            writer.InsertRows(SiteSubspecies.Insert, SiteSubspecies.InsertParameters, rows.Select(SiteSubspecies.InsertValues));
+            return $"{subspecies.WikidataRows:N0} subspecies and varieties of {subspecies.WikidataSpecies.Count:N0} species "
+                + $"({subspecies.WikidataLeftOutAsSynonym:N0} items named as a synonym and {subspecies.WikidataLeftOutByInstance:N0} synonym or fossil items left out, "
+                + $"{subspecies.WikidataUnreadable:N0} names not read)";
+        });
+        SiteSubspecies.CountLists(taxonList, taxa, subspecies);
+        var subspeciesSummary = $"{subspecies.SpeciesWithList:N0} species with a list ({subspecies.SpeciesWithSeveralSources:N0} from two or more sources); "
+            + $"rows from IUCN {subspecies.IucnRows:N0}, the Catalogue of Life {subspecies.ColRows:N0}, Wikidata {subspecies.WikidataRows:N0}";
+        _console.MarkupLineInterpolated($"  Subspecies and varieties: {subspeciesSummary}");
         WriteMeta(writer, taxonList.Count);
 
         // 9. Indexes and compaction.

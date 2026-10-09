@@ -1670,6 +1670,62 @@ linking each to the same kind of page).
   `Pages/Tools.cshtml`, which describes each tool and links an example taxon and genus). Strings in
   `Display/SiteText.Tools.cs` and `GroupText.Tools.cs`.
 
+### Subspecies and varieties (`infraspecific_name`, schema 27)
+
+A species page has a section after the names that lists the species' subspecies and varieties from
+three sources, one row per name with its authority and its sources, each source linked to its
+record (`Pages/SubspeciesRows.cs`, `Pages/Shared/_Subspecies.cshtml`, strings in
+`Display/SiteText.Subspecies.cs`). The section is left out for a taxon that is not a species in the
+release, and when no source lists a subspecies or variety of it.
+
+| Source | Rows | Link |
+| --- | --- | --- |
+| IUCN Red List | the subspecies and varieties in the release whose `parent_taxon_id` is the species, read from `taxon` when the page is shown | the taxon's page on this site |
+| Catalogue of Life | accepted and provisionally accepted name usages of rank subspecies or variety whose `parentID` is the species' `col_id` | the CoL record |
+| Wikidata | items of `wikidata sweep-taxa`'s table with rank subspecies (Q68947) or variety (Q767728) whose parent taxa (P171) include the species' item | the item |
+
+`site build-db` writes the CoL and Wikidata rows to `infraspecific_name` (`SiteBuild/SiteSubspecies.cs`):
+one indexed CoL query per species with a CoL ID (`nameusage` has an index on `parentID`), and one
+read of the sweep's subspecies and variety rows by rank. It leaves out Wikidata items that are an
+instance of synonym, fossil taxon, unavailable combination or original combination, and items that
+another item names as a taxon synonym (P1420). An item of an extinct taxon (Q98961713) is kept: the
+Cape lion is still a subspecies of the lion. CoL's `extinct` flag is not used, because it is set on
+both living lion subspecies. A name is kept only when `InfraspecificNames.Split` (`BeastieBot3.Shared`)
+reads it as a genus, a species epithet and one more epithet, with at most one rank marker (a
+subgenus in brackets after the genus, as CoL writes many insect names, is dropped from the name).
+Hybrid names ("×", "nothosubsp.") and names with a capitalised last word are left out.
+
+The page merges the rows by `InfraspecificNames.Key`: the rank, then the three words folded, so
+"Panthera pardus ssp. orientalis" (IUCN) and "Panthera pardus orientalis" (CoL) are one row, and a
+subspecies and a variety of the same name are two. A row shows the name as the lists write it (no
+rank marker for an animal subspecies, "subsp." and "var." for other kingdoms), the authority of the
+first source that gives one, and the sources in the order of the names tables (IUCN, Wikidata,
+Catalogue of Life), each with its own authority when that differs. A source with two records of one
+name (Wikidata has two "Panthera leo leo" items) links each record by its id. Rows are sorted by
+name, and those after the first 10 are hidden behind a "Show all" box.
+
+Known limits:
+
+- Wikidata often states a synonym in both directions: the item for Panthera leo leo names
+  P. l. persica as a taxon synonym and the persica item names P. l. leo, so both items are left out.
+- Names are merged only when they are spelled the same: "melanochaita" and "melanochaitus" are two
+  rows, and so are a CoL subspecies whose species part differs from IUCN's (CoL's accepted name of an
+  IUCN species may be spelled differently or be in another genus) and IUCN's or Wikidata's name for
+  it. In the October 2026 build, 4,014 CoL rows (1,394 species) and 1,355 Wikidata rows (477
+  species) have another species part than IUCN's name, such as CoL's "Acerodon macklotii alorensis"
+  under IUCN's Acerodon mackloti.
+
+In the October 2026 build (2026-1, COL26.7 XR), 25,624 species have a list (14,100 with names from
+two or more sources): 3,076 IUCN subspecies and varieties, 55,184 CoL rows (46,789 subspecies and
+8,395 varieties, 16,792 species) and 75,048 Wikidata rows (54,655 subspecies and 20,393 varieties,
+22,436 species; 1,009 items named as a synonym and 178 synonym or fossil items left out). Both
+readers take about 4 seconds.
+- The checklists store keeps no subspecies. The Mammal Diversity Database's species file has a
+  `subspecies` column (1,429 of 6,904 species in v2.5: each subspecies with its authority, its
+  synonyms and a fossil or recently extinct note), and the Reptile Database's ColDP export has 7,667
+  subspecies names, but `checklists import` reads neither. Wikispecies pages and the `subdivision`
+  lists of English Wikipedia taxoboxes are other possible sources.
+
 ### Citation options
 
 The options form on a taxon's wikitext page is read from and written to the query string

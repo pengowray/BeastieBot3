@@ -270,6 +270,7 @@
         </div>
     }
 </section>
+@if (Model.SubspeciesList is { } subspeciesList) {<partial name="_Subspecies" model="subspeciesList" />}
 
 @if (Model.ComparativeClassification.Count > 0) {
     var differences = Model.ComparativeClassification.Sum(r => r.Cells.Count(c => c.Differs));

@@ -291,6 +291,8 @@ internal sealed class SiteBuildStats {
     public readonly OtherNameCounts ColOtherNames = new();
     public readonly OtherNameCounts WikidataOtherNames = new();
     public readonly OtherNameCounts WikipediaOtherNames = new();
+    /// The subspecies and varieties of the species in the release (infraspecific_name, SiteSubspecies).
+    public readonly SubspeciesCounts Subspecies = new();
     /// name rows written for common names in languages other than English (or none), by source.
     public readonly Dictionary<string, int> OtherLanguageNameRows = new(StringComparer.Ordinal);
     /// Those names after merging the sources' rows: one per taxon, language and name (case and
