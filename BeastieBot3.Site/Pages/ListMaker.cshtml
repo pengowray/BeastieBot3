@@ -22,7 +22,7 @@
     <p>@SiteText.ListMakerSpeciesBefore<a href="/species/@species.TaxonId"><i>@species.ScientificName</i></a>@SiteText.ListMakerSpeciesAfter</p>
     <ul class="group-choices">
         @foreach (var group in Model.SpeciesGroups) {
-            <li><a href="@SiteUrls.GroupList(group)">@GroupText.ToolListLinkBefore<partial name="_GroupInSentence" model="group" /></a></li>
+            <li><a href="@SiteUrls.GroupList(group)">@GroupList.Capitalize(group.Rank) @if (group.IsGenus) {<i>@group.Name</i>} else {@group.Name}</a></li>
         }
     </ul>
 } else if (Model.Groups.Count > 1) {

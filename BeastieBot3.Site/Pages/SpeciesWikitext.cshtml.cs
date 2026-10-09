@@ -225,7 +225,7 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
             }
             var taxoboxCode = SpeciesboxStatus.ToStatusCode(facts.Category, facts.PossiblyExtinct, facts.PossiblyExtinctInTheWild);
             if (code == "pl" && OtherWikipedias.PolishCode(taxoboxCode) is { } plCode && plCode != taxoboxCode) {
-                notes.Add(SiteText.WikiPolishCode(taxoboxCode, plCode));
+                notes.Add(SiteText.WikiPolishCode(taxoboxCode switch { "PE" => "CR(PE)", "PEW" => "CR(PEW)", _ => taxoboxCode }, plCode));
             }
             if (code == "pl" && OtherWikipedias.PolishCode(taxoboxCode) is null) {
                 notes.Add(SiteText.WikiPolishNoCode(taxoboxCode));

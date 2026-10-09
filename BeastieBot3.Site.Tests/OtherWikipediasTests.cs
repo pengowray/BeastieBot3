@@ -126,7 +126,7 @@ public sealed class OtherWikipediasPageTests(SiteFactory factory) : IClassFixtur
         Assert.Null(Html.Textarea(html, "wikitext-status"));
         Assert.DoesNotContain("name=\"authors\" value=\"lastfirst\" checked", html);
         Assert.Contains("<input type=\"hidden\" name=\"wiki\" value=\"fr\">", html);
-        Assert.Contains("{{UICN}} always links IUCN&#x27;s current assessment of the taxon", html);
+        Assert.Contains("{{UICN}} always links to the taxon&#x27;s current assessment", html);
         // English Wikipedia's taxobox check and the {{cite iucn}} DOI note belong to English only.
         Assert.DoesNotContain("Status in the Wikipedia taxobox", html);
         Assert.DoesNotContain("works without a DOI", html);

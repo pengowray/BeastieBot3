@@ -42,7 +42,7 @@ public sealed class CiteQOptionTests(SiteFactory factory) : IClassFixture<SiteFa
 
         Assert.Contains("| status_ref = <ref name=\"iucn\">{{cite iucn", Html.Textarea(html, "wikitext-speciesbox"));
         Assert.Contains("This assessment has no Wikidata item, so the citations use {{cite iucn}}. ", Html.Text(html));
-        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikidata\">Commands to create the item</a>", html);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikidata\">QuickStatements commands to create the item</a>", html);
         Assert.Null(Html.Textarea(html, WikidataCite.CiteQBoxId));
     }
 

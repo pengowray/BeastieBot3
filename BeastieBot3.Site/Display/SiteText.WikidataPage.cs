@@ -9,7 +9,7 @@ public static partial class SiteText {
     public const string WikidataPageFor = "Wikidata references for ";
     public static string WikidataPageTitle(string name) => WikidataPageFor + name;
     public const string WikidataPageHelp =
-        "The Wikidata item of any IUCN assessment of this taxon, QuickStatements commands to create the item or add what it lacks, and the taxon item's IUCN conservation status (P141).";
+        "Find the Wikidata item of any IUCN assessment of this taxon, and get QuickStatements commands to create the item, add its missing statements, or update the taxon item's IUCN conservation status (P141).";
 
     public const string HeadingWikidataItem = "Wikidata item of the assessment";
 
@@ -20,7 +20,7 @@ public static partial class SiteText {
 
     public static string WikidataChooseAssessment(string? version) =>
         (version is null ? "No current assessment in the IUCN Red List." : $"No current assessment in IUCN Red List version {version}.")
-        + " To get an assessment's Wikidata item and commands, select “Show Wikidata item” beside one of the assessments below.";
+        + " For the Wikidata item and QuickStatements commands of an assessment, select “Show Wikidata item” in its row below.";
 
     public static string WikidataEarlierAssessment(string category, int? year, string? versionNote = null) =>
         (year is null ? $"Wikidata item of an earlier assessment: {category}." : $"Wikidata item of an earlier assessment: {category}, published {year}.")

@@ -49,7 +49,7 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("enctype=\"multipart/form-data\"", html);
         Assert.Contains("name=\"text\"", html);
-        Assert.Contains("Update IUCN statuses in wikitext", Html.Text(html));
+        Assert.Contains("Update IUCN statuses", Html.Text(html));
         Assert.Null(Html.Textarea(html, "update-output"));
     }
 
@@ -117,7 +117,7 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
     [Fact]
     public async Task PageIsLinkedFromTheNavigationAndHome() {
         var home = await (await _client.GetAsync("/")).Content.ReadAsStringAsync();
-        Assert.Contains("<a href=\"/update-statuses\">Update IUCN statuses in wikitext</a>", home);
+        Assert.Contains("<a href=\"/update-statuses\">Update IUCN statuses</a>", home);
         Assert.Contains("Update the IUCN statuses in an article or list", home);
         var about = await (await _client.GetAsync("/about")).Content.ReadAsStringAsync();
         Assert.Contains("status update page", Html.Text(about));

@@ -5,15 +5,15 @@ namespace BeastieBot3.Site.Display;
 /// Strings of the status update page (/update). The three results are named the same way in the
 /// summary, the report table and the notes: "changed", "already up to date", "left as is".
 public static partial class UpdateText {
-    public const string Heading = "Update IUCN statuses in wikitext";
+    public const string Heading = "Update IUCN statuses";
 
     /// The link on the home page.
     public const string HomeLink = "Update the IUCN statuses in an article or list";
 
     public static string Intro(string? version) =>
-        "Paste the wikitext of an article or list, or the address of its English Wikipedia page. This page gives back the same wikitext with IUCN statuses changed to match the latest global assessments"
-        + (version is null ? "." : $" in Red List {version}.")
-        + " All other text is returned exactly as pasted.";
+        "Paste the wikitext of an article or list, or the address of its English Wikipedia page. This page returns the same wikitext with the IUCN statuses updated to match the latest global assessments"
+        + (version is null ? "." : $" in IUCN Red List version {version}.")
+        + " All other text is returned unchanged.";
 
     public const string IntroItemsLabel = "Updated items:";
     /// The summary of the introduction, closed once a result is shown.
@@ -37,7 +37,7 @@ public static partial class UpdateText {
     public static string IntroLimits(int maxItems) =>
         $"Limits: 2 MB of text and {Count(maxItems)} items. Items after the first {Count(maxItems)} are left as they are.";
 
-    public const string InputLabel = "Wikitext of an article or list, or its English Wikipedia address";
+    public const string InputLabel = "Wikitext, or the address of an English Wikipedia page";
     public const string Submit = "Update statuses";
     public const string NotSaved = "Species Check does not save your text or edit Wikipedia. Copy the updated wikitext back into the article yourself.";
 
@@ -152,7 +152,7 @@ public static partial class UpdateText {
     private static string Items(int n) => n == 1 ? "1 item" : $"{Count(n)} items";
 
     // The example on the page before any text is sent (_UpdateExample).
-    public const string ExampleHeading = "What it updates";
+    public const string ExampleHeading = "What this page updates";
     public const string ExampleBecomes = "becomes";
     public const string ExampleListLine = "Lists";
     public const string ExampleListLineText = "Giant panda";
@@ -160,8 +160,8 @@ public static partial class UpdateText {
     public const string ExampleTaxoboxText = "Conservation status";
     public const string ExampleSpeciesTable = "Species tables";
     public const string ExampleSpeciesTableText = "Kerivoula crypta";
-    public const string ExampleSummaryBox = "Status count boxes";
-    public const string ExampleSummaryBoxText = "The counts of each category are counted again.";
-    public const string ExampleMore = "It also updates the {{cite iucn}} in a taxobox's status_ref, and status columns in other wikitables. Nothing else in the text changes.";
+    public const string ExampleSummaryBox = "{{IUCN statuses}} boxes";
+    public const string ExampleSummaryBoxText = "Category counts are recounted from the updated statuses.";
+    public const string ExampleMore = "This page also updates the {{cite iucn}} citation in a taxobox's status_ref, and the status columns of other wikitables.";
     public const string SettingsSummary = "Options";
 }

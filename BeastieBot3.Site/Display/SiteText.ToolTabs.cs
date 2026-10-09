@@ -6,14 +6,14 @@ public static partial class SiteText {
     public const string ToolTabsLabel = "Tools";
 
     public const string ToolCite = "Cite an assessment";
-    public const string ToolCiteLine = "{{cite iucn}}, taxobox status and Wikidata references for any IUCN assessment.";
-    public const string ToolUpdateLine = "Bring the IUCN statuses in a Wikipedia article or list up to date.";
+    public const string ToolCiteLine = "Enter a species name or IUCN taxon ID to get the {{cite iucn}} citation, taxobox status and Wikidata references for the species.";
+    public const string ToolUpdateLine = "Paste the wikitext or address of an English Wikipedia article or list to update the IUCN statuses in it.";
     public const string ToolListMaker = "Make a species list";
-    public const string ToolListMakerLine = "Make a Wikipedia list or species tables of a genus, family or order.";
+    public const string ToolListMakerLine = "Enter a genus, family or order to get its species as a Wikipedia list or species tables.";
 
     // /cite
     public static string CiteResultsTitle(string query) => $"Cite {query}";
-    public const string CiteInputLabel = "Species, scientific name or IUCN ID";
+    public const string CiteInputLabel = "Common name, scientific name or IUCN ID";
     public const string CitePlaceholder = "Polar bear, Ursus maritimus, 22823";
     public const string CiteButton = "Cite";
     public const string CiteForLegend = "Cite for";
@@ -30,8 +30,8 @@ public static partial class SiteText {
     public static string ListMakerNothingFound(string query) => $"No group found for “{query}”.";
     /// When the text names a species: ListMakerSpeciesBefore + the species + ListMakerSpeciesAfter, then its groups.
     public const string ListMakerSpeciesBefore = "";
-    public const string ListMakerSpeciesAfter = " is a species. Make a list of a group it is in:";
+    public const string ListMakerSpeciesAfter = " is a species. Make a list of its genus, family or order:";
     /// ListMakerUpdateBefore + link "Update IUCN statuses in wikitext" + ListMakerUpdateAfter.
-    public const string ListMakerUpdateBefore = "For a list that is already on Wikipedia, use ";
+    public const string ListMakerUpdateBefore = "To update a list that is already on Wikipedia, use ";
     public const string ListMakerUpdateAfter = ".";
 }

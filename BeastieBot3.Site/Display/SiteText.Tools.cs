@@ -11,7 +11,7 @@ public static partial class SiteText {
 
     public const string ToolsIntro = "Tools for adding IUCN Red List statuses and citations to Wikipedia and Wikidata.";
 
-    public const string ToolUpdateLink = "Update IUCN statuses in wikitext";
+    public const string ToolUpdateLink = "Update IUCN statuses";
     public const string ToolUpdateHelp = "Paste the wikitext of a Wikipedia article or list, or enter its title, to bring its IUCN statuses up to date.";
     public const string ToolsUpdateText =
         "Paste the wikitext of a Wikipedia article or list, or enter its title, to update its {{IUCN status}} templates, species tables and taxobox status lines to the latest assessments. For a list, the report also shows which taxa of the list's group are missing from the list.";

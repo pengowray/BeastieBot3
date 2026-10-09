@@ -13,20 +13,20 @@ public static partial class SiteText {
     public static string LabelCiteTemplate(string template) => $"{template} citation";
 
     public static string WikiNoTaxoboxStatus(string wikiName) =>
-        $"{wikiName} Wikipedia's taxoboxes have no conservation status, so this page gives the citation only.";
+        $"{wikiName} Wikipedia's taxoboxes have no conservation status, so this page shows only the citation.";
 
     public static string WikiPolishCode(string code, string polishCode) =>
-        $"Polish infoboxes have no {code} category, so the status is written {polishCode}.";
+        $"Polish infoboxes have no {code} category, so the status is given as {polishCode}.";
 
     public static string WikiPolishNoCode(string code) =>
-        $"Polish infoboxes have no {code} category, so the lines give only the IUCN id.";
+        $"Polish infoboxes have no {code} category, so only |IUCN id = is given.";
 
     public const string WikiPolishRefName =
-        "Keep the reference name “iucn”: the infobox then points its footnote at this citation.";
+        "Keep the reference name “iucn” so that the infobox's footnote shows this citation.";
 
     public const string WikiFrenchCurrentAssessment =
-        "{{UICN}} always links IUCN's current assessment of the taxon, whichever assessment it cites.";
+        "{{UICN}} always links to the taxon's current assessment on the IUCN Red List website, even when it cites an earlier assessment.";
 
     public const string WikiSpanishWikidataLink =
-        "Spanish Wikipedia's {{IUCN}} links the IUCN taxon ID on the article's own Wikidata item, so it fits only the article about this taxon.";
+        "Use this citation only in the article about this taxon. Spanish Wikipedia's {{IUCN}} builds its link from the IUCN taxon ID on the article's Wikidata item.";
 }
