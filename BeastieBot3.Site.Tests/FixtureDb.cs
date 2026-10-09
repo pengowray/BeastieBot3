@@ -433,6 +433,14 @@ public static class FixtureDb {
         // Made up for the ranking of search hits: a name in another language that is another
         // taxon's English name (the leopard's "Panther").
         w.Name(Lion, "Panther", "common", "de", "col");
+        // The lion's subspecies in the Catalogue of Life and on Wikidata: one name from both, one from
+        // both with two Wikidata items, one only on Wikidata.
+        w.InfraspecificName(Lion, "col", "7KGW9", "subspecies", "Panthera leo melanochaita", "(C. E. H. Smith, 1858)");
+        w.InfraspecificName(Lion, "col", "5K5L8", "subspecies", "Panthera leo leo", "(Linnaeus, 1758)");
+        w.InfraspecificName(Lion, "wikidata", "Q20907143", "subspecies", "Panthera leo melanochaita");
+        w.InfraspecificName(Lion, "wikidata", "Q221094", "subspecies", "Panthera leo leo");
+        w.InfraspecificName(Lion, "wikidata", "Q56289810", "subspecies", "Panthera leo leo");
+        w.InfraspecificName(Lion, "wikidata", "Q2118614", "subspecies", "Panthera leo krugeri");
 
         w.Taxon(WestAfricanLion, "Panthera leo West Africa subpopulation", "subpopulation", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",
             subpopulation: "West Africa subpopulation", commonEn: "West African lion", parent: Lion, latest: WestAfricanLionLatest);
@@ -977,6 +985,10 @@ public static class FixtureDb {
         public void ExtraCounts(int nodeId, int lastNodeId, int col, int wikidata, int both) =>
             Run("INSERT INTO higher_taxon_extra(node_id, last_node_id, col_count, wikidata_count, both_count) VALUES (@a, @b, @c, @d, @e)",
                 nodeId, lastNodeId, col, wikidata, both);
+
+        public void InfraspecificName(long speciesId, string source, string sourceId, string rank, string name, string? authority = null) =>
+            Run("INSERT INTO infraspecific_name(taxon_id, source, source_id, rank, name, authority) VALUES (@a, @b, @c, @d, @e, @f)",
+                speciesId, source, sourceId, rank, name, authority);
 
         public void TaxonLink(long taxonId, long currentTaxonId, string kind) =>
             Run("INSERT INTO taxon_link(taxon_id, current_taxon_id, link_kind) VALUES (@a, @b, @c)", taxonId, currentTaxonId, kind);

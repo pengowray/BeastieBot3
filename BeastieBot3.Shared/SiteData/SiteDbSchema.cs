@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 26;
+    public const int Version = 27;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -337,6 +337,26 @@ public static class SiteDbSchema {
             rank       TEXT,                                 -- as the source names it: 'family', 'subtribe', 'clade'; NULL when it gives none
             name       TEXT NOT NULL,
             PRIMARY KEY (source, id)
+        ) WITHOUT ROWID;
+
+        -- The subspecies and varieties that the Catalogue of Life and Wikidata list under each IUCN species
+        -- in the release, for the species page's list of subspecies and varieties, which adds IUCN's own
+        -- (taxon rows whose parent_taxon_id is the species) and merges the three sources' rows by name
+        -- (InfraspecificNames.Key). Names only: no IUCN assessment data. source 'col': accepted and
+        -- provisionally accepted name usages of rank subspecies or variety whose parentID is taxon.col_id;
+        -- source 'wikidata': items of `wikidata sweep-taxa`'s table with rank subspecies (Q68947) or variety
+        -- (Q767728) whose parent taxon (P171) is taxon.wikidata_qid, leaving out items that are an instance
+        -- of synonym, fossil taxon, unavailable combination or original combination, and items that another
+        -- item names as a taxon synonym (P1420). Only names that InfraspecificNames.Split reads are kept.
+        CREATE TABLE infraspecific_name (
+            taxon_id   INTEGER NOT NULL,                     -- the species (taxon.kind = 'species')
+            source     TEXT NOT NULL,                        -- 'col' | 'wikidata'
+            source_id  TEXT NOT NULL,                        -- the CoL ID ('7KGW9'); the item's QID ('Q20907143')
+            rank       TEXT NOT NULL,                        -- 'subspecies' | 'variety'
+            name       TEXT NOT NULL,                        -- as the source writes it: 'Panthera leo melanochaita', 'Abies alba var. acutifolia'
+            authority  TEXT,                                 -- CoL's authorship ('(C. E. H. Smith, 1858)'); NULL for Wikidata (the sweep reads no authors)
+                                                             -- and when CoL gives none
+            PRIMARY KEY (taxon_id, source, source_id)
         ) WITHOUT ROWID;
 
         -- Species that are in the Catalogue of Life or Wikidata but are not IUCN taxa, for the group
