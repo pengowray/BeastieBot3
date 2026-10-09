@@ -36,14 +36,17 @@ public sealed class SiteDbBuildSubspeciesTests : IDisposable {
         var rows = Rows(db, "SELECT source_id, rank, name, authority FROM infraspecific_name WHERE taxon_id = @t AND source = 'wikidata' ORDER BY source_id",
             ("@t", Lion)).Select(r => string.Join(" | ", r)).ToList();
         Assert.Equal([
+            // Two items that name each other as a taxon synonym: both kept (the other is Q56289810).
+            "Q182347 | subspecies | Panthera leo persica | ",
             "Q20907143 | subspecies | Panthera leo melanochaita | ",
             // A population item with the rank subspecies, and an extinct subspecies: kept.
             "Q221094 | subspecies | Panthera leo leo | ",
             "Q221247 | subspecies | Panthera leo melanochaitus | ",
+            "Q56289810 | subspecies | Panthera leo leo | ",
             "Q900 | variety | Panthera leo var. testvar | ",
         ], rows);
-        // Left out: a fossil taxon, two items that name each other as a taxon synonym, a name that is
-        // not genus, species and one more epithet, and an item whose parent is not a site species.
+        // Left out: a fossil taxon, an item that another item names as a taxon synonym (nubica), a name
+        // that is not genus, species and one more epithet, and an item whose parent is not a site species.
         Assert.Equal("0", Scalar(db, "SELECT COUNT(*) FROM infraspecific_name WHERE taxon_id <> 15951"));
     }
 
@@ -54,9 +57,10 @@ public sealed class SiteDbBuildSubspeciesTests : IDisposable {
         Assert.Equal(1, s.IucnRows);          // persica
         Assert.Equal(3, s.ColRows);
         Assert.Equal(1, s.ColSpeciesRead);    // the wildcat has no CoL ID
-        Assert.Equal(4, s.WikidataRows);
+        Assert.Equal(6, s.WikidataRows);
         Assert.Equal(1, s.WikidataLeftOutByInstance);
-        Assert.Equal(2, s.WikidataLeftOutAsSynonym);
+        Assert.Equal(1, s.WikidataLeftOutAsSynonym);
+        Assert.Equal(2, s.WikidataKeptAsMutualSynonym);
         Assert.Equal(1, s.WikidataUnreadable);
         Assert.Equal(1, s.SpeciesWithList);
         Assert.Equal(1, s.SpeciesWithSeveralSources);
@@ -142,6 +146,7 @@ public sealed class SiteDbBuildSubspeciesTests : IDisposable {
                 Item(221094, "Panthera leo leo", SiteSubspecies.SubspeciesRankQid, [140], instance: [2625603]),
                 Item(221247, "Panthera leo melanochaitus", SiteSubspecies.SubspeciesRankQid, [140], instance: [98961713]),
                 Item(20907143, "Panthera leo melanochaita", SiteSubspecies.SubspeciesRankQid, [140]),
+                Item(903, "Panthera leo nubica", SiteSubspecies.SubspeciesRankQid, [140], synonymOf: [20907143]),
                 Item(56289810, "Panthera leo leo", SiteSubspecies.SubspeciesRankQid, [140], synonymOf: [182347]),
             ], DateTime.UtcNow);
         }

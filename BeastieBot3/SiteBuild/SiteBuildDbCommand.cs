@@ -338,6 +338,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Wikidata: species with one or more", sub.WikidataSpecies.Count);
         Row("Wikidata: items under a site species left out as an instance of synonym, fossil taxon, unavailable or original combination", sub.WikidataLeftOutByInstance);
         Row("Wikidata: items under a site species left out because another item names them as a taxon synonym (P1420)", sub.WikidataLeftOutAsSynonym);
+        Row("Wikidata: items kept because each item that names them as a taxon synonym is named as a synonym by them", sub.WikidataKeptAsMutualSynonym);
         Row("Wikidata: names left out (not genus, species and one more epithet)", sub.WikidataUnreadable);
 
         Section("Links");

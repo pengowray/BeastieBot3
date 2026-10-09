@@ -12,9 +12,9 @@ using Microsoft.Data.Sqlite;
 //             (Q767728), read once by rank (about 300,000 rows) and placed under each species whose
 //             item is among their parent taxa (P171). Left out: items that are an instance of
 //             synonym, fossil taxon, unavailable combination or original combination, and items that
-//             another item names as a taxon synonym (P1420). Wikidata often has both directions of a
-//             synonym (Panthera leo leo names P. l. persica as a synonym and the persica item names
-//             P. l. leo), and then both items are left out.
+//             another item names as a taxon synonym (P1420). When two subspecies or variety items name
+//             each other as a synonym (Panthera leo leo names P. l. persica and the persica item names
+//             P. l. leo), neither can be taken as the other's synonym, so both are kept.
 // Names that InfraspecificNames.Split cannot read as genus, species and one more epithet are left out
 // and counted.
 
@@ -34,6 +34,9 @@ internal sealed class SubspeciesCounts {
     public int WikidataUnreadable;
     public int WikidataLeftOutByInstance;
     public int WikidataLeftOutAsSynonym;
+    /// Items kept although another item names them as a taxon synonym, because each item that does is
+    /// named as a synonym by them in turn.
+    public int WikidataKeptAsMutualSynonym;
     /// Species with at least one row from any source, and those with rows from two or more sources.
     public int SpeciesWithList;
     public int SpeciesWithSeveralSources;
@@ -134,7 +137,10 @@ internal static class SiteSubspecies {
             FROM wikidata_taxon_sweep WHERE rank_qid IN ({SubspeciesRankQid}, {VarietyRankQid})
             """;
         command.CommandTimeout = 0;
-        var rows = new List<SiteInfraspecificName>();
+        // Read first and decided after, because whether an item is kept as a mutual synonym depends on
+        // the other item's row.
+        var found = new List<(long Qid, string Rank, string Name, List<long> Species, HashSet<long> SynonymOf)>();
+        var synonymOfByItem = new Dictionary<long, HashSet<long>>();
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             if (++counts.WikidataItemsRead % 50_000 == 0) {
@@ -153,17 +159,28 @@ internal static class SiteSubspecies {
                 counts.WikidataLeftOutByInstance++;
                 continue;
             }
-            if (!reader.IsDBNull(5) && !string.IsNullOrWhiteSpace(reader.GetString(5))) {
-                counts.WikidataLeftOutAsSynonym++;
-                continue;
-            }
             var name = reader.GetString(1).Trim();
             if (InfraspecificNames.Split(name) is null) {
                 counts.WikidataUnreadable++;
                 continue;
             }
-            var rank = reader.GetInt64(2) == VarietyRankQid ? InfraspecificNames.Variety : InfraspecificNames.Subspecies;
-            var sourceId = "Q" + reader.GetInt64(0).ToString(CultureInfo.InvariantCulture);
+            var qid = reader.GetInt64(0);
+            var synonymOf = Numbers(reader.IsDBNull(5) ? null : reader.GetString(5)).ToHashSet();
+            synonymOfByItem[qid] = synonymOf;
+            found.Add((qid, reader.GetInt64(2) == VarietyRankQid ? InfraspecificNames.Variety : InfraspecificNames.Subspecies, name, species, synonymOf));
+        }
+
+        var rows = new List<SiteInfraspecificName>();
+        foreach (var (qid, rank, name, species, synonymOf) in found) {
+            if (synonymOf.Count > 0) {
+                // Kept only when every item that names it as a synonym is named as a synonym by it.
+                if (!synonymOf.All(other => synonymOfByItem.TryGetValue(other, out var back) && back.Contains(qid))) {
+                    counts.WikidataLeftOutAsSynonym++;
+                    continue;
+                }
+                counts.WikidataKeptAsMutualSynonym++;
+            }
+            var sourceId = "Q" + qid.ToString(CultureInfo.InvariantCulture);
             foreach (var taxonId in species) {
                 rows.Add(new SiteInfraspecificName(taxonId, Wikidata, sourceId, rank, name, null));
                 counts.WikidataRows++;

@@ -369,6 +369,7 @@ internal sealed class SiteDbBuild {
             writer.InsertRows(SiteSubspecies.Insert, SiteSubspecies.InsertParameters, rows.Select(SiteSubspecies.InsertValues));
             return $"{subspecies.WikidataRows:N0} subspecies and varieties of {subspecies.WikidataSpecies.Count:N0} species "
                 + $"({subspecies.WikidataLeftOutAsSynonym:N0} items named as a synonym and {subspecies.WikidataLeftOutByInstance:N0} synonym or fossil items left out, "
+                + $"{subspecies.WikidataKeptAsMutualSynonym:N0} items that name each other as a synonym kept, "
                 + $"{subspecies.WikidataUnreadable:N0} names not read)";
         });
         SiteSubspecies.CountLists(taxonList, taxa, subspecies);

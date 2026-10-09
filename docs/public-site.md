@@ -1688,7 +1688,10 @@ release, and when no source lists a subspecies or variety of it.
 one indexed CoL query per species with a CoL ID (`nameusage` has an index on `parentID`), and one
 read of the sweep's subspecies and variety rows by rank. It leaves out Wikidata items that are an
 instance of synonym, fossil taxon, unavailable combination or original combination, and items that
-another item names as a taxon synonym (P1420). An item of an extinct taxon (Q98961713) is kept: the
+another item names as a taxon synonym (P1420), unless every item that does is a subspecies or variety
+item that it names as a synonym in turn (Wikidata's Panthera leo leo and P. l. persica items name each
+other, and neither can be taken as the other's synonym, so both are kept;
+`SubspeciesCounts.WikidataKeptAsMutualSynonym`). An item of an extinct taxon (Q98961713) is kept: the
 Cape lion is still a subspecies of the lion. CoL's `extinct` flag is not used, because it is set on
 both living lion subspecies. A name is kept only when `InfraspecificNames.Split` (`BeastieBot3.Shared`)
 reads it as a genus, a species epithet and one more epithet, with at most one rank marker (a
@@ -1707,8 +1710,6 @@ all three sources agree on lead the list; rows after the first 10 are hidden beh
 
 Known limits:
 
-- Wikidata often states a synonym in both directions: the item for Panthera leo leo names
-  P. l. persica as a taxon synonym and the persica item names P. l. leo, so both items are left out.
 - Names are merged only when they are spelled the same: "melanochaita" and "melanochaitus" are two
   rows, and so are a CoL subspecies whose species part differs from IUCN's (CoL's accepted name of an
   IUCN species may be spelled differently or be in another genus) and IUCN's or Wikidata's name for

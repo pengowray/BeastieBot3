@@ -347,7 +347,8 @@ public static class SiteDbSchema {
         -- source 'wikidata': items of `wikidata sweep-taxa`'s table with rank subspecies (Q68947) or variety
         -- (Q767728) whose parent taxon (P171) is taxon.wikidata_qid, leaving out items that are an instance
         -- of synonym, fossil taxon, unavailable combination or original combination, and items that another
-        -- item names as a taxon synonym (P1420). Only names that InfraspecificNames.Split reads are kept.
+        -- item names as a taxon synonym (P1420), unless each such item is named as a synonym by it in turn.
+        -- Only names that InfraspecificNames.Split reads are kept.
         CREATE TABLE infraspecific_name (
             taxon_id   INTEGER NOT NULL,                     -- the species (taxon.kind = 'species')
             source     TEXT NOT NULL,                        -- 'col' | 'wikidata'
