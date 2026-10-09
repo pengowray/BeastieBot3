@@ -86,21 +86,27 @@ public static class SubspeciesRows {
             : $"{parts.Genus} {parts.Species} {marker} {parts.Infra}";
     }
 
-    /// The record's address: this site's page of an IUCN taxon, the Catalogue of Life record or the
-    /// Wikidata item.
+    /// The record's address: this site's page of an IUCN taxon, the Catalogue of Life record, the
+    /// Wikidata item, or the species page that lists the subspecies on the Mammal Diversity Database
+    /// (source id the MDD id) or the Reptile Database (source id the query of the species page).
     public static string RecordUrl(string source, string sourceId) => source switch {
         "iucn" => "/species/" + sourceId,
         "col" => SiteFormat.CatalogueOfLifeUrl(sourceId),
         "wikidata" => SiteFormat.WikidataUrl(sourceId),
+        "mdd" => SiteText.MddUrl + "taxon/" + Uri.EscapeDataString(sourceId) + "/",
+        "reptiledb" => "https://reptile-database.reptarium.cz/species?" + sourceId,
         _ => string.Empty,
     };
 
-    // The order of the names tables (TaxonNames): IUCN, Wikidata, the Catalogue of Life.
+    // The order of the names tables (TaxonNames): IUCN, Wikidata, the Catalogue of Life; then the
+    // Mammal Diversity Database and the Reptile Database.
     private static int SourceOrder(string source) => source switch {
         "iucn" => 0,
         "wikidata" => 1,
         "col" => 2,
-        _ => 3,
+        "mdd" => 3,
+        "reptiledb" => 4,
+        _ => 5,
     };
 
     // The key of a name InfraspecificNames.Split cannot read: the rank and the stem of the name's last

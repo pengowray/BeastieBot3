@@ -19,7 +19,8 @@ using Spectre.Console;
 //   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT
 //      (with the EPBC Act and state and territory statuses of its profiles).
 //   8. Parents, then the taxon, name and taxon link rows, the classification in other sources, the
-//      subspecies and varieties of each species in CoL and Wikidata (SiteSubspecies), then meta.
+//      subspecies and varieties of each species in CoL, Wikidata, the Mammal Diversity Database and the
+//      Reptile Database (SiteSubspecies), then meta.
 //   9. Name keys, indexes, full-text index, ANALYZE, VACUUM.
 //
 // The database is written to "<output>.building" and moved over the output only when every phase
@@ -349,8 +350,8 @@ internal sealed class SiteDbBuild {
             return $"{nodes.Count(n => n.Id.StartsWith(SiteLadders.PagePrefix, StringComparison.Ordinal) && !n.Id.Contains('#')):N0} taxon pages, {nodes.Count:N0} nodes";
         });
 
-        // The subspecies and varieties of each species in the Catalogue of Life and Wikidata, for the
-        // species page's list, which adds IUCN's own from the taxon table.
+        // The subspecies and varieties of each species in the Catalogue of Life, Wikidata and the
+        // checklists store, for the species page's list, which adds IUCN's own from the taxon table.
         var subspecies = _stats.Subspecies;
         Optional("Catalogue of Life database: subspecies and varieties", _inputs.ColDatabase, path => {
             var rows = SiteSubspecies.ReadCol(path, taxonList, subspecies, ct);
@@ -372,9 +373,18 @@ internal sealed class SiteDbBuild {
                 + $"{subspecies.WikidataKeptAsMutualSynonym:N0} items that name each other as a synonym kept, "
                 + $"{subspecies.WikidataUnreadable:N0} names not read)";
         });
+        Optional("checklists store: subspecies (Mammal Diversity Database, Reptile Database)", _inputs.Checklists, path => {
+            var rows = SiteSubspecies.ReadChecklists(path, taxonList, subspecies, ct);
+            writer.InsertRows(SiteSubspecies.Insert, SiteSubspecies.InsertParameters, rows.Select(SiteSubspecies.InsertValues));
+            static string Part(string title, ChecklistSubspeciesCounts c) =>
+                $"{title}: {c.Rows:N0} subspecies of {c.Species.Count:N0} species ({c.SourceSpeciesMatched:N0} of its {c.SourceSpecies:N0} species with subspecies matched, "
+                + $"{c.LeftOutFossil:N0} fossil subspecies left out, {c.Unreadable:N0} names not read)";
+            return $"{Part("MDD", subspecies.Mdd)}; {Part("Reptile Database", subspecies.ReptileDb)}";
+        });
         SiteSubspecies.CountLists(taxonList, taxa, subspecies);
         var subspeciesSummary = $"{subspecies.SpeciesWithList:N0} species with a list ({subspecies.SpeciesWithSeveralSources:N0} from two or more sources); "
-            + $"rows from IUCN {subspecies.IucnRows:N0}, the Catalogue of Life {subspecies.ColRows:N0}, Wikidata {subspecies.WikidataRows:N0}";
+            + $"rows from IUCN {subspecies.IucnRows:N0}, the Catalogue of Life {subspecies.ColRows:N0}, Wikidata {subspecies.WikidataRows:N0}, "
+            + $"the Mammal Diversity Database {subspecies.Mdd.Rows:N0}, the Reptile Database {subspecies.ReptileDb.Rows:N0}";
         _console.MarkupLineInterpolated($"  Subspecies and varieties: {subspeciesSummary}");
         WriteMeta(writer, taxonList.Count);
 

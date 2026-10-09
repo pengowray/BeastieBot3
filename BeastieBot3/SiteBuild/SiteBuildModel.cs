@@ -43,7 +43,8 @@ internal sealed record SiteBuildInputs {
     /// defaults, when no file was found).
     public Shared.Wikitext.WikidataItemModel WikidataItemModel { get; init; } = new();
     public string? WikidataItemModelSource { get; init; }
-    /// The checklists store (`checklists import`), for the Mammal Diversity Database's and AmphibiaWeb's names.
+    /// The checklists store (`checklists import`), for the Mammal Diversity Database's and AmphibiaWeb's
+    /// names and the Mammal Diversity Database's and the Reptile Database's subspecies.
     public string? Checklists { get; init; }
     /// rules/wikidata-taxon-ranks.csv: the names of Wikidata's rank items, for ladder_node.
     public string? WikidataRanks { get; init; }

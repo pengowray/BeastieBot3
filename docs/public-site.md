@@ -1682,7 +1682,7 @@ linking each to the same kind of page).
 ### Subspecies and varieties (`infraspecific_name`, schema 27)
 
 A species page has a section after the names that lists the species' subspecies and varieties from
-three sources, one row per name with its authority and its sources, each source linked to its
+up to five sources, one row per name with its authority and its sources, each source linked to its
 record (`Pages/SubspeciesRows.cs`, `Pages/Shared/_Subspecies.cshtml`, strings in
 `Display/SiteText.Subspecies.cs`). The section is left out for a taxon that is not a species in the
 release, and when no source lists a subspecies or variety of it.
@@ -1692,6 +1692,8 @@ release, and when no source lists a subspecies or variety of it.
 | IUCN Red List | the subspecies and varieties in the release whose `parent_taxon_id` is the species, read from `taxon` when the page is shown | the taxon's page on this site |
 | Catalogue of Life | accepted and provisionally accepted name usages of rank subspecies or variety whose `parentID` is the species' `col_id` | the CoL record |
 | Wikidata | items of `wikidata sweep-taxa`'s table with rank subspecies (Q68947) or variety (Q767728) whose parent taxa (P171) include the species' item | the item |
+| Mammal Diversity Database | the subspecies in the `subspecies` column of the MDD species file, for an IUCN mammal species of the same name; fossil subspecies left out | the species' page on the MDD website (`https://www.mammaldiversity.org/taxon/<MDD id>/`), which lists its subspecies |
+| The Reptile Database | the accepted subspecies (rows of rank subspecies in `Taxon.tsv`) of ChecklistBank dataset 1008, for an IUCN reptile species of the same name, or of the one species the database's synonyms lead its name to unless another IUCN species leads there too | the species' page on reptile-database.reptarium.cz |
 
 `site build-db` writes the CoL and Wikidata rows to `infraspecific_name` (`SiteBuild/SiteSubspecies.cs`):
 one indexed CoL query per species with a CoL ID (`nameusage` has an index on `parentID`), and one
@@ -1707,6 +1709,27 @@ reads it as a genus, a species epithet and one more epithet, with at most one ra
 subgenus in brackets after the genus, as CoL writes many insect names, is dropped from the name).
 Hybrid names ("×", "nothosubsp.") and names with a capitalised last word are left out.
 
+The Mammal Diversity Database's and the Reptile Database's subspecies come from the checklists store
+(`checklists import --source mdd` and `--source reptiledb`, `Checklists/ChecklistStore.cs`), which
+keeps them in two tables: `checklist_species` (each accepted species of the source, with the id of its
+record: the MDD id, or the query `genus=...&species=...` of the Reptile Database's species page,
+which is also the value of Wikidata's Reptile Database ID, P5473) and `checklist_infraspecific`
+(each subspecies under its species, with the authority as the source writes it and MDD's note:
+`fossil`, `recently extinct` or `holocene`). MDD writes a species' subspecies in one text field, with
+the genus and species abbreviated and the synonyms in brackets (`_T. a. acanthion_ (Collett, 1885)
+(synonyms: _ineptus_ Thomas, 1906); _T. a. lawesii_ Ramsay, 1877`); `Checklists/MddSubspecies.cs`
+writes out each name, keeps the authority, leaves out the synonyms, and counts an entry of any other
+form as not read. Of the Reptile Database's 7,667 names of rank subspecies, 4,705 are synonyms
+(`Synonym.tsv`); only the 2,962 accepted ones are read. `site build-db`
+(`SiteBuild/SiteSubspecies.Checklists.cs`) matches IUCN species of the source's class (MAMMALIA,
+REPTILIA) to the source's species with `SiteChecklistNames.Match`, the rule the MDD and AmphibiaWeb
+names use, and stores each subspecies with the species' record id as `source_id` (so the primary key
+of `infraspecific_name` includes the name). It leaves out MDD's fossil subspecies, as the Wikidata
+reader leaves out fossil taxa, and keeps the recently extinct and Holocene ones. In the checklists
+store of 9 October 2026, MDD v2.5 has 6,375 subspecies of 1,429 species (all entries read; 164
+fossil, 15 recently extinct, 8 Holocene) and the Reptile Database (version 2026-06) 2,962 subspecies
+of 898 species.
+
 The page merges a species' rows by `InfraspecificNames.MergeKey`: the rank and the stem of the
 infraspecific epithet (`LatinNameVariant.Stem` in `BeastieBot3.Shared`, the rule the CoL name resolver
 uses: Latin gender and genitive endings off, -ii/-i and the free Greek and Latin spellings folded). All
@@ -1715,12 +1738,12 @@ orientalis" (IUCN) and "Panthera pardus orientalis" (CoL) are one row, and so ar
 leo melanochaitus" and "Panthera leo melanochaita", and CoL's "Acerodon macklotii floresii" (or a CoL
 name in another genus) and IUCN's "Acerodon mackloti floresii". A subspecies and a variety of the same
 name are two rows. A row shows the name in the spelling of its first source (IUCN, Wikidata, Catalogue
-of Life), as the lists write it (no rank marker for an animal subspecies, "subsp." and "var." for other
+of Life, Mammal Diversity Database, Reptile Database), as the lists write it (no rank marker for an animal subspecies, "subsp." and "var." for other
 kingdoms), the authority of the first source that gives one, and the sources in that order, each with
 its own authority when that differs and its own spelling when that differs ("(as Panthera leo
 melanochaitus)"). A source with two records of one name (Wikidata has two "Panthera leo leo" items)
 links each record by its id. The names with most sources come first, then by name (as in the table of
-names in other languages), so the subspecies all three sources agree on lead the list; rows after the
+names in other languages), so the subspecies most sources agree on lead the list; rows after the
 first 10 are hidden behind a "Show all" box.
 
 Before the merge by stem (October 2026 build), 4,014 CoL rows (1,394 species) and 1,355 Wikidata rows
@@ -1735,11 +1758,11 @@ readers take about 4 seconds.
 
 Known limits:
 
-- The checklists store keeps no subspecies. The Mammal Diversity Database's species file has a
-  `subspecies` column (1,429 of 6,904 species in v2.5: each subspecies with its authority, its
-  synonyms and a fossil or recently extinct note), and the Reptile Database's ColDP export has 7,667
-  subspecies names, but `checklists import` reads neither. Wikispecies pages and the `subdivision`
-  lists of English Wikipedia taxoboxes are other possible sources.
+- The Mammal Diversity Database's subspecies are taken only for an IUCN species of the same name,
+  because the checklists store has no MDD synonyms for matching (its MDD synonyms are names for the
+  site), so an MDD species that IUCN spells or places differently (MDD's Acerodon macklotii, IUCN's
+  Acerodon mackloti) gives none. Wikispecies pages and the `subdivision` lists of English Wikipedia
+  taxoboxes are other possible sources.
 
 ### Citation options
 

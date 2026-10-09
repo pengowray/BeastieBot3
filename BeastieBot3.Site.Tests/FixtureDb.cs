@@ -419,6 +419,10 @@ public static class FixtureDb {
                 doi: null, doiSource: DoiSource.None, text: null));
         w.Name(SumatranTiger, "Panthera tigris ssp. sumatrae", "scientific", null, "iucn");
         w.Name(SumatranTiger, "Sumatran tiger", "common", "en", "iucn", preferred: true);
+        // The tiger's subspecies in the Mammal Diversity Database, which treats sumatrae as a synonym of
+        // sondaica; both rows link the tiger's MDD page.
+        w.InfraspecificName(Tiger, "mdd", "1006023", "subspecies", "Panthera tigris tigris", "(Linnaeus, 1758)");
+        w.InfraspecificName(Tiger, "mdd", "1006023", "subspecies", "Panthera tigris sondaica", "(Temminck, 1844)");
 
         // Lion and its West Africa subpopulation, whose assessment has no citation.
         w.Taxon(Lion, "Panthera leo", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",

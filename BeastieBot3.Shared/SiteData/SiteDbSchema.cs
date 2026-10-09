@@ -339,25 +339,31 @@ public static class SiteDbSchema {
             PRIMARY KEY (source, id)
         ) WITHOUT ROWID;
 
-        -- The subspecies and varieties that the Catalogue of Life and Wikidata list under each IUCN species
-        -- in the release, for the species page's list of subspecies and varieties, which adds IUCN's own
-        -- (taxon rows whose parent_taxon_id is the species) and merges the three sources' rows by name
-        -- (InfraspecificNames.MergeKey). Names only: no IUCN assessment data. source 'col': accepted and
-        -- provisionally accepted name usages of rank subspecies or variety whose parentID is taxon.col_id;
-        -- source 'wikidata': items of `wikidata sweep-taxa`'s table with rank subspecies (Q68947) or variety
-        -- (Q767728) whose parent taxon (P171) is taxon.wikidata_qid, leaving out items that are an instance
-        -- of synonym, fossil taxon, unavailable combination or original combination, and items that another
-        -- item names as a taxon synonym (P1420), unless each such item is named as a synonym by it in turn.
-        -- Only names that InfraspecificNames.Split reads are kept.
+        -- The subspecies and varieties that the Catalogue of Life, Wikidata, the Mammal Diversity Database
+        -- and the Reptile Database list under each IUCN species in the release, for the species page's
+        -- list of subspecies and varieties, which adds IUCN's own (taxon rows whose parent_taxon_id is the
+        -- species) and merges the sources' rows by name (InfraspecificNames.MergeKey). Names only: no IUCN
+        -- assessment data. source 'col': accepted and provisionally accepted name usages of rank
+        -- subspecies or variety whose parentID is taxon.col_id; source 'wikidata': items of
+        -- `wikidata sweep-taxa`'s table with rank subspecies (Q68947) or variety (Q767728) whose parent
+        -- taxon (P171) is taxon.wikidata_qid, leaving out items that are an instance of synonym, fossil
+        -- taxon, unavailable combination or original combination, and items that another item names as a
+        -- taxon synonym (P1420), unless each such item is named as a synonym by it in turn. Sources 'mdd'
+        -- and 'reptiledb' (the checklists store, `checklists import`): the subspecies the source lists
+        -- under its species of the same name as the IUCN species (or the one species its synonyms lead
+        -- the name to, unless two IUCN species lead there), mammals and reptiles only; MDD's fossil
+        -- subspecies left out. Only names that InfraspecificNames.Split reads are kept.
         CREATE TABLE infraspecific_name (
             taxon_id   INTEGER NOT NULL,                     -- the species (taxon.kind = 'species')
-            source     TEXT NOT NULL,                        -- 'col' | 'wikidata'
-            source_id  TEXT NOT NULL,                        -- the CoL ID ('7KGW9'); the item's QID ('Q20907143')
+            source     TEXT NOT NULL,                        -- 'col' | 'wikidata' | 'mdd' | 'reptiledb'
+            source_id  TEXT NOT NULL,                        -- the record the page links: the CoL ID ('7KGW9'); the item's QID ('Q20907143');
+                                                             -- for 'mdd' and 'reptiledb' the record of the species, which lists its subspecies:
+                                                             -- the MDD id ('1000002'), the Reptile Database species query ('genus=Python&species=regius')
             rank       TEXT NOT NULL,                        -- 'subspecies' | 'variety'
             name       TEXT NOT NULL,                        -- as the source writes it: 'Panthera leo melanochaita', 'Abies alba var. acutifolia'
-            authority  TEXT,                                 -- CoL's authorship ('(C. E. H. Smith, 1858)'); NULL for Wikidata (the sweep reads no authors)
-                                                             -- and when CoL gives none
-            PRIMARY KEY (taxon_id, source, source_id)
+            authority  TEXT,                                 -- the authority as the source writes it ('(C. E. H. Smith, 1858)'); NULL for Wikidata
+                                                             -- (the sweep reads no authors) and when the source gives none
+            PRIMARY KEY (taxon_id, source, source_id, name)
         ) WITHOUT ROWID;
 
         -- Species that are in the Catalogue of Life or Wikidata but are not IUCN taxa, for the group
