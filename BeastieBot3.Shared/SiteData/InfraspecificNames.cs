@@ -16,9 +16,13 @@ public static class InfraspecificNames {
 
     /// The genus, species epithet and infraspecific epithet of a name; null unless the name is those
     /// three words with at most one rank marker before the last: a capitalised genus and two epithets
-    /// that start with a lower-case letter.
+    /// that start with a lower-case letter. A subgenus in brackets after the genus, as the Catalogue of
+    /// Life writes many insect names ("Stenus (Hypostenus) obconicus obconicus"), is left out.
     public static (string Genus, string Species, string Infra)? Split(string name) {
         var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length >= 4 && words[1].Length > 2 && words[1][0] == '(' && words[1][^1] == ')' && char.IsUpper(words[1][1])) {
+            words = [words[0], .. words[2..]];
+        }
         if (words.Length == 4 && Markers.Contains(words[2])) {
             words = [words[0], words[1], words[3]];
         }

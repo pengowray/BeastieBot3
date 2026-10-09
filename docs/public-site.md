@@ -1644,7 +1644,9 @@ instance of synonym, fossil taxon, unavailable combination or original combinati
 another item names as a taxon synonym (P1420). An item of an extinct taxon (Q98961713) is kept: the
 Cape lion is still a subspecies of the lion. CoL's `extinct` flag is not used, because it is set on
 both living lion subspecies. A name is kept only when `InfraspecificNames.Split` (`BeastieBot3.Shared`)
-reads it as a genus, a species epithet and one more epithet, with at most one rank marker.
+reads it as a genus, a species epithet and one more epithet, with at most one rank marker (a
+subgenus in brackets after the genus, as CoL writes many insect names, is dropped from the name).
+Hybrid names ("×", "nothosubsp.") and names with a capitalised last word are left out.
 
 The page merges the rows by `InfraspecificNames.Key`: the rank, then the three words folded, so
 "Panthera pardus ssp. orientalis" (IUCN) and "Panthera pardus orientalis" (CoL) are one row, and a

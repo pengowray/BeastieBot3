@@ -94,6 +94,7 @@ public sealed class SubspeciesRowsTests {
     [InlineData("Panthera pardus ssp. orientalis", "Panthera", "pardus", "orientalis")]
     [InlineData("Abies alba var. acutifolia", "Abies", "alba", "acutifolia")]
     [InlineData("Abies alba subsp. apennina", "Abies", "alba", "apennina")]
+    [InlineData("Stenus (Hypostenus) obconicus obconicus", "Stenus", "obconicus", "obconicus")]
     public void SplitReadsGenusSpeciesAndInfraspecificEpithet(string name, string genus, string species, string infra) =>
         Assert.Equal((genus, species, infra), InfraspecificNames.Split(name));
 
