@@ -558,7 +558,12 @@ public static class FixtureDb {
         w.OtherStatus(Cassowary, "au-qld", "Endangered", "Casuarius casuarius johnsonii", null, "sprat", CassowarySprat.ToString(), null);
         w.Name(Cassowary, "Casuarius casuarius", "scientific", null, "iucn");
 
-        // Leopard and the Amur leopard, which is not in the release.
+        // Leopard and the Amur leopard, which is not in the release. The leopard has 11 subspecies in
+        // the Catalogue of Life, one more than a list shows before "Show all".
+        string[] leopardSubspecies = ["adersi", "delacouri", "fusca", "japonensis", "kotiya", "melas", "nimr", "orientalis", "pardus", "saxicolor", "tulliana"];
+        for (var i = 0; i < leopardSubspecies.Length; i++) {
+            w.InfraspecificName(Leopard, "col", $"PP{i}", "subspecies", $"Panthera pardus {leopardSubspecies[i]}");
+        }
         w.Taxon(Leopard, "Panthera pardus", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",
             authority: "(Linnaeus, 1758)", commonEn: "Leopard", latest: LeopardLatest,
             qid: LeopardItem, itemDownloaded: "2026-09-13", p141: "[]",

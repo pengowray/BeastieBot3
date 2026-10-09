@@ -146,6 +146,16 @@ public sealed class SubspeciesSectionTests(SiteFactory factory) : IClassFixture<
     }
 
     [Fact]
+    public async Task RowsAfterTheFirstTenAreBehindShowAll() {
+        var section = Section(await _client.GetStringAsync($"/species/{FixtureDb.Leopard}"));
+        Assert.Contains("Show all subspecies (1 more)", Html.Text(section));
+        Assert.Single(Regex.Matches(section, "<tr class=\"more-item\">"));
+        Assert.Contains("<tr class=\"more-item\">\n                            <th scope=\"row\"><i>Panthera pardus tulliana</i>", section);
+        // The Amur leopard's IUCN taxon is not in the release, so orientalis is listed by CoL alone.
+        Assert.DoesNotContain($"/species/{FixtureDb.AmurLeopard}\"", section);
+    }
+
+    [Fact]
     public async Task SubspeciesPagesAndSpeciesWithNoneHaveNoSection() {
         Assert.DoesNotContain("subspecies-list-heading", await _client.GetStringAsync($"/species/{FixtureDb.SumatranTiger}"));
         Assert.DoesNotContain("subspecies-list-heading", await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}"));
