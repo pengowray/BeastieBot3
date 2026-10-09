@@ -40,10 +40,11 @@ public sealed class SubspeciesRowsTests {
             Row("col", "C2", "Cupressus arizonica ssp. nevadensis"),
         ], "PLANTAE")!;
 
-        Assert.Equal(["Cupressus arizonica subsp. glabra", "Cupressus arizonica subsp. nevadensis", "Cupressus arizonica var. glabra"],
+        // The variety with two sources first, then by name.
+        Assert.Equal(["Cupressus arizonica var. glabra", "Cupressus arizonica subsp. glabra", "Cupressus arizonica subsp. nevadensis"],
             list.Rows.Select(r => r.Name));
-        Assert.Equal(["wikidata"], list.Rows[0].Sources.Select(s => s.Source));
-        Assert.Equal(["iucn", "wikidata"], list.Rows[2].Sources.Select(s => s.Source));
+        Assert.Equal(["iucn", "wikidata"], list.Rows[0].Sources.Select(s => s.Source));
+        Assert.Equal(["wikidata"], list.Rows[1].Sources.Select(s => s.Source));
         Assert.True(list.HasSubspecies);
         Assert.True(list.HasVarieties);
     }
@@ -124,7 +125,8 @@ public sealed class SubspeciesSectionTests(SiteFactory factory) : IClassFixture<
         // Two Wikidata items with one name: each linked by its id.
         Assert.Contains("Wikidata (<a href=\"https://www.wikidata.org/wiki/Q221094\">Q221094</a>, <a href=\"https://www.wikidata.org/wiki/Q56289810\">Q56289810</a>), "
             + "<a href=\"https://www.catalogueoflife.org/data/taxon/5K5L8\">Catalogue of Life</a>", section);
-        Assert.Equal(["Panthera leo krugeri", "Panthera leo leo", "Panthera leo melanochaita"],
+        // The names with most sources first: krugeri, which only Wikidata lists, comes last.
+        Assert.Equal(["Panthera leo leo", "Panthera leo melanochaita", "Panthera leo krugeri"],
             Regex.Matches(section, "<th scope=\"row\"><i>([^<]+)</i>").Select(m => m.Groups[1].Value));
         // The subpopulation is not a subspecies, and three rows need no "Show all" box.
         Assert.DoesNotContain("West Africa", text);

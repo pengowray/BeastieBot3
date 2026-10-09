@@ -18,8 +18,8 @@ public sealed record SubspeciesSource(string Source, string Label, IReadOnlyList
 /// the first source that gives one, and the sources in SourceOrder.
 public sealed record SubspeciesRow(string Name, string Rank, string? Authority, IReadOnlyList<SubspeciesSource> Sources);
 
-/// The species page's list of subspecies and varieties from IUCN, the Catalogue of Life and Wikidata,
-/// sorted by name.
+/// The species page's list of subspecies and varieties from IUCN, the Catalogue of Life and Wikidata:
+/// the names with most sources first, then by name, as in the table of names in other languages.
 public sealed record SubspeciesList(IReadOnlyList<SubspeciesRow> Rows) {
     public bool HasSubspecies => Rows.Any(r => r.Rank == InfraspecificNames.Subspecies);
     public bool HasVarieties => Rows.Any(r => r.Rank == InfraspecificNames.Variety);
@@ -36,7 +36,7 @@ public static class SubspeciesRows {
         taxon.Kind == TaxonKinds.Species && taxon.InRelease ? Build(queries.GetInfraspecificNames(taxon.TaxonId), taxon.Kingdom) : null;
 
     /// One row per name (InfraspecificNames.Key: rank markers, case and spacing ignored; subspecies and
-    /// varieties kept apart), sorted by name. kingdom: the species' kingdom, which decides the rank
+    /// varieties kept apart), the names with most sources first, then by name. kingdom: the species' kingdom, which decides the rank
     /// marker shown (none for an animal subspecies). Null when there are no rows.
     public static SubspeciesList? Build(IEnumerable<InfraspecificNameRow> rows, string? kingdom) {
         var list = rows
@@ -57,7 +57,8 @@ public static class SubspeciesRows {
                     .ToList();
                 return new SubspeciesRow(DisplayName(first.Name, first.Rank, kingdom), first.Rank, authority, sources);
             })
-            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(r => r.Sources.Count)
+            .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Name, StringComparer.Ordinal)
             .ToList();
         return list.Count == 0 ? null : new SubspeciesList(list);

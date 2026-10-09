@@ -1701,8 +1701,9 @@ subspecies and a variety of the same name are two. A row shows the name as the l
 rank marker for an animal subspecies, "subsp." and "var." for other kingdoms), the authority of the
 first source that gives one, and the sources in the order of the names tables (IUCN, Wikidata,
 Catalogue of Life), each with its own authority when that differs. A source with two records of one
-name (Wikidata has two "Panthera leo leo" items) links each record by its id. Rows are sorted by
-name, and those after the first 10 are hidden behind a "Show all" box.
+name (Wikidata has two "Panthera leo leo" items) links each record by its id. The names with most
+sources come first, then by name (as in the table of names in other languages), so the subspecies
+all three sources agree on lead the list; rows after the first 10 are hidden behind a "Show all" box.
 
 Known limits:
 
