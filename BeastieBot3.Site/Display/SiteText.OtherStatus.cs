@@ -7,7 +7,7 @@ namespace BeastieBot3.Site.Display;
 public static partial class SiteText {
     public const string HeadingOtherStatuses = "Other conservation statuses";
     public const string OtherStatusesIntro =
-        "Each list has its own criteria, which usually differ from those of the IUCN Red List.";
+        "Each list has its own categories and criteria, which are not directly comparable.";
 
     public const string ColOtherList = "List";
     public const string ColOtherStatus = "Status";
