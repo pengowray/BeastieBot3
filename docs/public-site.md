@@ -1662,8 +1662,17 @@ Known limits:
 - Wikidata often states a synonym in both directions: the item for Panthera leo leo names
   P. l. persica as a taxon synonym and the persica item names P. l. leo, so both items are left out.
 - Names are merged only when they are spelled the same: "melanochaita" and "melanochaitus" are two
-  rows, and so are a CoL subspecies under another genus (CoL's accepted name of an IUCN species may
-  be in another genus) and IUCN's or Wikidata's name for it.
+  rows, and so are a CoL subspecies whose species part differs from IUCN's (CoL's accepted name of an
+  IUCN species may be spelled differently or be in another genus) and IUCN's or Wikidata's name for
+  it. In the October 2026 build, 4,014 CoL rows (1,394 species) and 1,355 Wikidata rows (477
+  species) have another species part than IUCN's name, such as CoL's "Acerodon macklotii alorensis"
+  under IUCN's Acerodon mackloti.
+
+In the October 2026 build (2026-1, COL26.7 XR), 25,624 species have a list (14,100 with names from
+two or more sources): 3,076 IUCN subspecies and varieties, 55,184 CoL rows (46,789 subspecies and
+8,395 varieties, 16,792 species) and 75,048 Wikidata rows (54,655 subspecies and 20,393 varieties,
+22,436 species; 1,009 items named as a synonym and 178 synonym or fossil items left out). Both
+readers take about 4 seconds.
 - The checklists store keeps no subspecies. The Mammal Diversity Database's species file has a
   `subspecies` column (1,429 of 6,904 species in v2.5: each subspecies with its authority, its
   synonyms and a fossil or recently extinct note), and the Reptile Database's ColDP export has 7,667
