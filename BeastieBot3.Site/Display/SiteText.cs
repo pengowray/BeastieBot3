@@ -113,6 +113,7 @@ public static partial class SiteText {
         "wikipedia-taxobox" => "Wikipedia taxobox",
         "mdd" => "Mammal Diversity Database",
         "amphibiaweb" => "AmphibiaWeb",
+        "reptiledb" => "The Reptile Database",
         "japan-moe" => "Ministry of the Environment (Japan)",
         _ => source,
     };

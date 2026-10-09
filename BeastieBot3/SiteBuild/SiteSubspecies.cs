@@ -2,9 +2,11 @@ using System.Globalization;
 using BeastieBot3.Shared.SiteData;
 using Microsoft.Data.Sqlite;
 
-// The subspecies and varieties that the Catalogue of Life and Wikidata list under each IUCN species
-// in the release, for the species page's list of subspecies and varieties (infraspecific_name). The
-// site adds IUCN's own subspecies and varieties from the taxon table and merges the rows by name.
+// The subspecies and varieties that the Catalogue of Life, Wikidata, the Mammal Diversity Database and
+// the Reptile Database list under each IUCN species in the release, for the species page's list of
+// subspecies and varieties (infraspecific_name). The site adds IUCN's own subspecies and varieties
+// from the taxon table and merges the rows by name. The two checklists are read by ReadChecklists
+// (SiteSubspecies.Checklists.cs).
 //   col       accepted and provisionally accepted name usages of rank subspecies or variety whose
 //             parentID is the species' col_id: one indexed query per species (nameusage has an
 //             index on parentID; about 210,000 such usages in COL26.7 XR), with CoL's authorship.
@@ -42,9 +44,25 @@ internal sealed class SubspeciesCounts {
     public int SpeciesWithSeveralSources;
     public readonly HashSet<long> ColSpecies = new();
     public readonly HashSet<long> WikidataSpecies = new();
+    public readonly ChecklistSubspeciesCounts Mdd = new();
+    public readonly ChecklistSubspeciesCounts ReptileDb = new();
 }
 
-internal static class SiteSubspecies {
+/// What reading one checklist's subspecies (checklists store) found.
+internal sealed class ChecklistSubspeciesCounts {
+    /// The source's species with subspecies, and those an IUCN species in the release takes them from.
+    public int SourceSpecies;
+    public int SourceSpeciesMatched;
+    /// The subspecies of the matched species: rows stored, fossil subspecies left out, and names that
+    /// InfraspecificNames.Split cannot read (or of a species with no record id) left out.
+    public int Rows;
+    public int LeftOutFossil;
+    public int Unreadable;
+    /// IUCN species with one or more rows.
+    public readonly HashSet<long> Species = new();
+}
+
+internal static partial class SiteSubspecies {
     public const string Col = "col";
     public const string Wikidata = "wikidata";
     public const long SubspeciesRankQid = 68947;
@@ -191,7 +209,7 @@ internal static class SiteSubspecies {
     }
 
     /// Counts IUCN's subspecies and varieties under the listed species and the species that have a
-    /// list from any source. Call after both readers.
+    /// list from any source. Call after the other readers.
     public static void CountLists(IEnumerable<SiteTaxon> taxa, IReadOnlyDictionary<long, SiteTaxon> byId, SubspeciesCounts counts) {
         var iucnSpecies = new HashSet<long>();
         foreach (var taxon in taxa) {
@@ -201,12 +219,13 @@ internal static class SiteSubspecies {
                 iucnSpecies.Add(parent);
             }
         }
-        var all = new HashSet<long>(iucnSpecies);
-        all.UnionWith(counts.ColSpecies);
-        all.UnionWith(counts.WikidataSpecies);
+        HashSet<long>[] sources = [iucnSpecies, counts.ColSpecies, counts.WikidataSpecies, counts.Mdd.Species, counts.ReptileDb.Species];
+        var all = new HashSet<long>();
+        foreach (var source in sources) {
+            all.UnionWith(source);
+        }
         counts.SpeciesWithList = all.Count;
-        counts.SpeciesWithSeveralSources = all.Count(id =>
-            (iucnSpecies.Contains(id) ? 1 : 0) + (counts.ColSpecies.Contains(id) ? 1 : 0) + (counts.WikidataSpecies.Contains(id) ? 1 : 0) >= 2);
+        counts.SpeciesWithSeveralSources = all.Count(id => sources.Count(source => source.Contains(id)) >= 2);
     }
 
     private static bool HasIndex(SqliteConnection connection, string name) {

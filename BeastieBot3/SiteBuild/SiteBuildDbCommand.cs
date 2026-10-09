@@ -340,6 +340,14 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Wikidata: items under a site species left out because another item names them as a taxon synonym (P1420)", sub.WikidataLeftOutAsSynonym);
         Row("Wikidata: items kept because each item that names them as a taxon synonym is named as a synonym by them", sub.WikidataKeptAsMutualSynonym);
         Row("Wikidata: names left out (not genus, species and one more epithet)", sub.WikidataUnreadable);
+        foreach (var (title, c) in new[] { ("Mammal Diversity Database", sub.Mdd), ("Reptile Database", sub.ReptileDb) }) {
+            Row($"{title}: its species with subspecies", c.SourceSpecies);
+            Row($"{title}: of those, matched to an IUCN species", c.SourceSpeciesMatched);
+            Row($"{title}: subspecies stored", c.Rows);
+            Row($"{title}: IUCN species with one or more", c.Species.Count);
+            Row($"{title}: fossil subspecies left out", c.LeftOutFossil);
+            Row($"{title}: names left out (not genus, species and one more epithet)", c.Unreadable);
+        }
 
         Section("Links");
         Row("Taxa with an English Wikipedia article", s.EnwikiTitles);
