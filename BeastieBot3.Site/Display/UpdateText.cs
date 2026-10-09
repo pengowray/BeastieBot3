@@ -6,7 +6,6 @@ namespace BeastieBot3.Site.Display;
 /// summary, the report table and the notes: "changed", "already up to date", "left as is".
 public static partial class UpdateText {
     public const string Heading = "Update IUCN statuses in wikitext";
-    public const string NavLink = "Update wikitext";
 
     /// The link on the home page.
     public const string HomeLink = "Update the IUCN statuses in an article or list";

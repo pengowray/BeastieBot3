@@ -282,7 +282,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
     [Fact]
     public async Task AboutPageSaysWhatTheCommandsDo() {
         var text = Html.Text(await _client.GetStringAsync("/about"));
-        Assert.Contains("for a species or subspecies, QuickStatements commands that bring the IUCN conservation status on its Wikidata item up to date", text);
+        Assert.Contains("for the latest global assessment of a species or subspecies, QuickStatements commands that bring the IUCN conservation status on its Wikidata item up to date", text);
         Assert.Contains("Titles and labels of assessment items.", text);
         Assert.Contains("IUCN conservation status on Wikidata.", text);
         Assert.Contains("QuickStatements cannot set ranks, so you then set the ranks on the item's page.", text);
