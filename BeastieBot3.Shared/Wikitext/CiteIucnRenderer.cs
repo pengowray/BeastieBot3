@@ -59,17 +59,17 @@ public static partial class CiteIucnRenderer {
         }
         p.Add(("title", title));
         p.Add(("volume", year));
-        p.Add(("article-number", parts.ArticleNumber));
+        p.Add((options.Dialect.ArticleNumberParameter, parts.ArticleNumber));
 
-        var doi = AcceptableDoi(parts.Doi, parts.TaxonId, parts.AssessmentId, errataYear is not null);
+        var doi = AcceptableDoi(parts.Doi, parts.TaxonId, parts.AssessmentId, errataYear is not null, options.Dialect.DoiLanguages);
         if (doi is not null) {
             p.Add(("doi", doi));
         }
         if (options.AccessDate is { } accessed) {
-            p.Add(("access-date", accessed.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)));
+            p.Add(("access-date", accessed.ToString(options.Dialect.IsoAccessDate ? "yyyy-MM-dd" : "d MMMM yyyy", CultureInfo.InvariantCulture)));
         }
 
-        var sb = new StringBuilder("{{cite iucn");
+        var sb = new StringBuilder("{{" + options.Dialect.TemplateName);
         foreach (var (name, value) in p) {
             sb.Append(" |").Append(name).Append('=').Append(value);
         }
@@ -132,7 +132,7 @@ public static partial class CiteIucnRenderer {
     // given names as it follows the initials ("Lowry, Porter P. II"). A name IUCN wrote initials
     // first ("N.H. Rakotoarivelo") becomes "Rakotoarivelo, Nirina Hasina". Everyone else keeps
     // IUCN's form.
-    private static int AddAuthors(List<(string Name, string Value)> p, IucnCitationParts parts,
+    internal static int AddAuthors(List<(string Name, string Value)> p, IucnCitationParts parts,
         CiteAuthorStyle style, bool fullGivenNames, out bool etAlInNames) {
         etAlInNames = false;
         var n = 0;
@@ -216,7 +216,7 @@ public static partial class CiteIucnRenderer {
     // Removes IUCN's title annotations and returns what they said. Each one is removed wherever it
     // appears, so a name that arrives with them (contrary to IucnCitationParts' contract) still
     // renders without the module's "title has extraneous text" error.
-    private static string StripAnnotations(string name, out int? errataYear, out int? amendsYear, out string? scope) {
+    internal static string StripAnnotations(string name, out int? errataYear, out int? amendsYear, out string? scope) {
         errataYear = null;
         amendsYear = null;
         scope = null;
@@ -245,7 +245,7 @@ public static partial class CiteIucnRenderer {
     // The DOI as {{cite iucn}} will accept it, or null. Resolver prefixes are removed; the rest must
     // end like Module:Cite IUCN's pattern and name this assessment (or, for an errata version, the
     // assessment it corrects, which has the same taxon id).
-    private static string? AcceptableDoi(string? doi, long taxonId, long assessmentId, bool isErrata) {
+    internal static string? AcceptableDoi(string? doi, long taxonId, long assessmentId, bool isErrata, IReadOnlySet<string>? languages = null) {
         if (string.IsNullOrWhiteSpace(doi)) {
             return null;
         }
@@ -262,6 +262,9 @@ public static partial class CiteIucnRenderer {
             return null;
         }
         if (doiAssessment != assessmentId && !isErrata) {
+            return null;
+        }
+        if (languages is not null && !languages.Contains(value[(value.LastIndexOf('.') + 1)..])) {
             return null;
         }
         return value;

@@ -33,4 +33,20 @@ public sealed record CiteIucnOptions {
     /// Use a person's full given names (CitationAuthor.GivenNames) where IUCN lists them, instead of
     /// the initials IUCN's citation prints. Authors without GivenNames keep their initials.
     public bool FullGivenNames { get; init; }
+
+    /// The wiki's copy of {{cite iucn}} to write for (CiteIucnDialect); English Wikipedia's by default.
+    public CiteIucnDialect Dialect { get; init; } = CiteIucnDialect.English;
+}
+
+/// A Wikipedia's copy of English Wikipedia's {{cite iucn}} (Module:Cite IUCN): the template's name, the
+/// parameter that carries the article number ("e.T22823A14871490"), the DOI language suffixes its
+/// module accepts, and how it wants the access date. See OtherWikipedias for the evidence.
+public sealed record CiteIucnDialect(
+    string TemplateName,
+    string ArticleNumberParameter,
+    IReadOnlySet<string> DoiLanguages,
+    bool IsoAccessDate) {
+    private static readonly IReadOnlySet<string> FourLanguages = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "en", "es", "fr", "pt" };
+
+    public static readonly CiteIucnDialect English = new("cite iucn", "article-number", FourLanguages, IsoAccessDate: false);
 }
