@@ -8,7 +8,7 @@ namespace BeastieBot3.Site.Tests;
 public sealed class LiveUpdateTests(SiteFactory factory) : IClassFixture<SiteFactory> {
     private readonly HttpClient _client = factory.Client();
 
-    private Task<string> Page(string query = "") => _client.GetStringAsync($"/species/{FixtureDb.PolarBear}{query}");
+    private Task<string> Page(string query = "") => _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext{query}");
 
     private static string Attribute(string html, string name) =>
         System.Net.WebUtility.HtmlDecode(Regex.Match(html, $"<section class=\"wikitext\"[^>]*\\s{Regex.Escape(name)}=\"([^\"]*)\"").Groups[1].Value);
@@ -17,21 +17,21 @@ public sealed class LiveUpdateTests(SiteFactory factory) : IClassFixture<SiteFac
     public async Task SectionCarriesTheStatusTextAndItsOwnAddress() {
         var html = await Page();
         Assert.Equal("Wikitext updated", Attribute(html, "data-live-updated"));
-        Assert.Equal("/species/22823", Attribute(html, "data-options-url"));
+        Assert.Equal("/species/22823/wikitext", Attribute(html, "data-options-url"));
 
         // The address the form's query stands for, without what is the default.
         var chosen = await Page("?opts=1&authors=author&access=download&ref=1&refname=iucn&amp=1");
-        Assert.Equal("/species/22823?authors=author&opts=1&ref=1&amp=1&refname=iucn", Attribute(chosen, "data-options-url"));
+        Assert.Equal("/species/22823/wikitext?authors=author&opts=1&ref=1&amp=1&refname=iucn", Attribute(chosen, "data-options-url"));
 
         // Last/first is the default, so the address leaves it out even when the form sent it.
         var lastFirst = await Page("?opts=1&authors=lastfirst&access=download&ref=1&refname=iucn&amp=1");
-        Assert.Equal("/species/22823?opts=1&ref=1&amp=1&refname=iucn", Attribute(lastFirst, "data-options-url"));
+        Assert.Equal("/species/22823/wikitext?opts=1&ref=1&amp=1&refname=iucn", Attribute(lastFirst, "data-options-url"));
 
         var earlier = await Page($"?assessment={FixtureDb.PolarBear2008}&opts=1&authors=author&access=none&ref=1&refname=iucn2008");
-        Assert.Equal($"/species/22823?assessment={FixtureDb.PolarBear2008}&authors=author&access=none", Attribute(earlier, "data-options-url"));
+        Assert.Equal($"/species/22823/wikitext?assessment={FixtureDb.PolarBear2008}&authors=author&access=none", Attribute(earlier, "data-options-url"));
 
         var earlierLastFirst = await Page($"?assessment={FixtureDb.PolarBear2008}&opts=1&authors=lastfirst&access=none&ref=1&refname=iucn2008");
-        Assert.Equal($"/species/22823?assessment={FixtureDb.PolarBear2008}&access=none", Attribute(earlierLastFirst, "data-options-url"));
+        Assert.Equal($"/species/22823/wikitext?assessment={FixtureDb.PolarBear2008}&access=none", Attribute(earlierLastFirst, "data-options-url"));
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public sealed class LiveUpdateTests(SiteFactory factory) : IClassFixture<SiteFac
         var html = await Page();
         Assert.Contains("<button type=\"submit\">Update wikitext</button>", html);
         Assert.Contains("<p class=\"live-status\" role=\"status\" data-live-status hidden></p>", html);
-        Assert.Contains("<form class=\"options-form\" method=\"get\" action=\"/species/22823#wikitext\">", html);
+        Assert.Contains("<form class=\"options-form\" method=\"get\" action=\"/species/22823/wikitext#wikitext\">", html);
     }
 
     [Fact]
@@ -86,20 +86,20 @@ public sealed class LiveUpdateTests(SiteFactory factory) : IClassFixture<SiteFac
     [Fact]
     public async Task ShowWikitextLinksHaveKeys() {
         var latest = await Page("?authors=author");
-        Assert.Contains($"<a data-options-link=\"{FixtureDb.PolarBear2008}\" href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;authors=author#wikitext\"", latest);
+        Assert.Contains($"<a data-options-link=\"{FixtureDb.PolarBear2008}\" href=\"/species/22823/wikitext?assessment={FixtureDb.PolarBear2008}&amp;authors=author#wikitext\"", latest);
 
         // On an earlier assessment's page the latest one is the page's default.
         var earlier = await Page($"?assessment={FixtureDb.PolarBear2008}&authors=author");
-        Assert.Contains("<a data-options-link=\"default\" href=\"/species/22823?authors=author#wikitext\"", earlier);
+        Assert.Contains("<a data-options-link=\"default\" href=\"/species/22823/wikitext?authors=author#wikitext\"", earlier);
 
-        var sparrow = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}?access=none");
-        Assert.Contains($"<a data-options-link=\"{FixtureDb.HouseSparrowEurope}\" href=\"/species/{FixtureDb.HouseSparrow}?assessment={FixtureDb.HouseSparrowEurope}&amp;access=none#wikitext\"", sparrow);
+        var sparrow = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}/wikitext?access=none");
+        Assert.Contains($"<a data-options-link=\"{FixtureDb.HouseSparrowEurope}\" href=\"/species/{FixtureDb.HouseSparrow}/wikitext?assessment={FixtureDb.HouseSparrowEurope}&amp;access=none#wikitext\"", sparrow);
     }
 
     [Fact]
     public async Task NoInlineScriptOrHandlers() {
         foreach (var id in new[] { FixtureDb.PolarBear, FixtureDb.Tiger, FixtureDb.WestAfricanLion }) {
-            var html = await _client.GetStringAsync($"/species/{id}");
+            var html = await _client.GetStringAsync($"/species/{id}/wikitext");
             Assert.Empty(Regex.Matches(html, "<script(?![^>]*\\ssrc=)[^>]*>"));
             Assert.Empty(Regex.Matches(html, "\\son[a-z]+=", RegexOptions.IgnoreCase));
             Assert.DoesNotContain(" style=\"", html);
@@ -108,7 +108,7 @@ public sealed class LiveUpdateTests(SiteFactory factory) : IClassFixture<SiteFac
 
     [Fact]
     public async Task PageIsServedWithThePolicyThatAllowsTheRequest() {
-        var response = await _client.GetAsync($"/species/{FixtureDb.PolarBear}");
+        var response = await _client.GetAsync($"/species/{FixtureDb.PolarBear}/wikitext");
         var policy = string.Join(";", response.Headers.GetValues("Content-Security-Policy"));
         Assert.Equal(SiteMiddleware.ContentSecurityPolicy, policy);
         // site.js asks the site for the page again: same origin.

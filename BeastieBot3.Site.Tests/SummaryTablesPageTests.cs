@@ -18,7 +18,7 @@ public sealed class SummaryTablesPageTests : IClassFixture<SiteFactory> {
         var history = await History(FixtureDb.PolarBear);
         var rows = Html.TableRows(history);
 
-        Assert.Equal(new[] { "Year published", "Category", "Reason for change", "Criteria", "Date assessed", "Wikitext", "Assessment" }, rows[0]);
+        Assert.Equal(new[] { "Year published", "Category", "Reason for change", "Criteria", "Date assessed", "Assessment" }, rows[0]);
         Assert.Equal("Genuine status change (G)1", rows.Single(r => r[0].StartsWith("2008", StringComparison.Ordinal))[2]);
         Assert.Equal("no change", rows.Single(r => r[0].StartsWith("2015", StringComparison.Ordinal))[2]);
         Assert.Equal("\u2014", rows.Single(r => r[0].StartsWith("1996", StringComparison.Ordinal))[2]);

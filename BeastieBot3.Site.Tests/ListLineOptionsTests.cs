@@ -146,7 +146,7 @@ public sealed class ListLineOptionsTests(SiteFactory factory) : IClassFixture<Si
 
     [Fact]
     public async Task GroupPage_AuthoritiesAndListDefinedReferences() {
-        var html = await _client.GetStringAsync("/taxa/genus/ursus?src=iucn&src=col&src=wd&style=sci&sort=sci&auth=small&lrefs=list");
+        var html = await _client.GetStringAsync("/taxa/genus/ursus/list?src=iucn&src=col&src=wd&style=sci&sort=sci&auth=small&lrefs=list");
         var wikitext = Html.Textarea(html, "list-wikitext");
 
         Assert.Contains("* ''[[Ursus arctos]]'' <small>Linnaeus, 1758</small><ref name=\"col-COLAR\"/>", wikitext);
@@ -164,7 +164,7 @@ public sealed class ListLineOptionsTests(SiteFactory factory) : IClassFixture<Si
 
     [Fact]
     public async Task GroupPage_WithoutTheOptions_HasNoAuthorityOrReference() {
-        var html = await _client.GetStringAsync("/taxa/genus/ursus?src=iucn&src=col&src=wd&style=sci&sort=sci");
+        var html = await _client.GetStringAsync("/taxa/genus/ursus/list?src=iucn&src=col&src=wd&style=sci&sort=sci");
         var wikitext = Html.Textarea(html, "list-wikitext");
 
         Assert.DoesNotContain("<ref", wikitext);

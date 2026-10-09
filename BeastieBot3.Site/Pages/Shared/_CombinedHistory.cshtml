@@ -1,10 +1,11 @@
-@model SpeciesModel
+@model TaxonPageModel
 @* The combined assessment history: the global assessments of this taxon and of the taxa linked to
    it (CombinedHistory), in place of the taxon's own history table. A legend line for each id, with
    the swatch of its row colour, then the table, newest first. *@
 @{
     var combined = Model.Combined!;
-    var selected = Model.Selected;
+    var tool = Model as SpeciesWikitextModel;
+    var selected = tool?.Selected;
     var thisPage = combined.ThisPage;
     string NameHtml(TaxonRow t) => ScientificNameMarkup.ToHtml(t.ScientificName, t.SubpopulationName);
 }
@@ -55,7 +56,9 @@
                         }
                         <th scope="col">@SiteText.ColCriteria</th>
                         <th scope="col" class="narrow-hide">@SiteText.ColAssessed</th>
-                        <th scope="col">@SiteText.ColWikitext</th>
+                        @if (tool is not null) {
+                            <th scope="col">@SiteText.ColWikitext</th>
+                        }
                         <th scope="col">@SiteText.ColAssessment</th>
                     </tr>
                 </thead>
@@ -86,16 +89,18 @@
                             }
                             <td>@a.Criteria</td>
                             <td class="narrow-hide">@SiteFormat.Date(a.AssessmentDate)</td>
-                            <td>
-                                @if (isShown) {
-                                    <span class="shown-label">@SiteText.Shown</span>
-                                } else if (own) {
-                                    var ownIsLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId;
-                                    <a data-options-link="@SpeciesModel.OptionsLinkKey(ownIsLatest ? null : a.AssessmentId)" href="@(Model.OptionsUrl(ownIsLatest ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(null, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
-                                } else {
-                                    <a data-options-link="@SpeciesModel.OtherIdOptionsLinkKey(row)" href="@(Model.OtherIdOptionsUrl(row))#wikitext" aria-label="@SiteText.ShowWikitextOtherIdAccessible(a.TaxonId, a.YearPublished, versionNote)">@SiteText.ShowWikitextOtherId(a.TaxonId)</a>
-                                }
-                            </td>
+                            @if (tool is not null) {
+                                <td>
+                                    @if (isShown) {
+                                        <span class="shown-label">@SiteText.Shown</span>
+                                    } else if (own) {
+                                        var ownIsLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId;
+                                        <a data-options-link="@SpeciesWikitextModel.OptionsLinkKey(ownIsLatest ? null : a.AssessmentId)" href="@(tool.OptionsUrl(ownIsLatest ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(null, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
+                                    } else {
+                                        <a data-options-link="@SpeciesWikitextModel.OtherIdOptionsLinkKey(row)" href="@(tool.OtherIdOptionsUrl(row))#wikitext" aria-label="@SiteText.ShowWikitextOtherIdAccessible(a.TaxonId, a.YearPublished, versionNote)">@SiteText.ShowWikitextOtherId(a.TaxonId)</a>
+                                    }
+                                </td>
+                            }
                             <td><partial name="_IucnAssessmentLink" model="a" /></td>
                         </tr>
                     }

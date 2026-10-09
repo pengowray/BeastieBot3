@@ -442,14 +442,17 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     [InlineData(FixtureDb.SumatranTiger, "Up to date, with a reference to the latest assessment.")]
     [InlineData(FixtureDb.Lion, "but the reference cites another assessment (ID 99999).")]
     public async Task TheSpeciesPageComparesTheTaxoboxStatusWithTheLatestAssessment(long taxonId, string text) {
-        var html = await factory.CreateClient().GetStringAsync($"/species/{taxonId}");
+        var client = factory.CreateClient();
+        // The taxon page has it in the links section.
+        Assert.Contains("<dt>Status in the Wikipedia taxobox</dt>", await client.GetStringAsync($"/species/{taxonId}"));
+        var html = await client.GetStringAsync($"/species/{taxonId}/wikitext");
         Assert.Contains("Status in the Wikipedia taxobox", html);
         Assert.Contains(text, html);
         // The full stop follows the badge with no space before it.
         Assert.Contains("</span></span>.", html);
         Assert.DoesNotContain("</span></span>\n.", html);
         Assert.Contains("From the copy of the article downloaded on 29 November 2025.", html);
-        // Under the taxobox status parameters box, not in the links section.
+        // On the wikitext page, under the taxobox status parameters box.
         Assert.True(html.IndexOf("status parameters", StringComparison.Ordinal) < html.IndexOf("Status in the Wikipedia taxobox", StringComparison.Ordinal));
         Assert.DoesNotContain("<dt>Status in the Wikipedia taxobox</dt>", html);
     }

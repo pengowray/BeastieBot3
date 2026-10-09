@@ -1,0 +1,34 @@
+@page "/tools"
+@model ToolsModel
+@using BeastieBot3.Site.Web
+@{
+    ViewData["Title"] = SiteText.HeadingTools;
+    var example = Model.ExampleTaxon;
+}
+<h1>@SiteText.HeadingTools</h1>
+<p class="lead">@SiteText.ToolsIntro</p>
+
+<section class="tool-entry" aria-labelledby="tool-update-heading">
+    <h2 id="tool-update-heading"><a href="/update">@SiteText.ToolUpdateLink</a></h2>
+    <p>@SiteText.ToolsUpdateText</p>
+</section>
+
+<section class="tool-entry" aria-labelledby="tool-wikitext-heading">
+    <h2 id="tool-wikitext-heading">@SiteText.ToolWikitextLink</h2>
+    <p>@SiteText.ToolsWikitextText</p>
+    <p>@SiteText.ToolsWhereTaxon
+        @if (example is not null) {
+            @SiteText.ToolsExample <a href="@SpeciesWikitextModel.PathFor(example.TaxonId)"><i>@example.ScientificName</i></a>
+        }
+    </p>
+</section>
+
+<section class="tool-entry" aria-labelledby="tool-list-heading">
+    <h2 id="tool-list-heading">@SiteText.ToolsListHeading</h2>
+    <p>@SiteText.ToolsListText</p>
+    <p>@SiteText.ToolsWhereGroup
+        @if (Model.ExampleGenus is { } genus) {
+            @SiteText.ToolsExample <a href="@SiteUrls.GroupList(genus)">@GroupText.ToolListLink(BeastieBot3.Site.Lists.GroupList.HeadingText(genus))</a>
+        }
+    </p>
+</section>

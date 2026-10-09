@@ -10,6 +10,9 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
 
     private Task<string> Page(long taxonId, string query = "") => _client.GetStringAsync($"/species/{taxonId}{query}");
 
+    // The taxon's wikitext page, whose tables have the "Show wikitext" column.
+    private Task<string> Tool(long taxonId, string query = "") => _client.GetStringAsync($"/species/{taxonId}/wikitext{query}");
+
     // The rows of the combined table: (IUCN id, assessment id) in page order, read from each row's
     // IUCN Red List link.
     private static List<(long TaxonId, long AssessmentId)> Rows(string html) {
@@ -32,7 +35,7 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
 
     [Fact]
     public async Task CurrentTaxonPage_CombinesItsHistoryWithTheOldIdsWithItsName() {
-        var html = await Page(FixtureDb.Woylie);
+        var html = await Tool(FixtureDb.Woylie);
         var text = Html.Text(html);
 
         Assert.Contains("<h2 id=\"history-heading\">Combined assessment history</h2>", html);
@@ -46,7 +49,7 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
         Assert.DoesNotContain("<th scope=\"col\">Name</th>", Section(html));
         // The old id links to its page, and its wikitext link goes there with the assessment.
         Assert.Contains($"<a href=\"/species/{FixtureDb.WoylieOld}\" aria-label=\"IUCN id {FixtureDb.WoylieOld}\">{FixtureDb.WoylieOld}</a>", html);
-        Assert.Contains($"data-options-link=\"{FixtureDb.WoylieOld}-{FixtureDb.WoylieOld2008}\" href=\"/species/{FixtureDb.WoylieOld}?assessment={FixtureDb.WoylieOld2008}#wikitext\"", html);
+        Assert.Contains($"data-options-link=\"{FixtureDb.WoylieOld}-{FixtureDb.WoylieOld2008}\" href=\"/species/{FixtureDb.WoylieOld}/wikitext?assessment={FixtureDb.WoylieOld2008}#wikitext\"", html);
         // The legend, in place of the line "Earlier assessments of a taxon with this name ...".
         Assert.Contains("Global assessments of IUCN ids 2790 and 2785, newest first.", text);
         Assert.Contains("IUCN id 2790 This page (Bettongia penicillata): in Red List version 2026-1; 1 global assessment, published 2015.", text);
@@ -65,28 +68,29 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
 
     [Fact]
     public async Task OldIdPage_ShowsTheSameTableWithItsOwnRowsMarked() {
-        var html = await Page(FixtureDb.WoylieOld);
+        var html = await Tool(FixtureDb.WoylieOld);
 
         Assert.Equal(new[] { (FixtureDb.Woylie, FixtureDb.WoylieLatest), (FixtureDb.WoylieOld, FixtureDb.WoylieOld2008) }, Rows(html));
         Assert.Equal(" class=\"id-tint-1\"", RowClass(html, FixtureDb.Woylie, FixtureDb.WoylieLatest));
         Assert.Equal(" class=\"id-tint-2\"", RowClass(html, FixtureDb.WoylieOld, FixtureDb.WoylieOld2008));
         Assert.Contains($"{FixtureDb.WoylieOld}<span class=\"tag\">This page</span>", html);
         // Its own rows keep their wikitext links on this page; the current taxon's latest goes to its page.
-        Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}?assessment={FixtureDb.WoylieOld2008}#wikitext\"", html);
-        Assert.Contains($"href=\"/species/{FixtureDb.Woylie}?assessment={FixtureDb.WoylieLatest}#wikitext\"", html);
-        // The status section still names the taxon in the release.
-        Assert.Contains($"lists <span class=\"sci-name\"><i>Bettongia penicillata</i></span> under <a href=\"/species/{FixtureDb.Woylie}\">IUCN id {FixtureDb.Woylie}</a>.</p>", html);
+        Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}/wikitext?assessment={FixtureDb.WoylieOld2008}#wikitext\"", html);
+        Assert.Contains($"href=\"/species/{FixtureDb.Woylie}/wikitext?assessment={FixtureDb.WoylieLatest}#wikitext\"", html);
+        // The status section of the taxon page still names the taxon in the release.
+        Assert.Contains($"lists <span class=\"sci-name\"><i>Bettongia penicillata</i></span> under <a href=\"/species/{FixtureDb.Woylie}\">IUCN id {FixtureDb.Woylie}</a>.</p>",
+            await Page(FixtureDb.WoylieOld));
     }
 
     // The visitor's citation options go along to the other id's page, with that page's own default
     // ref name for the assessment ("iucn2008" there too, so no refname in the link).
     [Fact]
     public async Task OtherIdWikitextLinksKeepTheOptions() {
-        var html = await Page(FixtureDb.Woylie, "?authors=author&access=none");
-        Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}?assessment={FixtureDb.WoylieOld2008}&amp;authors=author&amp;access=none#wikitext\"", html);
+        var html = await Tool(FixtureDb.Woylie, "?authors=author&access=none");
+        Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}/wikitext?assessment={FixtureDb.WoylieOld2008}&amp;authors=author&amp;access=none#wikitext\"", html);
 
-        var named = await Page(FixtureDb.Woylie, "?opts=1&ref=1&refname=woylie");
-        Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}?assessment={FixtureDb.WoylieOld2008}&amp;opts=1&amp;ref=1&amp;refname=woylie#wikitext\"", named);
+        var named = await Tool(FixtureDb.Woylie, "?opts=1&ref=1&refname=woylie");
+        Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}/wikitext?assessment={FixtureDb.WoylieOld2008}&amp;opts=1&amp;ref=1&amp;refname=woylie#wikitext\"", named);
     }
 
     [Fact]

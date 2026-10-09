@@ -27,30 +27,33 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
         Assert.DoesNotContain("class=\"current-taxon\"", html);
         Assert.Contains($"Subspecies of <a href=\"/species/{FixtureDb.Leopard}\"><i>Panthera pardus</i></a>", html);
 
-        // The history, with a wikitext link on every row and none marked latest; no wikitext is
-        // shown until one is chosen.
+        // The history, with none marked latest.
         Assert.Contains("Assessment history", text);
-        foreach (var id in new[] { FixtureDb.AmurLeopard2016Ne, FixtureDb.AmurLeopard2008, FixtureDb.AmurLeopard1996 }) {
-            Assert.Contains($"href=\"/species/{FixtureDb.AmurLeopard}?assessment={id}", html);
-        }
         Assert.Contains("NE Not Evaluated", text);
         Assert.DoesNotContain("<span class=\"tag\">Latest</span>", html);
-        Assert.DoesNotContain("id=\"wikitext\"", html);
-        Assert.Null(Html.Textarea(html, "wikitext-status"));
+
+        // On the wikitext page, a wikitext link on every row; no wikitext is shown until one is chosen.
+        var tool = await _client.GetStringAsync($"/species/{FixtureDb.AmurLeopard}/wikitext");
+        foreach (var id in new[] { FixtureDb.AmurLeopard2016Ne, FixtureDb.AmurLeopard2008, FixtureDb.AmurLeopard1996 }) {
+            Assert.Contains($"href=\"/species/{FixtureDb.AmurLeopard}/wikitext?assessment={id}", tool);
+        }
+        Assert.DoesNotContain("id=\"wikitext\"", tool);
+        Assert.Contains("Choose an assessment in the tables below to get its wikitext.", Html.Text(tool));
+        Assert.Null(Html.Textarea(tool, "wikitext-status"));
     }
 
     // None of the regional assessments of a taxon not in the release is current, so the table lists
     // all of them, not only the newest in each region.
     [Fact]
     public async Task TaxonNotInTheReleaseListsEveryRegionalAssessment() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.BombusPyrrhopygus}");
-        var text = Html.Text(html);
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.BombusPyrrhopygus}/wikitext");
+        var text = Html.Text(html + await _client.GetStringAsync($"/species/{FixtureDb.BombusPyrrhopygus}"));
 
-        Assert.Contains("<p class=\"no-global-line\">No current assessment in IUCN Red List version 2026-1.</p>", html);
+        Assert.Contains("<p class=\"no-global-line\">No current assessment in IUCN Red List version 2026-1.</p>", await _client.GetStringAsync($"/species/{FixtureDb.BombusPyrrhopygus}"));
         Assert.DoesNotContain("No global assessment", text);
         Assert.DoesNotContain("Assessment history", text);
         var rows = new[] { FixtureDb.BombusEurope2016, FixtureDb.BombusEurope2015, FixtureDb.BombusEurope2013 }
-            .Select(id => Html.IndexOf(html, $"href=\"/species/{FixtureDb.BombusPyrrhopygus}?assessment={id}"))
+            .Select(id => Html.IndexOf(html, $"href=\"/species/{FixtureDb.BombusPyrrhopygus}/wikitext?assessment={id}"))
             .ToList();
         Assert.All(rows, at => Assert.True(at > 0));
         // Newest first.
@@ -60,7 +63,7 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
 
     [Fact]
     public async Task AmurLeopardEarlierAssessmentStillHasWikitext() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.AmurLeopard}?assessment={FixtureDb.AmurLeopard2008}");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.AmurLeopard}/wikitext?assessment={FixtureDb.AmurLeopard2008}");
         var text = Html.Text(html);
 
         Assert.Contains("Wikitext for an earlier assessment: Critically Endangered, published 2008.", text);
@@ -229,7 +232,7 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
 
     [Fact]
     public async Task DoiFoundAtDoiOrgHasItsNote() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Woylie}");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Woylie}/wikitext");
         Assert.Contains($"|doi={FixtureDb.WoylieDoi}", Html.Textarea(html, "wikitext-cite"));
         Assert.Contains("<p class=\"note\">DOI found in Crossref&#x27;s list of IUCN DOIs, or by checking possible DOIs at doi.org.</p>", html);
 

@@ -14,6 +14,7 @@
         && SiteFormat.TryParseDate(Db.Snapshot?.Get(BeastieBot3.Shared.SiteData.SiteDbSchema.MetaKeys.IucnApiDownloadedTo), out var apiTo)
         ? SiteFormat.DateRange(apiFrom, apiTo) : null;
     var sourceUrl = SiteOptions.Value.SourceUrl;
+    var pageTools = ViewData["PageTools"] as IReadOnlyList<(string Text, string Href)> ?? [];
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -49,7 +50,18 @@
                 <partial name="_SearchForm" model="@(new SearchFormModel(ViewData["Query"] as string, "header"))" />
             }
             <nav class="site-nav" aria-label="Site">
-                <a href="/update">@UpdateText.NavLink</a>
+                @* A disclosure menu: the tools of the page shown (ViewData["PageTools"]), then the site's.
+                   site.js closes it on Escape and on a click outside it. *@
+                <details class="nav-menu">
+                    <summary>@SiteText.HeadingTools</summary>
+                    <ul>
+                        @foreach (var (text, href) in pageTools) {
+                            <li><a href="@href">@text</a></li>
+                        }
+                        <li><a href="/update">@SiteText.ToolUpdateLink</a></li>
+                        <li><a href="/tools">@SiteText.NavToolsAll</a></li>
+                    </ul>
+                </details>
                 <a href="/about">@SiteText.NavAbout</a>
             </nav>
             @* Hidden until theme.js runs (site.css), so a browser without JavaScript has no control

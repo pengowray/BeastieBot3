@@ -96,7 +96,7 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
     [Fact]
     public async Task PageIsLinkedFromTheNavigationAndHome() {
         var home = await (await _client.GetAsync("/")).Content.ReadAsStringAsync();
-        Assert.Contains("<a href=\"/update\">Update wikitext</a>", home);
+        Assert.Contains("<a href=\"/update\">Update IUCN statuses in wikitext</a>", home);
         Assert.Contains("Update the IUCN statuses in an article or list", home);
         var about = await (await _client.GetAsync("/about")).Content.ReadAsStringAsync();
         Assert.Contains("status update page", Html.Text(about));

@@ -13,6 +13,17 @@ public static class SiteUrls {
         return query.Length == 0 ? url : url + "?" + query;
     }
 
+    /// The list page of a group: "/taxa/family/felidae/list", with the pick of Group and the list options.
+    public static string GroupList(Data.GroupRow group, string listQuery = "") {
+        var url = Group(group);
+        var q = url.IndexOf('?');
+        var path = q < 0 ? url : url[..q];
+        var query = q < 0 ? "" : url[(q + 1)..];
+        var options = listQuery.TrimStart('?');
+        query = options.Length == 0 ? query : query.Length == 0 ? options : query + "&" + options;
+        return path + "/list" + (query.Length == 0 ? "" : "?" + query);
+    }
+
     /// The page of a species from the Catalogue of Life or Wikidata that is not on the IUCN Red List:
     /// "/col/4QHKG" when the Catalogue of Life has it, else "/wikidata/Q1003".
     public static string Extra(Lists.ExtraSpeciesRow species) => species.ColId is { } colId

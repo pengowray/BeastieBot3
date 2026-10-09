@@ -11,7 +11,7 @@ public sealed class CiteQOptionTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task TaxoboxStatusRefUsesCiteQWhenChosenAndTheCiteIucnBoxStays() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}?cite=q");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}/wikitext?cite=q");
 
         Assert.Contains($"| status_ref = <ref name=\"iucn\">{{{{cite Q|{FixtureDb.CassowaryLatestItem}", Html.Textarea(html, "wikitext-speciesbox"));
         var cite = Html.Textarea(html, "wikitext-cite");
@@ -30,14 +30,14 @@ public sealed class CiteQOptionTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task TaxoboxStatusRefKeepsCiteIucnByDefault() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}/wikitext");
 
         Assert.Contains("| status_ref = <ref name=\"iucn\">{{cite iucn", Html.Textarea(html, "wikitext-speciesbox"));
     }
 
     [Fact]
     public async Task WithNoWikidataItemTheChoiceSaysStatusRefUsesCiteIucn() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}?cite=q");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?cite=q");
 
         Assert.Contains("| status_ref = <ref name=\"iucn\">{{cite iucn", Html.Textarea(html, "wikitext-speciesbox"));
         Assert.Contains("This assessment has no Wikidata item, so status_ref uses {{cite iucn}}.", html);

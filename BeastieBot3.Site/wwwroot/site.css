@@ -1256,11 +1256,65 @@ th.num {
 
 /* ---------------------------------------------------------------- status updater */
 
-/* The site navigation has two links since the status update page was added. */
+/* The site navigation: the Tools menu and the About link. */
 .site-nav {
     display: flex;
     flex-wrap: wrap;
+    align-items: baseline;
     gap: 0.25rem 1rem;
+}
+
+/* The Tools menu: a <details> whose list opens below its summary, over the page. */
+.nav-menu {
+    position: relative;
+}
+.nav-menu > summary {
+    cursor: pointer;
+    color: var(--link);
+}
+.nav-menu > summary:hover {
+    text-decoration: underline;
+}
+.nav-menu > ul {
+    position: absolute;
+    right: 0;
+    z-index: 10;
+    min-width: 16rem;
+    max-width: calc(100vw - 2rem);
+    margin: 0.4rem 0 0;
+    padding: 0.35rem 0;
+    list-style: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+.nav-menu > ul a {
+    display: block;
+    padding: 0.4rem 0.9rem;
+}
+
+/* The page of a tool for one taxon or group: the tool's name above the taxon's name, and a link back. */
+.tool-header .tool-label {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+.tool-header .tool-back {
+    margin: 0.4rem 0 0;
+}
+
+/* The Tools section at the bottom of taxon and group pages, and the tools page. */
+.tool-links {
+    padding-left: 1.25rem;
+}
+.tool-links li {
+    margin: 0.35rem 0;
+}
+.tool-links .help {
+    display: block;
+}
+.tool-entry h2 {
+    margin-bottom: 0.3rem;
 }
 
 .update-intro ul {

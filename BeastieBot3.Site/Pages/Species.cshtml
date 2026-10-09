@@ -17,8 +17,8 @@
 }
 @{
     var status = Model.StatusAssessment;
-    var selected = Model.Selected;
     var parentPrefix = SiteText.ParentLinePrefix(taxon.Kind);
+    ViewData["PageTools"] = new List<(string, string)> { (SiteText.ToolWikitextLink, SpeciesWikitextModel.PathFor(taxon.TaxonId)) };
     var ranks = new[] { taxon.Kingdom, taxon.Phylum, taxon.ClassName, taxon.OrderName, taxon.Family, taxon.Genus };
 }
 
@@ -146,320 +146,23 @@
             }
         </dl>
         <p class="iucn-link"><a href="@SiteFormat.IucnAssessmentUrl(status.TaxonId, status.AssessmentId)">@SiteText.IucnLink</a></p>
+        @if (!string.IsNullOrWhiteSpace(Model.StatusParts?.IucnCitationText) || Model.StatusCredits is not null) {
+            <div class="citation-notes">
+                @if (!string.IsNullOrWhiteSpace(Model.StatusParts?.IucnCitationText)) {
+                    <details class="iucn-citation" id="iucn-citation">
+                        <summary>@SiteText.IucnCitationLabel</summary>
+                        <p>@Model.StatusParts.IucnCitationText</p>
+                    </details>
+                }
+                @if (Model.StatusCredits is { } credits) {
+                    <partial name="_AssessmentCredits" model="credits" />
+                }
+            </div>
+        }
     }
 </section>
 
-@if (selected is not null) {
-    <section class="wikitext" id="wikitext" aria-labelledby="wikitext-heading"
-             data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed" data-copy-failed-button="@SiteText.CopyFailedButton"
-             data-live-updated="@SiteText.WikitextUpdated" data-live-too-many="@SiteText.WikitextTooManyRequests" data-options-url="@Model.CurrentOptionsUrl">
-        <h2 id="wikitext-heading">@SiteText.HeadingWikitext</h2>
-        @{
-            var selectedCategory = IucnCategories.Describe(selected).Label;
-        }
-        @* site.js replaces each data-live-region element with the one of the same id when the
-           citation options change. The form is never replaced, so it keeps focus and typing. *@
-        <div class="wikitext-output" id="wikitext-output" data-live-region>
-        @if (!selected.IsGlobal) {
-            <p class="note note-selected">
-                @SiteText.RegionalAssessment(selected.Scope, selectedCategory, selected.YearPublished, Model.VersionNote(selected))
-                @SiteText.TaxoboxGlobalOnly(Model.Taxobox.Label)
-                @if (Model.LatestGlobal is not null && Model.InRelease) {
-                    <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
-                }
-            </p>
-        } else if (!Model.SelectedIsDefault) {
-            <p class="note note-selected">
-                @SiteText.EarlierAssessment(selectedCategory, selected.YearPublished, Model.VersionNote(selected))
-                @if (Model.StatusAssessment is not null) {
-                    <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
-                }
-            </p>
-        }
-        @if (IucnCategories.IsEarlierVersionCode(selected)) {
-            <p class="note">@SiteText.NoTemplateEarlierVersion(Model.Taxobox.Name)</p>
-        } else if (!IucnCategories.HasStatusTemplateCode(selected)) {
-            <p class="note">@SiteText.NoTemplateCode(Model.Taxobox.Noun)</p>
-        }
-
-        @if (Model.Parts is null) {
-            <p class="note">
-                @SiteText.NoCitationReason
-                @if (IucnCategories.HasStatusTemplateCode(selected)) {
-                    @SiteText.NoCitationStatusAvailable
-                }
-                @SiteText.NoCitationBefore<a href="@SiteFormat.IucnAssessmentUrl(selected.TaxonId, selected.AssessmentId)">@SiteText.NoCitationLink</a>@SiteText.NoCitationAfter
-            </p>
-        }
-
-        @foreach (var box in Model.Boxes) {
-            <div class="wikitext-box">
-                <partial name="_WikitextBoxContent" model="box" />
-                @if (box.Id == "wikitext-speciesbox" && Model.TaxoboxCheck is { } taxoboxCheck) {
-                    <div class="taxobox-status note">
-                        <strong>@SiteText.TaxoboxStatusHeading:</strong>
-                        <partial name="_TaxoboxStatus" model="@(new TaxoboxStatusView(taxoboxCheck, Model.LatestGlobal))" />
-                    </div>
-                }
-                @if (box.Id == "wikitext-cite") {
-                    <div class="citation-notes">
-                        @if (Model.DoiNote is not null) {
-                            <p class="note">@Model.DoiNote</p>
-                        }
-                        @if (Model.UnsplitAuthors.Count > 0) {
-                            <p class="note">@SiteText.AuthorsUnsplit @string.Join("; ", Model.UnsplitAuthors)</p>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(Model.Parts?.IucnCitationText)) {
-                            <details class="iucn-citation" id="iucn-citation">
-                                <summary>@SiteText.IucnCitationLabel</summary>
-                                <p>@Model.Parts.IucnCitationText</p>
-                            </details>
-                        }
-                        @if (Model.Credits is { } credits) {
-                            <partial name="_AssessmentCredits" model="credits" />
-                        }
-                    </div>
-                }
-                @if (box.Id == "wikitext-green") {
-                    <div class="citation-notes">
-                        <p class="note">@(Model.Options.GreenStatusYear == GreenStatusYearRule.Published ? SiteText.GreenStatusCiteNoteYearPublished : SiteText.GreenStatusCiteNoteYearAssessed)</p>
-                        <p class="note">@SiteText.GreenStatusCiteNoteNumber</p>
-                    </div>
-                }
-            </div>
-        }
-        @if (Model.Credits is { } creditsWithoutCitation && !Model.Boxes.Any(b => b.Id == "wikitext-cite")) {
-            <div class="citation-notes">
-                <partial name="_AssessmentCredits" model="creditsWithoutCitation" />
-            </div>
-        }
-        </div>
-
-        @if (Model.Parts is not null) {
-            <form class="options-form" method="get" action="/species/@taxon.TaxonId#wikitext">
-                <fieldset>
-                    <legend>@SiteText.OptionsLegend</legend>
-                    <input type="hidden" name="opts" value="1">
-                    @if (!Model.SelectedIsDefault) {
-                        <input type="hidden" name="assessment" value="@selected.AssessmentId">
-                    }
-                    <fieldset class="option-group">
-                        <legend>@SiteText.AuthorsLabel</legend>
-                        <label><input type="radio" name="authors" value="author" checked="@(Model.Options.AuthorStyle == CiteAuthorStyle.AuthorN)"> @Html.Raw(SiteText.AuthorsAuthorHtml)</label>
-                        <label><input type="radio" name="authors" value="lastfirst" checked="@(Model.Options.AuthorStyle == CiteAuthorStyle.LastFirst)"> @Html.Raw(SiteText.AuthorsLastFirstHtml)</label>
-                        @if (Model.GivenNames is { } given) {
-                            <label class="option-extra"><input type="checkbox" name="fullnames" value="1" checked="@Model.Options.FullGivenNames" aria-describedby="fullnames-help"> @SiteText.FullGivenNames</label>
-                            <p class="help" id="fullnames-help">@SiteText.FullGivenNamesHelp(given.WithGivenNames, given.People, given.Example.GivenNames!.Trim(), given.Example.Display.Trim())</p>
-                        } else if (Model.Options.FullGivenNames) {
-                            @* Kept for the next assessment shown, which may have full given names. *@
-                            <input type="hidden" name="fullnames" value="1">
-                        }
-                    </fieldset>
-                    <fieldset class="option-group">
-                        <legend>@SiteText.AccessLabel</legend>
-                        @if (Model.DownloadDateText is not null) {
-                            <label><input type="radio" name="access" value="download" checked="@(Model.Options.Access == WikitextOptions.AccessDownload)" aria-describedby="access-help"> @SiteText.AccessDownload(Model.DownloadDateText)</label>
-                        }
-                        <label><input type="radio" name="access" value="today" checked="@(Model.Options.Access == WikitextOptions.AccessToday)"> @SiteText.AccessToday(Model.TodayText)</label>
-                        <label><input type="radio" name="access" value="none" checked="@(Model.Options.Access == WikitextOptions.AccessNone || (Model.DownloadDateText is null && Model.Options.Access == WikitextOptions.AccessDownload))"> @SiteText.AccessNone</label>
-                        @if (Model.DownloadDateText is not null) {
-                            <p class="help" id="access-help">@SiteText.AccessHelp</p>
-                        }
-                    </fieldset>
-                    <div class="option-group">
-                        <label><input type="checkbox" name="ref" value="1" checked="@Model.Options.WrapInRef"> @Html.Raw(SiteText.RefWrapHtml)</label>
-                        <label class="ref-name">@SiteText.RefName <input type="text" name="refname" value="@Model.Options.RefName" maxlength="@WikitextOptions.MaxRefNameLength" size="20" spellcheck="false" aria-describedby="refname-help"></label>
-                        <p class="help" id="refname-help">@SiteText.RefNameHelp</p>
-                    </div>
-                    <partial name="_StatusRefTemplate" model="Model" />
-                    @if (Model.GreenStatus is not null) {
-                        <fieldset class="option-group">
-                            <legend>@SiteText.GreenStatusYearLegend</legend>
-                            <label><input type="radio" name="@WikitextOptions.GreenStatusYearKey" value="assessed" checked="@(Model.Options.GreenStatusYear == GreenStatusYearRule.Assessed)" aria-describedby="gsyear-help"> @SiteText.GreenStatusYearAssessed</label>
-                            <label><input type="radio" name="@WikitextOptions.GreenStatusYearKey" value="@WikitextOptions.GreenStatusYearPublished" checked="@(Model.Options.GreenStatusYear == GreenStatusYearRule.Published)" aria-describedby="gsyear-help"> @SiteText.GreenStatusYearPublished</label>
-                            <p class="help" id="gsyear-help">@SiteText.GreenStatusYearHelp</p>
-                        </fieldset>
-                    } else if (Model.Options.GreenStatusYear == GreenStatusYearRule.Published) {
-                        @* Kept for the next page shown, which may have a Green Status. *@
-                        <input type="hidden" name="@WikitextOptions.GreenStatusYearKey" value="@WikitextOptions.GreenStatusYearPublished">
-                    }
-                    <div class="option-group">
-                        <label><input type="checkbox" name="amp" value="1" checked="@Model.Options.Amp" aria-describedby="amp-help"> @Html.Raw(SiteText.AmpHtml)</label>
-                        <p class="help" id="amp-help">@SiteText.AmpHelp</p>
-                    </div>
-                    @* site.js hides the button and updates the wikitext as soon as an option changes,
-                       saying so in the status line. *@
-                    <button type="submit">@SiteText.UpdateWikitext</button>
-                    <p class="live-status" role="status" data-live-status hidden></p>
-                </fieldset>
-            </form>
-        }
-
-        @if (Model.Wikidata is { } wikidata) {
-            <section class="wikidata-cite" id="wikidata-cite" aria-labelledby="wikidata-cite-heading" data-live-region>
-                <h3 id="wikidata-cite-heading">@SiteText.HeadingWikidataCite</h3>
-                @if (wikidata.ItemQid is { } itemQid) {
-                    <p class="wikidata-item">@SiteText.WikidataItemBefore<a href="@wikidata.ItemUrl">@itemQid</a></p>
-                    @if (wikidata.CiteQ is { } citeQ) {
-                        <div class="wikitext-box">
-                            <partial name="_WikitextBoxContent" model="citeQ" />
-                        </div>
-                        <p class="note"><a href="@SiteText.CiteQGuidanceUrl">@SiteText.CiteQGuidanceLink</a>@SiteText.CiteQGuidanceAfter</p>
-                    }
-                    @if (wikidata.ItemIsForAssessmentId is { } owner) {
-                        @if (wikidata.ItemAssessmentHasPage) {
-                            <p class="wikidata-borrowed">@SiteText.BorrowedItemBefore<a href="@(Model.OptionsUrl(owner))#wikidata-cite">@SiteText.BorrowedItemLink</a>.</p>
-                        } else {
-                            <p class="wikidata-borrowed">@SiteText.BorrowedItemNoPage(owner)</p>
-                        }
-                    }
-                    <partial name="_WikidataName" model="wikidata" />
-                    @if (wikidata.Commands is { } add) {
-                        var changes = wikidata.Changes;
-                        @if (changes.Count == 0) {
-                            <p class="wikidata-missing">@SiteText.MissingStatements(string.Join(", ", wikidata.AddedStatements)) @SiteText.AddStatementsLine</p>
-                        } else {
-                            @if (wikidata.AddedStatements.Count > 0) {
-                                <p class="wikidata-missing">@SiteText.MissingStatements(string.Join(", ", wikidata.AddedStatements))</p>
-                            }
-                            <partial name="_WikidataItemChanges" model="wikidata" />
-                            <p>@SiteText.RunCommandsLine</p>
-                        }
-                        <partial name="_WikidataMainSubject" model="wikidata" />
-                        <div class="wikitext-box">
-                            <partial name="_WikitextBoxContent" model="add" />
-                        </div>
-                        @if (wikidata.QuickStatementsUrl is { } addUrl) {
-                            <p class="quickstatements-link"><a href="@addUrl">@SiteText.OpenInQuickStatements</a></p>
-                        }
-                    }
-                } else {
-                    <p class="wikidata-item">@SiteText.NoWikidataItem</p>
-                    @if (wikidata.NoUsableName && wikidata.CitationName is { } internalName) {
-                        <p>@SiteText.NoUsableName(internalName)</p>
-                    }
-                    @if (wikidata.Commands is { } create) {
-                        <p>
-                            @if (wikidata.SearchUrl is { } searchUrl) {
-                                @SiteText.SearchWikidataBefore<a href="@searchUrl">@SiteText.SearchWikidataLink</a>@SiteText.SearchWikidataAfter
-                            }
-                            @SiteText.CreateItemLine
-                        </p>
-                        <partial name="_WikidataName" model="wikidata" />
-                        <partial name="_WikidataMainSubject" model="wikidata" />
-                        <div class="wikitext-box">
-                            <partial name="_WikitextBoxContent" model="create" />
-                        </div>
-                        @if (wikidata.QuickStatementsUrl is { } createUrl) {
-                            <p class="quickstatements-link"><a href="@createUrl">@SiteText.OpenInQuickStatements</a></p>
-                        }
-                    }
-                }
-            </section>
-        }
-        @if (Model.WikidataStatus is { HasContent: true } wikidataStatus && Model.LatestGlobal is { } latestGlobal) {
-            <partial name="_WikidataStatus" model="@(new WikidataStatusPartial(wikidataStatus, latestGlobal, Model.Version))" />
-        }
-    </section>
-}
-
-@if (Model.Combined is not null) {
-    <partial name="_CombinedHistory" model="Model" />
-} else if (Model.GlobalHistory.Count > 0) {
-    var historyNotes = Model.TableNotes(Model.GlobalHistory.Select(a => (a, true)));
-    <section class="history" aria-labelledby="history-heading">
-        <h2 id="history-heading">@SiteText.HeadingHistory</h2>
-        <div class="table-scroll">
-            <table>
-                <thead>
-                    <tr>
-                        <th scope="col">@SiteText.ColPublished</th>
-                        <th scope="col">@SiteText.ColCategory</th>
-                        @if (historyNotes.ShowReasonColumn) {
-                            <th scope="col">@SiteText.ColReasonForChange</th>
-                        }
-                        <th scope="col">@SiteText.ColCriteria</th>
-                        <th scope="col" class="narrow-hide">@SiteText.ColAssessed</th>
-                        <th scope="col">@SiteText.ColWikitext</th>
-                        <th scope="col">@SiteText.ColAssessment</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var a in Model.GlobalHistory) {
-                        var isShown = selected?.AssessmentId == a.AssessmentId;
-                        var isLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId;
-                        var versionNote = Model.VersionNote(a);
-                        <tr class="@(isShown ? "shown" : null)">
-                            <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</th>
-                            <td><partial name="_Badge" model="@historyNotes.BadgeFor(a)" /></td>
-                            @if (historyNotes.ShowReasonColumn) {
-                                <td><partial name="_ReasonCell" model="@(new ReasonCellModel(historyNotes.CellFor(a.AssessmentId)))" /></td>
-                            }
-                            <td>@a.Criteria</td>
-                            <td class="narrow-hide">@SiteFormat.Date(a.AssessmentDate)</td>
-                            <td>
-                                @if (isShown) {
-                                    <span class="shown-label">@SiteText.Shown</span>
-                                } else {
-                                    <a data-options-link="@SpeciesModel.OptionsLinkKey(isLatest ? null : a.AssessmentId)" href="@(Model.OptionsUrl(isLatest ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(null, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
-                                }
-                            </td>
-                            <td><partial name="_IucnAssessmentLink" model="a" /></td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-        <partial name="_HistoryTableNotes" model="historyNotes" />
-        <partial name="_EarlierIds" model="Model" />
-    </section>
-} else if (Model.InRelease && Model.LinkedTaxa.Count > 0) {
-    <section class="history" aria-labelledby="history-heading">
-        <h2 id="history-heading">@SiteText.HeadingHistory</h2>
-        <partial name="_EarlierIds" model="Model" />
-    </section>
-}
-
-@if (Model.RegionalRows.Count > 0) {
-    <section class="regional" id="regional" aria-labelledby="regional-heading">
-        <h2 id="regional-heading">@(Model.RegionalRows.All(r => r.HasNoScope) ? SiteText.HeadingNoScope : SiteText.HeadingRegional)</h2>
-        <div class="table-scroll">
-            <table>
-                <thead>
-                    <tr>
-                        <th scope="col">@SiteText.ColRegion</th>
-                        <th scope="col">@SiteText.ColCategory</th>
-                        <th scope="col">@SiteText.ColCriteria</th>
-                        <th scope="col">@SiteText.ColPublished</th>
-                        <th scope="col">@SiteText.ColWikitext</th>
-                        <th scope="col">@SiteText.ColAssessment</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var a in Model.RegionalRows) {
-                        var isShown = selected?.AssessmentId == a.AssessmentId;
-                        var isDefault = a.AssessmentId == Model.StatusAssessment?.AssessmentId;
-                        var versionNote = Model.VersionNote(a);
-                        <tr class="@(isShown ? "shown" : null)">
-                            <th scope="row">@SiteText.RegionLabel(a.Scope)</th>
-                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
-                            <td>@a.Criteria</td>
-                            <td>@a.YearPublished@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</td>
-                            <td>
-                                @if (isShown) {
-                                    <span class="shown-label">@SiteText.Shown</span>
-                                } else {
-                                    <a data-options-link="@SpeciesModel.OptionsLinkKey(isDefault ? null : a.AssessmentId)" href="@(Model.OptionsUrl(isDefault ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(a.Scope, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
-                                }
-                            </td>
-                            <td><partial name="_IucnAssessmentLink" model="a" /></td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </section>
-}
+<partial name="_AssessmentTables" model="Model" />
 
 <section class="related" id="related" aria-labelledby="related-heading">
 @if (Model.IsSpecies) {
@@ -633,7 +336,7 @@
                 @SiteText.LinkWikipediaNone
             }
         </dd>
-        @if (Model.TaxoboxCheck is { } check && !Model.Boxes.Any(b => b.Id == "wikitext-speciesbox")) {
+        @if (Model.TaxoboxCheck is { } check) {
             <dt>@SiteText.TaxoboxStatusHeading</dt>
             <dd class="taxobox-status"><partial name="_TaxoboxStatus" model="@(new TaxoboxStatusView(check, Model.LatestGlobal))" /></dd>
         }
@@ -676,4 +379,15 @@
             </dd>
         }
     </dl>
+</section>
+
+<section class="tools" id="tools" aria-labelledby="tools-heading">
+    <h2 id="tools-heading">@SiteText.HeadingTools</h2>
+    <ul class="tool-links">
+        <li><a href="@SpeciesWikitextModel.PathFor(taxon.TaxonId)">@SiteText.ToolWikitextLink</a> <span class="help">@SiteText.ToolWikitextHelp</span></li>
+        @if (Model.GenusGroup is { } genus) {
+            <li><a href="@BeastieBot3.Site.Web.SiteUrls.GroupList(genus)">@SiteText.ToolGenusListLink(genus.Name)</a> <span class="help">@SiteText.ToolGenusListHelp</span></li>
+        }
+        <li><a href="/update">@SiteText.ToolUpdateLink</a> <span class="help">@SiteText.ToolUpdateHelp</span></li>
+    </ul>
 </section>

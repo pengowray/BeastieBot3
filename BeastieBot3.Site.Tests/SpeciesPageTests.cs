@@ -7,6 +7,9 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     private Task<string> Page(string query = "") => _client.GetStringAsync($"/species/{FixtureDb.PolarBear}{query}");
 
+    // The polar bear's wikitext page.
+    private Task<string> Tool(string query = "") => _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext{query}");
+
     [Fact]
     public async Task SectionsComeInOrder() {
         var html = await Page();
@@ -16,10 +19,11 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
             "class=\"taxon-common-name\">Polar bear",
             "class=\"classification",
             ">Latest global assessment</h2>",
-            ">Wikitext for Wikipedia</h2>",
             ">Assessment history</h2>",
+            ">Subspecies and subpopulations (IUCN)</h2>",
             ">Names</h2>",
             ">Links to other sites</h2>",
+            ">Tools</h2>",
             "class=\"site-footer\"",
         ];
         var last = -1;
@@ -28,6 +32,43 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
             Assert.True(at > last, $"'{marker}' should come after the previous section");
             last = at;
         }
+    }
+
+    [Fact]
+    public async Task TheTaxonPageHasNoWikitextAndLinksItsWikitextPage() {
+        var html = await Page();
+        Assert.DoesNotContain("id=\"wikitext\"", html);
+        Assert.DoesNotContain(">Show wikitext</a>", html);
+        Assert.DoesNotContain(">Wikitext</th>", html);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}/wikitext\">Wikitext and citations</a>", Section(html, "tools"));
+        Assert.Contains("<a href=\"/taxa/genus/ursus/list\">", Section(html, "tools"));
+        // The Tools menu in the header has the page's own tool first.
+        var menu = html[html.IndexOf("<details class=\"nav-menu\">", StringComparison.Ordinal)..];
+        Assert.True(menu.IndexOf($"/species/{FixtureDb.PolarBear}/wikitext", StringComparison.Ordinal) < menu.IndexOf("/update", StringComparison.Ordinal));
+
+        var tool = await Tool();
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PolarBear}\">", tool);
+        Assert.Contains($"<link rel=\"canonical\" href=\"http://localhost/species/{FixtureDb.PolarBear}/wikitext\">", tool);
+        Assert.Contains(">Show wikitext</a>", tool);
+    }
+
+    [Fact]
+    public async Task ATaxonPageAddressWithWikitextOptionsGoesToTheWikitextPage() {
+        var response = await _client.GetAsync($"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}&authors=author&q=bear");
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}&authors=author", response.Headers.Location?.OriginalString);
+        // A search for a common name keeps the taxon page.
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync($"/species/{FixtureDb.PolarBear}?q=polar+bear")).StatusCode);
+    }
+
+    [Fact]
+    public async Task TheTaxonPageShowsWhoAssessedTheLatestAssessmentAndIucnsCitation() {
+        static string Status(string html) {
+            var status = html[html.IndexOf("<section class=\"status\"", StringComparison.Ordinal)..];
+            return status[..status.IndexOf("</section>", StringComparison.Ordinal)];
+        }
+        Assert.Contains("id=\"iucn-citation\"", Status(await Page()));
+        Assert.Contains("id=\"iucn-credits\"", Status(await _client.GetStringAsync($"/species/{FixtureDb.Tiger}")));
     }
 
     [Fact]
@@ -42,7 +83,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("Criteria A3c", text);
         Assert.Contains("Population trend Unknown", text);
         Assert.Contains("Date assessed 21 March 2015", text);
-        Assert.Contains("Year published 2015", text);
+        Assert.Contains("Year published 2015", Html.Text(await Page()));
         Assert.Contains("Data from Red List version 2026-1", text);
         Assert.Contains("<a href=\"https://www.iucnredlist.org/species/22823/14871490\">Read the full assessment on the IUCN Red List website</a>", html);
         Assert.Contains($"<link rel=\"canonical\" href=\"http://localhost/species/{FixtureDb.PolarBear}\">", html);
@@ -66,7 +107,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task DefaultWikitext() {
-        var html = await Page();
+        var html = await Tool();
         var cite = Html.Textarea(html, "wikitext-cite");
         Assert.Equal(
             "<ref name=\"iucn\">{{cite iucn |last1=Wiig |first1=Ø. |last2=Amstrup |first2=S. |last3=Atwood |first3=T. |last4=Laidre |first4=K. " +
@@ -88,7 +129,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task LastFirstAuthorsAndNoAccessDate() {
-        var cite = Html.Textarea(await Page("?access=none"), "wikitext-cite")!;
+        var cite = Html.Textarea(await Tool("?access=none"), "wikitext-cite")!;
         Assert.Contains("|last1=Wiig |first1=Ø. |last2=Amstrup |first2=S.", cite);
         Assert.Contains("|author5=Jon Aars", cite);
         Assert.DoesNotContain("access-date", cite);
@@ -96,7 +137,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task AuthorNAuthorsAndNoAccessDate() {
-        var cite = Html.Textarea(await Page("?authors=author&access=none"), "wikitext-cite")!;
+        var cite = Html.Textarea(await Tool("?authors=author&access=none"), "wikitext-cite")!;
         Assert.Contains("|author=Wiig, Ø. |author2=Amstrup, S.", cite);
         Assert.Contains("|author5=Jon Aars", cite);
         Assert.DoesNotContain("access-date", cite);
@@ -105,7 +146,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     [Fact]
     public async Task TodayAsAccessDate() {
         var today = DateTime.UtcNow.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
-        var html = await Page("?access=today");
+        var html = await Tool("?access=today");
         var cite = Html.Textarea(html, "wikitext-cite")!;
         Assert.Contains($"|access-date={today}}}", cite);
         // The date is the server's UTC date, and the label says so.
@@ -114,7 +155,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task EachWikitextBoxHasItsOwnCopyStatus() {
-        var html = await Page();
+        var html = await Tool();
         // The three boxes before the citation options; the {{cite Q}} part after them may add more.
         var start = Html.IndexOf(html, "id=\"wikitext-output\"");
         var main = html[start..Html.IndexOf(html, "<form class=\"options-form\"")];
@@ -137,96 +178,96 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task RefWrappingRefNameAndAmp() {
-        var plain = Html.Textarea(await Page("?opts=1"), "wikitext-cite")!;
+        var plain = Html.Textarea(await Tool("?opts=1"), "wikitext-cite")!;
         Assert.StartsWith("{{cite iucn ", plain);
         Assert.DoesNotContain("name-list-style", plain);
 
-        var html = await Page("?opts=1&ref=1&refname=polar&amp=1");
+        var html = await Tool("?opts=1&ref=1&refname=polar&amp=1");
         var named = Html.Textarea(html, "wikitext-cite")!;
         Assert.StartsWith("<ref name=\"polar\">{{cite iucn ", named);
         Assert.Contains("|name-list-style=amp", named);
         // status_ref is always a ref, with the same name.
         Assert.Contains("| status_ref = <ref name=\"polar\">", Html.Textarea(html, "wikitext-speciesbox"));
 
-        var unnamed = Html.Textarea(await Page("?opts=1&ref=1&refname="), "wikitext-cite")!;
+        var unnamed = Html.Textarea(await Tool("?opts=1&ref=1&refname="), "wikitext-cite")!;
         Assert.StartsWith("<ref>{{cite iucn ", unnamed);
 
-        var quoted = Html.Textarea(await Page("?opts=1&ref=1&refname=" + Uri.EscapeDataString("a\"><script>")), "wikitext-cite")!;
+        var quoted = Html.Textarea(await Tool("?opts=1&ref=1&refname=" + Uri.EscapeDataString("a\"><script>")), "wikitext-cite")!;
         Assert.StartsWith("<ref name=\"ascript\">", quoted);
     }
 
     [Fact]
     public async Task DefaultRefNameDependsOnTheAssessment() {
-        var latest = await Page();
+        var latest = await Tool();
         Assert.Contains("name=\"refname\" value=\"iucn\"", latest);
         Assert.Contains("Use a ref name that no other citation in the article uses, unless this citation replaces the citation with that name.", Html.Text(latest));
         // The link to an earlier assessment does not carry "iucn" to it.
-        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}#wikitext\"", latest);
+        Assert.Contains($"href=\"/species/22823/wikitext?assessment={FixtureDb.PolarBear2008}#wikitext\"", latest);
 
-        var earlier = await Page($"?assessment={FixtureDb.PolarBear2008}");
+        var earlier = await Tool($"?assessment={FixtureDb.PolarBear2008}");
         Assert.StartsWith("<ref name=\"iucn2008\">{{cite iucn ", Html.Textarea(earlier, "wikitext-cite"));
         Assert.Contains("| status_ref = <ref name=\"iucn2008\">", Html.Textarea(earlier, "wikitext-speciesbox"));
         Assert.Contains("name=\"refname\" value=\"iucn2008\"", earlier);
-        Assert.Contains("<a href=\"/species/22823#wikitext\">Show wikitext for the latest assessment</a>", earlier);
+        Assert.Contains("<a href=\"/species/22823/wikitext#wikitext\">Show wikitext for the latest assessment</a>", earlier);
 
-        var regional = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}?assessment={FixtureDb.HouseSparrowEurope}");
+        var regional = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}/wikitext?assessment={FixtureDb.HouseSparrowEurope}");
         Assert.StartsWith("<ref name=\"iucn-europe\">{{cite iucn ", Html.Textarea(regional, "wikitext-cite"));
-        Assert.Contains($"<a href=\"/species/{FixtureDb.HouseSparrow}#wikitext\">Show wikitext for the latest assessment</a>", regional);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.HouseSparrow}/wikitext#wikitext\">Show wikitext for the latest assessment</a>", regional);
 
         // Two global assessments published in 2010: the replaced one's name has its id.
-        var replaced = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}?assessment={FixtureDb.MicropyropsisReplaced}");
+        var replaced = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}/wikitext?assessment={FixtureDb.MicropyropsisReplaced}");
         Assert.StartsWith($"<ref name=\"iucn2010-{FixtureDb.MicropyropsisReplaced}\">", Html.Textarea(replaced, "wikitext-cite"));
-        var errata = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}");
+        var errata = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}/wikitext");
         Assert.StartsWith("<ref name=\"iucn\">", Html.Textarea(errata, "wikitext-cite"));
     }
 
     [Fact]
     public async Task ARefNameTheVisitorChoseGoesToOtherAssessments() {
-        var chosen = await Page("?opts=1&ref=1&refname=polar");
-        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;opts=1&amp;ref=1&amp;refname=polar#wikitext\"", chosen);
+        var chosen = await Tool("?opts=1&ref=1&refname=polar");
+        Assert.Contains($"href=\"/species/22823/wikitext?assessment={FixtureDb.PolarBear2008}&amp;opts=1&amp;ref=1&amp;refname=polar#wikitext\"", chosen);
 
         // The form sends the pre-filled default back with another option: the link to the 2008
         // assessment names that assessment's default.
-        var submitted = await Page("?opts=1&ref=1&refname=iucn&amp=1");
-        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;opts=1&amp;ref=1&amp;amp=1&amp;refname=iucn2008#wikitext\"", submitted);
+        var submitted = await Tool("?opts=1&ref=1&refname=iucn&amp=1");
+        Assert.Contains($"href=\"/species/22823/wikitext?assessment={FixtureDb.PolarBear2008}&amp;opts=1&amp;ref=1&amp;amp=1&amp;refname=iucn2008#wikitext\"", submitted);
     }
 
     [Fact]
     public async Task OptionsFormKeepsTheChoices() {
-        var html = await Page("?authors=author&access=today&opts=1&amp=1");
+        var html = await Tool("?authors=author&access=today&opts=1&amp=1");
         Assert.Contains("value=\"author\" checked=\"checked\"", html);
         // Last/first is the default: its radio button is checked without an authors parameter, and an
         // explicit authors=lastfirst (sent by the form's radio button) means the same.
-        Assert.Contains("value=\"lastfirst\" checked=\"checked\"", await Page("?opts=1"));
-        Assert.Contains("value=\"lastfirst\" checked=\"checked\"", await Page("?authors=lastfirst&opts=1"));
+        Assert.Contains("value=\"lastfirst\" checked=\"checked\"", await Tool("?opts=1"));
+        Assert.Contains("value=\"lastfirst\" checked=\"checked\"", await Tool("?authors=lastfirst&opts=1"));
         Assert.Contains("value=\"today\" checked=\"checked\"", html);
         Assert.Contains("name=\"amp\" value=\"1\" checked=\"checked\"", html);
         Assert.DoesNotContain("name=\"ref\" value=\"1\" checked", html);
-        Assert.Contains("<form class=\"options-form\" method=\"get\" action=\"/species/22823#wikitext\">", html);
+        Assert.Contains("<form class=\"options-form\" method=\"get\" action=\"/species/22823/wikitext#wikitext\">", html);
         // History links keep the options.
-        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;authors=author&amp;access=today&amp;opts=1&amp;amp=1#wikitext\"", html);
+        Assert.Contains($"href=\"/species/22823/wikitext?assessment={FixtureDb.PolarBear2008}&amp;authors=author&amp;access=today&amp;opts=1&amp;amp=1#wikitext\"", html);
     }
 
     [Fact]
     public async Task EarlierAssessmentWikitext() {
-        var html = await Page($"?assessment={FixtureDb.PolarBear2008}");
+        var html = await Tool($"?assessment={FixtureDb.PolarBear2008}");
         var text = Html.Text(html);
         Assert.Contains("Wikitext for an earlier assessment: Vulnerable, published 2008.", text);
-        Assert.Contains("<a href=\"/species/22823#wikitext\">Show wikitext for the latest assessment</a>", html);
+        Assert.Contains("<a href=\"/species/22823/wikitext#wikitext\">Show wikitext for the latest assessment</a>", html);
         var cite = Html.Textarea(html, "wikitext-cite")!;
         Assert.Contains("|last1=Schliebe |first1=S. |display-authors=etal |year=2008", cite);
         Assert.Contains("|article-number=e.T22823A13045100", cite);
         Assert.Contains("No DOI found in IUCN's citation text, GBIF or Wikidata. {{cite iucn}} works without a DOI.", text);
         Assert.Equal("{{IUCN status|VU|22823/13045100|1|year=2008}}", Html.Textarea(html, "wikitext-status"));
         // The status summary still shows the latest assessment.
-        Assert.Contains("Year published 2015", text);
+        Assert.Contains("Year published 2015", Html.Text(await Page()));
         Assert.Contains("<input type=\"hidden\" name=\"assessment\" value=\"13045100\">", html);
         Assert.Contains("<span class=\"shown-label\">Shown</span>", html);
     }
 
     [Fact]
     public async Task LowerRiskAssessmentUsesIucn23() {
-        var html = await Page($"?assessment={FixtureDb.PolarBear1996}");
+        var html = await Tool($"?assessment={FixtureDb.PolarBear1996}");
         Assert.Contains("Lower Risk/conservation dependent", Html.Text(html));
         Assert.Equal("{{IUCN status|LR/cd|22823/13045101|1|year=1996}}", Html.Textarea(html, "wikitext-status"));
         // No citation, so no Speciesbox box either.
@@ -235,7 +276,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task OldCategoryCodesKeepTheirCase() {
-        var html = await Page($"?assessment={FixtureDb.PolarBear1988Nt}");
+        var html = await Tool($"?assessment={FixtureDb.PolarBear1988Nt}");
         var text = Html.Text(html);
         // "nt" is the pre-1994 Not Threatened, not Near Threatened.
         Assert.Contains("<span class=\"badge cat-other\">nt</span> <span class=\"category-label\">Not Threatened (1994 or earlier categories)</span>", html);
@@ -244,7 +285,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("{{IUCN status}} and {{Speciesbox}} have no code for this category.", text);
         Assert.DoesNotContain("{{IUCN status}} wikitext is available.", text);
 
-        var baiji = await _client.GetStringAsync($"/species/{FixtureDb.Baiji}?assessment={FixtureDb.Baiji1986Ex}");
+        var baiji = await _client.GetStringAsync($"/species/{FixtureDb.Baiji}/wikitext?assessment={FixtureDb.Baiji1986Ex}");
         Assert.Contains("<span class=\"badge cat-other\">Ex</span> <span class=\"category-label\">Extinct (1994 or earlier categories)</span>", baiji);
         Assert.DoesNotContain("{{IUCN status|EX", baiji);
     }
@@ -254,19 +295,19 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     [InlineData(FixtureDb.SumatranTiger, "{{Subspeciesbox}}")]
     [InlineData(FixtureDb.PlantSubspecies, "{{Infraspeciesbox}}")]
     public async Task TaxoboxLabelFollowsTheKindOfTaxon(long taxonId, string taxobox) {
-        var html = await _client.GetStringAsync($"/species/{taxonId}");
+        var html = await _client.GetStringAsync($"/species/{taxonId}/wikitext");
         Assert.Contains($"<label for=\"wikitext-speciesbox\">{taxobox} status parameters</label>", html);
         Assert.Contains($"aria-label=\"Copy {taxobox} wikitext\"", html);
     }
 
     [Fact]
     public async Task CurrentCodesOnEarlierVersionRowsGetNoTemplates() {
-        var subspecies = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}");
+        var subspecies = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}/wikitext");
         // The latest NT is Near Threatened; the 1998 NT with no criteria version is not named.
         Assert.Contains("<span class=\"badge cat-nt\">NT</span> <span class=\"category-label\">Near Threatened</span>", subspecies);
         Assert.Contains("<span class=\"badge cat-other\">NT</span> <span class=\"category-label\">No name given by IUCN (1994 or earlier categories)</span>", subspecies);
 
-        var nt = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}?assessment={FixtureDb.PlantSubspecies1998Nt}");
+        var nt = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}/wikitext?assessment={FixtureDb.PlantSubspecies1998Nt}");
         var ntText = Html.Text(nt);
         Assert.Contains("Wikitext for an earlier assessment: No name given by IUCN (1994 or earlier categories), published 1998.", ntText);
         Assert.Contains("This assessment uses an earlier version of the IUCN categories, so no {{IUCN status}} or {{Infraspeciesbox}} wikitext is given for it.", ntText);
@@ -275,7 +316,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Null(Html.Textarea(nt, "wikitext-status"));
         Assert.Null(Html.Textarea(nt, "wikitext-speciesbox"));
 
-        var ex = await _client.GetStringAsync($"/species/{FixtureDb.Bromus}?assessment={FixtureDb.Bromus1998Ex}");
+        var ex = await _client.GetStringAsync($"/species/{FixtureDb.Bromus}/wikitext?assessment={FixtureDb.Bromus1998Ex}");
         Assert.Contains("<span class=\"badge cat-ex\">EX</span> <span class=\"category-label\">Extinct</span>", ex);
         Assert.Contains("This assessment uses an earlier version of the IUCN categories", Html.Text(ex));
         Assert.Null(Html.Textarea(ex, "wikitext-status"));
@@ -284,14 +325,14 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task AssessmentOfAnotherTaxonIsIgnored() {
-        var html = await Page($"?assessment={FixtureDb.LionLatest}");
+        var html = await Tool($"?assessment={FixtureDb.LionLatest}");
         Assert.Equal("{{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(html, "wikitext-status"));
         Assert.DoesNotContain("15951", Html.Textarea(html, "wikitext-cite"));
     }
 
     [Fact]
     public async Task HistoryNewestFirstWithLatestLabel() {
-        var html = await Page();
+        var html = await Tool();
         var y2015 = html.IndexOf("<th scope=\"row\">2015 <span class=\"tag\">Latest</span>", StringComparison.Ordinal);
         var y2008 = html.IndexOf("<th scope=\"row\">2008", StringComparison.Ordinal);
         var y1996 = html.IndexOf("<th scope=\"row\">1996", StringComparison.Ordinal);
@@ -303,16 +344,16 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task ErrataVersionAndTheAssessmentItReplacedAreTold() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}/wikitext");
         var text = Html.Text(html);
         Assert.Contains("2010 Latest Errata version, published 2016", text);
         Assert.Contains("2010 Replaced by the errata version", text);
-        Assert.Contains($"href=\"/species/{FixtureDb.Micropyropsis}?assessment={FixtureDb.MicropyropsisReplaced}#wikitext\" aria-label=\"Show wikitext for the assessment published in 2010 (replaced by the errata version)\"", html);
+        Assert.Contains($"href=\"/species/{FixtureDb.Micropyropsis}/wikitext?assessment={FixtureDb.MicropyropsisReplaced}#wikitext\" aria-label=\"Show wikitext for the assessment published in 2010 (replaced by the errata version)\"", html);
         // Regional rows carry the region and the note in the link's name.
         Assert.Contains("Europe EN Endangered B1ab(iii)+2ab(iii) 2011 Errata version, published 2016", text);
         Assert.Contains("aria-label=\"Show wikitext for the Europe assessment published in 2011 (errata version, published 2016)\"", html);
 
-        var replaced = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}?assessment={FixtureDb.MicropyropsisReplaced}");
+        var replaced = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}/wikitext?assessment={FixtureDb.MicropyropsisReplaced}");
         Assert.Contains("Wikitext for an earlier assessment: Endangered, published 2010. Replaced by the errata version.", Html.Text(replaced));
         Assert.Contains("aria-label=\"Show wikitext for the assessment published in 2010 (errata version, published 2016)\"", replaced);
     }
@@ -379,18 +420,18 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task PossiblyExtinctAndDoiFromWikidata() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Baiji}");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Baiji}/wikitext");
         var text = Html.Text(html);
         Assert.Contains("<span class=\"badge cat-cr\">CR (PE)</span> <span class=\"category-label\">Critically Endangered (Possibly Extinct)</span>", html);
         Assert.Equal("{{IUCN status|CR(PE)|12119/50358152|1|year=2017}}", Html.Textarea(html, "wikitext-status"));
         Assert.StartsWith("| status = PE\n| status_system = IUCN3.1\n", Html.Textarea(html, "wikitext-speciesbox"));
         Assert.Contains("DOI from Wikidata.", text);
-        Assert.Contains("Criteria A2cd; C2a(ii); D", text);
+        Assert.Contains("Criteria A2cd; C2a(ii); D", Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.Baiji}")));
     }
 
     [Fact]
     public async Task OrganisationAuthorAndRegionalAssessment() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}/wikitext");
         var cite = Html.Textarea(html, "wikitext-cite")!;
         Assert.Contains("{{cite iucn |author=BirdLife International |year=2019", cite);
         var text = Html.Text(html);
@@ -398,9 +439,9 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.DoesNotContain("No DOI found", text);
         Assert.Contains("Regional assessments", text);
         Assert.Contains("Europe LC Least Concern", text);
-        Assert.Contains($"href=\"/species/{FixtureDb.HouseSparrow}?assessment={FixtureDb.HouseSparrowEurope}#wikitext\"", html);
+        Assert.Contains($"href=\"/species/{FixtureDb.HouseSparrow}/wikitext?assessment={FixtureDb.HouseSparrowEurope}#wikitext\"", html);
 
-        var regional = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}?assessment={FixtureDb.HouseSparrowEurope}");
+        var regional = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}/wikitext?assessment={FixtureDb.HouseSparrowEurope}");
         var regionalText = Html.Text(regional);
         Assert.Contains("Wikitext for the Europe assessment: Least Concern, published 2021.", regionalText);
         Assert.Contains("{{Speciesbox}} status parameters are given for global assessments only.", regionalText);
@@ -453,7 +494,8 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("<h2 id=\"regional-heading\">Assessments with no geographic scope</h2>", html);
         Assert.Contains("<th scope=\"row\">No scope given</th>", html);
         Assert.Contains("Region No scope given", text);
-        Assert.Contains("Wikitext for the assessment with no geographic scope: Data Deficient, published 2011.", text);
+        Assert.Contains("Wikitext for the assessment with no geographic scope: Data Deficient, published 2011.",
+            Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.NoScopeOnly}/wikitext")));
     }
 
     [Fact]
@@ -479,9 +521,9 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task SubpopulationWithoutCitation() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.WestAfricanLion}");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.WestAfricanLion}/wikitext");
         var text = Html.Text(html);
-        Assert.Contains($"Subpopulation of <a href=\"/species/{FixtureDb.Lion}\"><i>Panthera leo</i></a>", html);
+        Assert.Contains($"Subpopulation of <a href=\"/species/{FixtureDb.Lion}\"><i>Panthera leo</i></a>", await _client.GetStringAsync($"/species/{FixtureDb.WestAfricanLion}"));
         Assert.Contains("<i>Panthera leo</i> West Africa subpopulation", html);
         Assert.Contains("No citation for this assessment yet: its details have not been downloaded from the IUCN Red List. {{IUCN status}} wikitext is available. To cite the assessment, use its page on the IUCN Red List website.", text);
         Assert.Null(Html.Textarea(html, "wikitext-cite"));
@@ -498,11 +540,12 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("No global assessment. This taxon has been assessed in <a href=\"#regional\">2 regions</a>.", html);
         // The latest regional assessment is the Mediterranean one (2010).
         Assert.Contains("Region Mediterranean", text);
-        Assert.Contains("Wikitext for the Mediterranean assessment: Data Deficient, published 2010.", text);
+        var tool = await _client.GetStringAsync($"/species/{FixtureDb.RegionalOnly}/wikitext");
+        Assert.Contains("Wikitext for the Mediterranean assessment: Data Deficient, published 2010.", Html.Text(tool));
         Assert.Contains("<section class=\"regional\" id=\"regional\"", html);
         Assert.DoesNotContain("Assessment history", text);
         // The table lists the latest assessment in each region; the 2006 Europe one is left out.
-        Assert.Contains($"href=\"/species/{FixtureDb.RegionalOnly}?assessment={FixtureDb.RegionalOnlyEurope}", html);
+        Assert.Contains($"href=\"/species/{FixtureDb.RegionalOnly}/wikitext?assessment={FixtureDb.RegionalOnlyEurope}", tool);
         Assert.DoesNotContain(FixtureDb.RegionalOnlyEurope2006.ToString(), html);
     }
 

@@ -244,7 +244,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
     [Fact]
     public async Task SecurityHeadersOnACachedTaxonPage() {
         // The second request is answered by the output cache.
-        const string url = "/species/22823?authors=author&q=cache-test";
+        const string url = "/species/22823/wikitext?authors=author&refname=cache-test";
         var first = await _client.GetAsync(url);
         var second = await _client.GetAsync(url);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
@@ -258,7 +258,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
 
     [Fact]
     public async Task PagesHaveNoInlineScriptsOrStyles() {
-        foreach (var url in new[] { "/", "/species/22823", "/search?q=Fillerus", "/about", "/no/such/page" }) {
+        foreach (var url in new[] { "/", "/species/22823", "/species/22823/wikitext", "/taxa/family/ursidae/list", "/tools", "/search?q=Fillerus", "/about", "/no/such/page" }) {
             var html = await (await _client.GetAsync(url)).Content.ReadAsStringAsync();
             Assert.DoesNotMatch("<script(?![^>]*\\bsrc=)", html);
             Assert.DoesNotContain(" style=\"", html);
@@ -274,9 +274,10 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
                      FixtureDb.Lion, FixtureDb.WestAfricanLion, FixtureDb.RegionalOnly, FixtureDb.Variety, FixtureDb.Koala,
                      FixtureDb.AmurLeopard, FixtureDb.WoylieOld, FixtureDb.Woylie }) {
             urls.Add($"/species/{id}");
-            urls.Add($"/species/{id}?authors=author&access=none");
+            urls.Add($"/species/{id}/wikitext");
+            urls.Add($"/species/{id}/wikitext?authors=author&access=none");
         }
-        urls.Add($"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}");
+        urls.Add($"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}");
         foreach (var url in urls) {
             var body = await (await _client.GetAsync(url)).Content.ReadAsStringAsync();
             Assert.DoesNotContain(FixtureDb.NarrativeMarker, body);

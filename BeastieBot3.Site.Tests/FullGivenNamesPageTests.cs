@@ -9,12 +9,12 @@ public sealed class FullGivenNamesPageTests(SiteFactory factory) : IClassFixture
 
     [Fact]
     public async Task OptionIsShownOnlyWhenAnAuthorHasFullGivenNames() {
-        var polarBear = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
+        var polarBear = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext");
         Assert.DoesNotContain(Checkbox, polarBear);
         Assert.DoesNotContain("Full given names", polarBear);
         Assert.DoesNotContain("name=\"fullnames\"", polarBear);
 
-        var tiger = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}");
+        var tiger = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext");
         Assert.Contains(Checkbox + " aria-describedby=\"fullnames-help\"> Full given names instead of initials</label>", tiger);
         Assert.DoesNotContain(Checkbox + " checked", tiger);
         Assert.Contains("IUCN gives full given names for 1 of the 2 authors, such as “John” for “Goodrich, J.”. The other author is written as in IUCN's citation.",
@@ -25,16 +25,16 @@ public sealed class FullGivenNamesPageTests(SiteFactory factory) : IClassFixture
         var option = Html.IndexOf(tiger, Checkbox);
         Assert.True(group < option && option < access);
 
-        var lion = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.Lion}"));
+        var lion = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.Lion}/wikitext"));
         Assert.Contains("IUCN gives full given names for both authors, such as “Samantha” for “Nicholson, S.”.", lion);
     }
 
     [Fact]
     public async Task ChoiceIsKept() {
-        var tiger = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}?fullnames=1");
+        var tiger = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?fullnames=1");
         Assert.Contains(Checkbox + " checked=\"checked\"", tiger);
         // The form sent without the box ticked turns it off.
-        var off = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}?opts=1&ref=1&refname=iucn");
+        var off = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?opts=1&ref=1&refname=iucn");
         Assert.DoesNotContain(Checkbox + " checked", off);
     }
 
@@ -42,16 +42,16 @@ public sealed class FullGivenNamesPageTests(SiteFactory factory) : IClassFixture
     public async Task ChoiceGoesToOtherAssessments() {
         // The polar bear's citations have no full given names, so the option is not shown, but the
         // choice is kept in the form and in the links to other assessments.
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}?fullnames=1");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?fullnames=1");
         Assert.DoesNotContain(Checkbox, html);
         Assert.Contains("<input type=\"hidden\" name=\"fullnames\" value=\"1\">", html);
-        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;fullnames=1#wikitext\"", html);
+        Assert.Contains($"href=\"/species/22823/wikitext?assessment={FixtureDb.PolarBear2008}&amp;fullnames=1#wikitext\"", html);
     }
 
     [Fact]
     public async Task OptionIsPartOfTheCacheKey() {
-        var plain = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}");
-        var full = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}?fullnames=1");
+        var plain = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext");
+        var full = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?fullnames=1");
         Assert.DoesNotContain(Checkbox + " checked", plain);
         Assert.Contains(Checkbox + " checked=\"checked\"", full);
         Assert.Contains("fullnames", Web.SiteCachePolicies.SpeciesQueryKeys);

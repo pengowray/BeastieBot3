@@ -28,13 +28,42 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
         Assert.Contains("Family Ursidae", html);
         Assert.Contains("rel=\"canonical\" href=\"http://localhost/taxa/family/ursidae\"", html);
         Assert.Contains("Common names in the Catalogue of Life (unchecked):", html);
+        Assert.Contains("<a href=\"/taxa/family/ursidae/list\">", Section(html, "tools"));
+        Assert.Null(Html.Textarea(html, "list-wikitext"));
+
+        var list = await _client.GetStringAsync("/taxa/family/ursidae/list");
+        Assert.Contains("rel=\"canonical\" href=\"http://localhost/taxa/family/ursidae/list\"", list);
+        Assert.Contains("<a href=\"/taxa/family/ursidae\">", list);
         // Mammals default to common name only, with no rank headings below a family and no status sections.
-        Assert.Equal("* [[Polar bear]] {{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(html, "list-wikitext"));
+        Assert.Equal("* [[Polar bear]] {{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(list, "list-wikitext"));
+    }
+
+    [Fact]
+    public async Task AGroupPageAddressWithListOptionsGoesToTheListPage() {
+        var response = await _client.GetAsync("/taxa/order/carnivora?style=sci&h=family&q=bear");
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal("/taxa/order/carnivora/list?style=sci&h=family", response.Headers.Location?.OriginalString);
+
+        var picked = await _client.GetAsync("/taxa/genus/abronia?kingdom=plantae&tpl=0");
+        Assert.Equal("/taxa/genus/abronia/list?kingdom=plantae&tpl=0", picked.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task TwoGeneraWithOneName_TheListPageLinksTheirListPages() {
+        var html = await _client.GetStringAsync("/taxa/genus/abronia/list");
+        Assert.Contains("href=\"/taxa/genus/abronia/list?kingdom=plantae\"", html);
+        Assert.Contains("href=\"/taxa/genus/abronia/list?kingdom=animalia\"", html);
+    }
+
+    private static string Section(string html, string id) {
+        var start = html.IndexOf($"id=\"{id}\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"the page has a section with id {id}");
+        return html[start..html.IndexOf("</section>", start, StringComparison.Ordinal)];
     }
 
     [Fact]
     public async Task ListOptionsComeFromTheQuery() {
-        var html = await _client.GetStringAsync("/taxa/order/carnivora?style=sci&status=0&h=family&tpl=0&names=1");
+        var html = await _client.GetStringAsync("/taxa/order/carnivora/list?style=sci&status=0&h=family&tpl=0&names=1");
 
         Assert.Equal("== Family Ursidae ==\nMembers of the [[Bear|Ursidae]] family are called bears.\n* [[Polar bear|''Ursus maritimus'']], Polar bear",
             Html.Textarea(html, "list-wikitext"));
@@ -80,7 +109,7 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
 
     [Fact]
     public async Task LongOptionHelpIsBehindInfoButtons() {
-        var html = await _client.GetStringAsync("/taxa/family/ursidae");
+        var html = await _client.GetStringAsync("/taxa/family/ursidae/list");
 
         // A button in the legend that opens the help text as a popover, named for the option it explains.
         // The fieldset is named by the legend's text alone, not by the button's name too.

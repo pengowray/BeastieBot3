@@ -65,8 +65,8 @@ public sealed class GreenStatusTests : IClassFixture<SiteFactory> {
 
     [Fact]
     public async Task Citation_box_uses_the_year_assessed_unless_asked() {
-        var assessed = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}");
-        var published = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}?gsyear=published");
+        var assessed = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext");
+        var published = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext?gsyear=published");
 
         Assert.Contains("|year=2021 |type=Green Status assessment |title=''Panthera tigris'' |volume=2021 "
             + $"|url=https://www.iucnredlist.org/species/{FixtureDb.Tiger}/{FixtureDb.TigerLatest} |access-date=8 October 2026}}}}</ref>", Html.Textarea(assessed, "wikitext-green"));

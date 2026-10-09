@@ -17,19 +17,15 @@ public sealed record ChildGroup(GroupRow Group, int Threatened, int Extinct);
 /// when the rank adds none of its own (genus in species tables, whose tables are one per genus).
 public sealed record HeadingChoice(string Rank, bool FromCol, bool Picked, int? Headings);
 
-/// A group page (/taxa/{rank}/{name}): the group's place in the classification, its names, its
-/// counts by category, the groups in it, and a Wikipedia list of its taxa with options. When the
-/// rank and name match two or more groups (a genus name used in two kingdoms), the page lists them;
-/// ?kingdom= or ?parent= picks one.
-[OutputCache(PolicyName = SiteCachePolicies.Group)]
-[ResponseCache(Duration = 600, Location = ResponseCacheLocation.Any)]
-public sealed class GroupModel : PageModel {
-    private readonly SiteDatabase _db;
-    private readonly SiteQueries _queries;
+/// What the two pages of a group share: the group page (/taxa/{rank}/{name}, GroupModel) and its
+/// list page (/taxa/{rank}/{name}/list, GroupListModel). When the rank and name match two or more
+/// groups (a genus name used in two kingdoms), both pages list them; ?kingdom= or ?parent= picks one.
+public abstract class GroupPageModel : PageModel {
+    protected readonly SiteDatabase _db;
+    protected readonly SiteQueries _queries;
+    protected readonly SiteOptions _options;
 
-    private readonly SiteOptions _options;
-
-    public GroupModel(SiteDatabase db, SiteQueries queries, Microsoft.Extensions.Options.IOptions<SiteOptions> options) {
+    protected GroupPageModel(SiteDatabase db, SiteQueries queries, Microsoft.Extensions.Options.IOptions<SiteOptions> options) {
         _db = db;
         _queries = queries;
         _options = options.Value;
@@ -45,6 +41,65 @@ public sealed class GroupModel : PageModel {
     /// From the kingdom down to the group itself.
     public IReadOnlyList<GroupRow> Path { get; private set; } = [];
     public IReadOnlyList<GroupCategoryCount> Counts { get; private set; } = [];
+
+    /// The address of this kind of page for a group (the group page or its list page), for the
+    /// links to each group when the rank and name match two or more.
+    public abstract string UrlOf(GroupRow group);
+
+    /// Finds the group. False when no group or more than one matches: the page then says so (404
+    /// when none matches) or lists the candidates.
+    protected bool LoadGroup(string rank, string name) {
+        RequestedRank = rank;
+        RequestedName = name;
+        Version = _db.Snapshot?.IucnRelease;
+        var matches = _queries.FindGroups(rank, name);
+        if (matches.Count == 0) {
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            return false;
+        }
+        var group = Pick(matches);
+        if (group is null) {
+            Candidates = matches.Select(m => (m, _queries.GetGroupPath(m.NodeId))).ToList();
+            return false;
+        }
+        Group = group;
+        Path = _queries.GetGroupPath(group.NodeId);
+        Counts = _queries.GetGroupCounts(group.NodeId);
+        return true;
+    }
+
+    // A ?kingdom= or ?parent= (the name of any group above it) that leaves one match picks it.
+    private GroupRow? Pick(IReadOnlyList<GroupRow> matches) {
+        if (matches.Count == 1) {
+            return matches[0];
+        }
+        IEnumerable<GroupRow> left = matches;
+        if (SiteEndpoints.FirstQueryValue(Request, "kingdom") is { Length: > 0 } kingdom) {
+            left = left.Where(m => string.Equals(m.Kingdom, kingdom, StringComparison.OrdinalIgnoreCase));
+        }
+        if (SiteEndpoints.FirstQueryValue(Request, "parent") is { Length: > 0 } parent) {
+            left = left.Where(m => _queries.GetGroupPath(m.NodeId)
+                .Any(p => p.NodeId != m.NodeId && string.Equals(p.Name, parent, StringComparison.OrdinalIgnoreCase)));
+        }
+        var list = left.ToList();
+        return list.Count == 1 && list.Count < matches.Count ? list[0] : null;
+    }
+
+    protected static int Sum(IReadOnlyList<GroupCategoryCount> counts, IReadOnlySet<string> codes) =>
+        counts.Where(c => codes.Contains(c.Category)).Sum(c => c.Species);
+
+    public int CountOf(IReadOnlySet<string> codes) => Sum(Counts, codes);
+}
+
+/// A group page (/taxa/{rank}/{name}): the group's place in the classification, its names, its
+/// counts by category and the groups in it, with a link to its list page. An address with list
+/// options (from before the list had its own page) is sent to the list page.
+[OutputCache(PolicyName = SiteCachePolicies.Group)]
+[ResponseCache(Duration = 600, Location = ResponseCacheLocation.Any)]
+public sealed class GroupModel : GroupPageModel {
+    public GroupModel(SiteDatabase db, SiteQueries queries, Microsoft.Extensions.Options.IOptions<SiteOptions> options) : base(db, queries, options) {
+    }
+
     public IReadOnlyList<ChildGroup> Children { get; private set; } = [];
     public IReadOnlyList<string> ColNames { get; private set; } = [];
     /// The group's names from English Wikipedia (its article's title and the redirects to it).
@@ -52,6 +107,63 @@ public sealed class GroupModel : PageModel {
     /// The search text (q) when search sent the reader here and the text is one of the group's names,
     /// for the link back to all the results.
     public string? ArrivedQuery { get; private set; }
+
+    public override string UrlOf(GroupRow group) => SiteUrls.Group(group);
+
+    public IActionResult OnGet(string rank, string name) {
+        if (Request.Query.Keys.Any(k => GroupListModel.ListQueryKeys.Contains(k))) {
+            var query = QueryString.Create(Request.Query.Where(p => p.Key != "q"));
+            return Redirect(GroupListModel.PathFor(rank, name, query.ToUriComponent()));
+        }
+        if (!LoadGroup(rank, name)) {
+            return Page();
+        }
+        var group = Group!;
+        // Search engines get the page without ?q=.
+        ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, SiteUrls.Group(group));
+        ColNames = _queries.GetGroupColNames(group.NodeId);
+        WikipediaNames = _queries.GetGroupWikipediaNames(group.NodeId);
+        ArrivedQuery = ArrivalText(SiteEndpoints.FirstQueryValue(Request, "q"), group, WikipediaNames);
+        var children = _queries.GetChildGroups(group.NodeId);
+        var childCounts = _queries.GetGroupCounts(children.Select(c => c.NodeId).ToList());
+        Children = children.Select(c => {
+            var counts = childCounts.GetValueOrDefault(c.NodeId) ?? [];
+            return new ChildGroup(c, Sum(counts, CategoryGroups.Threatened), Sum(counts, CategoryGroups.Extinct));
+        }).ToList();
+        return Page();
+    }
+
+    /// The search text to link back to: only one of the group's names (its own name or a name from
+    /// English Wikipedia, ignoring case and accents), so the link cannot put arbitrary text on the page.
+    public static string? ArrivalText(string? q, GroupRow group, IReadOnlyList<string> wikipediaNames) {
+        var text = SiteEndpoints.NormalizeQuery(q);
+        if (text.Length < 2) {
+            return null;
+        }
+        var key = SiteNameKey.Fold(text);
+        return key == SiteNameKey.Fold(group.Name) || wikipediaNames.Any(n => SiteNameKey.Fold(n) == key) ? text : null;
+    }
+}
+
+/// The list page of a group (/taxa/{rank}/{name}/list): a Wikipedia list of the group's taxa, or
+/// species tables, with options.
+[OutputCache(PolicyName = SiteCachePolicies.GroupList)]
+[ResponseCache(Duration = 600, Location = ResponseCacheLocation.Any)]
+public sealed class GroupListModel : GroupPageModel {
+    public GroupListModel(SiteDatabase db, SiteQueries queries, Microsoft.Extensions.Options.IOptions<SiteOptions> options) : base(db, queries, options) {
+    }
+
+    /// The query parameters of the list options. A group page address with any of them is sent to
+    /// the group's list page.
+    public static readonly IReadOnlySet<string> ListQueryKeys =
+        new HashSet<string>([.. GroupListQuery.Keys, .. SpeciesTableQuery.Keys], StringComparer.OrdinalIgnoreCase);
+
+    /// The list page of the group a group page address names: "/taxa/family/felidae/list" with the query
+    /// (which starts with "?" or is empty).
+    public static string PathFor(string rank, string name, string query = "") =>
+        $"/taxa/{Uri.EscapeDataString(rank)}/{Uri.EscapeDataString(name)}/list{query}";
+
+    public override string UrlOf(GroupRow group) => SiteUrls.GroupList(group);
 
     public GroupListOptions Options { get; private set; } = new();
     public GroupListOptions DefaultOptions { get; private set; } = new();
@@ -79,37 +191,15 @@ public sealed class GroupModel : PageModel {
 
     /// This page's address with the current options, for the address bar after a live update.
     public string CurrentOptionsUrl =>
-        SiteUrls.Group(Group!, SpeciesTableQuery.Append(GroupListQuery.Write(Options, DefaultOptions), Table));
+        SiteUrls.GroupList(Group!, SpeciesTableQuery.Append(GroupListQuery.Write(Options, DefaultOptions), Table));
 
     public IActionResult OnGet(string rank, string name) {
-        RequestedRank = rank;
-        RequestedName = name;
-        Version = _db.Snapshot?.IucnRelease;
-        var matches = _queries.FindGroups(rank, name);
-        if (matches.Count == 0) {
-            Response.StatusCode = StatusCodes.Status404NotFound;
+        if (!LoadGroup(rank, name)) {
             return Page();
         }
-        var group = Pick(matches);
-        if (group is null) {
-            Candidates = matches.Select(m => (m, _queries.GetGroupPath(m.NodeId))).ToList();
-            return Page();
-        }
-        Group = group;
+        var group = Group!;
         // Every set of list options has its own address; search engines get the page without them.
-        ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, SiteUrls.Group(group));
-        Path = _queries.GetGroupPath(group.NodeId);
-        Counts = _queries.GetGroupCounts(group.NodeId);
-        ColNames = _queries.GetGroupColNames(group.NodeId);
-        WikipediaNames = _queries.GetGroupWikipediaNames(group.NodeId);
-        ArrivedQuery = ArrivalText(SiteEndpoints.FirstQueryValue(Request, "q"), group, WikipediaNames);
-        var children = _queries.GetChildGroups(group.NodeId);
-        var childCounts = _queries.GetGroupCounts(children.Select(c => c.NodeId).ToList());
-        Children = children.Select(c => {
-            var counts = childCounts.GetValueOrDefault(c.NodeId) ?? [];
-            return new ChildGroup(c, Sum(counts, CategoryGroups.Threatened), Sum(counts, CategoryGroups.Extinct));
-        }).ToList();
-
+        ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, SiteUrls.GroupList(group));
         var ranks = _queries.GetRanksWithin(group);
         DefaultOptions = GroupListQuery.Defaults(Path);
         DefaultOptions = DefaultOptions with { HeadingRanks = DefaultOptions.HeadingRanks.Where(r => ranks.Any(x => x.Rank == r)).ToList() };
@@ -168,39 +258,6 @@ public sealed class GroupModel : PageModel {
         Tables = SpeciesTable.Build(List, groups, new SpeciesTableQueries(_db).GetExtras(group), Table);
         Wikitext = SpeciesTable.ToWikitext(Tables, Table);
     }
-
-    // A ?kingdom= or ?parent= (the name of any group above it) that leaves one match picks it.
-    private GroupRow? Pick(IReadOnlyList<GroupRow> matches) {
-        if (matches.Count == 1) {
-            return matches[0];
-        }
-        IEnumerable<GroupRow> left = matches;
-        if (SiteEndpoints.FirstQueryValue(Request, "kingdom") is { Length: > 0 } kingdom) {
-            left = left.Where(m => string.Equals(m.Kingdom, kingdom, StringComparison.OrdinalIgnoreCase));
-        }
-        if (SiteEndpoints.FirstQueryValue(Request, "parent") is { Length: > 0 } parent) {
-            left = left.Where(m => _queries.GetGroupPath(m.NodeId)
-                .Any(p => p.NodeId != m.NodeId && string.Equals(p.Name, parent, StringComparison.OrdinalIgnoreCase)));
-        }
-        var list = left.ToList();
-        return list.Count == 1 && list.Count < matches.Count ? list[0] : null;
-    }
-
-    /// The search text to link back to: only one of the group's names (its own name or a name from
-    /// English Wikipedia, ignoring case and accents), so the link cannot put arbitrary text on the page.
-    public static string? ArrivalText(string? q, GroupRow group, IReadOnlyList<string> wikipediaNames) {
-        var text = SiteEndpoints.NormalizeQuery(q);
-        if (text.Length < 2) {
-            return null;
-        }
-        var key = SiteNameKey.Fold(text);
-        return key == SiteNameKey.Fold(group.Name) || wikipediaNames.Any(n => SiteNameKey.Fold(n) == key) ? text : null;
-    }
-
-    private static int Sum(IReadOnlyList<GroupCategoryCount> counts, IReadOnlySet<string> codes) =>
-        counts.Where(c => codes.Contains(c.Category)).Sum(c => c.Species);
-
-    public int CountOf(IReadOnlySet<string> codes) => Sum(Counts, codes);
 }
 
 /// Category codes ({{IUCN status}} codes) counted together on group pages.

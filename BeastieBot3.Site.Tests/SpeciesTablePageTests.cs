@@ -6,7 +6,7 @@ public sealed class SpeciesTablePageTests(SiteFactory factory) : IClassFixture<S
 
     [Fact]
     public async Task TableTypeWritesASpeciesTableWithAListDefinedReference() {
-        var html = await _client.GetStringAsync("/taxa/family/ursidae?type=table");
+        var html = await _client.GetStringAsync("/taxa/family/ursidae/list?type=table");
         var wikitext = Html.Textarea(html, "list-wikitext")!;
 
         Assert.Equal("""
@@ -30,12 +30,12 @@ public sealed class SpeciesTablePageTests(SiteFactory factory) : IClassFixture<S
         Assert.Contains("<caption>Genus <i>Ursus</i> – one species</caption>", html);
         // The bullet-list options are hidden, the table options shown.
         Assert.Contains("data-list-type=\"bullets\" hidden", html);
-        Assert.Contains("data-options-url=\"/taxa/family/ursidae?type=table\"", html);
+        Assert.Contains("data-options-url=\"/taxa/family/ursidae/list?type=table\"", html);
     }
 
     [Fact]
     public async Task CiteQWithNoWikidataItemFallsBackToCiteIucnInTheRow() {
-        var html = await _client.GetStringAsync("/taxa/family/ursidae?type=table&refs=inline&refnames=id&cite=q&cols=noecology&summary=0");
+        var html = await _client.GetStringAsync("/taxa/family/ursidae/list?type=table&refs=inline&refnames=id&cite=q&cols=noecology&summary=0");
         var wikitext = Html.Textarea(html, "list-wikitext")!;
 
         Assert.StartsWith("{{Species table |no-note=y |no-ecology=yes |genus=[[Ursus]]", wikitext);
@@ -46,7 +46,7 @@ public sealed class SpeciesTablePageTests(SiteFactory factory) : IClassFixture<S
 
     [Fact]
     public async Task BulletListIsUnchangedByTheTableOptions() {
-        var html = await _client.GetStringAsync("/taxa/family/ursidae?refs=none&cite=q");
+        var html = await _client.GetStringAsync("/taxa/family/ursidae/list?refs=none&cite=q");
 
         Assert.Equal("* [[Polar bear]] {{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(html, "list-wikitext"));
         Assert.Contains("data-list-type=\"tables\" hidden", html);

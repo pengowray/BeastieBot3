@@ -15,8 +15,10 @@ public sealed class CreditsTests(SiteFactory factory) : IClassFixture<SiteFactor
 
     [Fact]
     public async Task LatestAssessment_ListsTheCredits_UnderIucnsHeadings() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}/wikitext");
         var credits = Credits(html);
+        // The taxon page has them too, in the status section.
+        Assert.Equal(credits, Credits(await _client.GetStringAsync($"/species/{FixtureDb.Tiger}")));
         var text = Html.Text(credits);
 
         // Closed by default, after the box of the {{cite iucn}} wikitext.
@@ -41,7 +43,7 @@ public sealed class CreditsTests(SiteFactory factory) : IClassFixture<SiteFactor
 
     [Fact]
     public async Task GroupInCitationForm_HasNoCount_AndTheTotalIsLeftOut() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}");
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}");
         var credits = Credits(html);
 
         Assert.Contains("<summary>Credits as given by IUCN</summary>", credits);
@@ -56,8 +58,8 @@ public sealed class CreditsTests(SiteFactory factory) : IClassFixture<SiteFactor
     // The section is for the assessment the wikitext is for: none for an assessment with no credits.
     [Fact]
     public async Task AssessmentWithNoCredits_HasNoSection() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
-        Assert.DoesNotContain("iucn-credits", html);
+        Assert.DoesNotContain("iucn-credits", await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}"));
+        Assert.DoesNotContain("iucn-credits", await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext"));
     }
 
     [Theory]

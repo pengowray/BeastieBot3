@@ -147,7 +147,7 @@ public sealed class ListSourcesTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task GroupListWithAllSources() {
-        var html = await _client.GetStringAsync("/taxa/genus/ursus?src=iucn&src=col&src=wd&style=sci&sort=sci");
+        var html = await _client.GetStringAsync("/taxa/genus/ursus/list?src=iucn&src=col&src=wd&style=sci&sort=sci");
 
         Assert.Equal("""
             * [[American black bear|''Ursus americanus'']], American black bear
@@ -176,7 +176,7 @@ public sealed class ListSourcesTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task GroupListPreferringWikidata() {
-        var html = await _client.GetStringAsync("/taxa/genus/ursus?src=wd&style=sci&sort=sci");
+        var html = await _client.GetStringAsync("/taxa/genus/ursus/list?src=wd&style=sci&sort=sci");
 
         // Only Wikidata: the polar bear (it has an item) and Ursus maritima are both from Wikidata, so both stay.
         Assert.Equal("""
@@ -194,16 +194,16 @@ public sealed class ListSourcesTests(SiteFactory factory) : IClassFixture<SiteFa
     [Fact]
     public async Task NotEvaluatedBoxIsTickedWithAnotherSourceAndMarkedForLiveUpdates() {
         // site.js copies the box's state from the new page after a live update (data-live-sync).
-        var withCol = await _client.GetStringAsync("/taxa/genus/ursus?src=iucn&src=col");
+        var withCol = await _client.GetStringAsync("/taxa/genus/ursus/list?src=iucn&src=col");
         Assert.Contains("value=\"NE\" checked=\"checked\" data-live-sync=\"\"", withCol);
 
-        var iucnOnly = await _client.GetStringAsync("/taxa/genus/ursus");
+        var iucnOnly = await _client.GetStringAsync("/taxa/genus/ursus/list");
         Assert.Contains("value=\"NE\" data-live-sync=\"\"", iucnOnly);
     }
 
     [Fact]
     public async Task DefaultListHasOnlyIucnTaxa() {
-        var html = await _client.GetStringAsync("/taxa/genus/ursus?style=sci&cat=");
+        var html = await _client.GetStringAsync("/taxa/genus/ursus/list?style=sci&cat=");
 
         Assert.Equal("* [[Polar bear|''Ursus maritimus'']], Polar bear {{IUCN status|VU|22823/14871490|1|year=2015}}",
             Html.Textarea(html, "list-wikitext"));

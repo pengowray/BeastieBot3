@@ -19,7 +19,7 @@
         <ul class="group-choices">
             @foreach (var (candidate, path) in Model.Candidates) {
                 <li>
-                    <a href="@SiteUrls.Group(candidate)">@GroupList.HeadingText(candidate)</a>
+                    <a href="@Model.UrlOf(candidate)">@GroupList.HeadingText(candidate)</a>
                     <span class="group-path">@string.Join(" › ", path.Where(p => p.NodeId != candidate.NodeId).Select(p => p.Name))</span>
                 </li>
             }
@@ -43,6 +43,7 @@
     var showInfraColumn = counts.Any(c => c.Count.Infra > 0);
     var childRanks = Model.Children.Select(c => c.Group.Rank).Distinct().ToList();
     var iucnParent = above.LastOrDefault(p => !p.IsCol);
+    ViewData["PageTools"] = new List<(string, string)> { (GroupText.ToolListLink(GroupList.HeadingText(group)), SiteUrls.GroupList(group)) };
 }
 
 @if (Model.ArrivedQuery is { } arrived) {
@@ -188,143 +189,10 @@
     </section>
 }
 
-@{
-    var options = Model.Options;
-    var defaults = Model.DefaultOptions;
-}
-<section class="group-list wikitext" id="wikitext" aria-labelledby="list-heading"
-         data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed" data-copy-failed-button="@SiteText.CopyFailedButton"
-         data-live-updated="@GroupText.ListUpdated" data-live-too-many="@GroupText.ListTooManyRequests" data-options-url="@Model.CurrentOptionsUrl">
-    <h2 id="list-heading">@GroupText.HeadingList</h2>
-    <div class="list-editor">
-        <form class="options-form list-options" method="get" action="@SiteUrls.Group(group)#wikitext">
-            @if (group.LinkQuery is { } pick) {
-                var parts = pick.Split('=', 2);
-                <input type="hidden" name="@parts[0]" value="@parts[1]">
-            }
-            <fieldset>
-                <legend>@GroupText.OptionsHeading</legend>
-                <partial name="_ListType" model="Model" />
-                <fieldset class="option-group" data-list-type="bullets" hidden="@Model.Table.IsTable">
-                    <legend>@GroupText.OptionFormat</legend>
-                    @foreach (var (style, label, example) in new[] {
-                                 (SpeciesListStyle.ScientificNameFirst, GroupText.StyleSci, GroupText.StyleSciExample),
-                                 (SpeciesListStyle.CommonNameFirst, GroupText.StyleCommon, GroupText.StyleCommonExample),
-                                 (SpeciesListStyle.CommonNameOnly, GroupText.StyleCommonOnly, GroupText.StyleCommonOnlyExample),
-                             }) {
-                        <label>
-                            <input type="radio" name="style" value="@GroupListQuery.StyleKey(style)" checked="@(options.Style == style)">
-                            @label <span class="example">@example</span>
-                            @if (defaults.Style == style) {
-                                <span class="help">@GroupText.DefaultMark</span>
-                            }
-                        </label>
-                    }
-                    <label><input type="hidden" name="tpl" value="0"><input type="checkbox" name="tpl" value="1" checked="@options.StatusTemplate"> @GroupText.OptionTemplate</label>
-                </fieldset>
-                <fieldset class="option-group">
-                    <legend>@GroupText.OptionHeadings</legend>
-                    <label data-list-type="bullets" hidden="@Model.Table.IsTable"><input type="hidden" name="status" value="0"><input type="checkbox" name="status" value="1" checked="@options.ByStatus"> @GroupText.OptionStatusSections</label>
-                    <input type="hidden" name="h" value="none">
-                    @if (Model.HeadingChoices.Count == 0) {
-                        <p class="help">@GroupText.NoRanks(group.Rank, group.Name)</p>
-                    } else {
-                        <p class="option-sublabel">@GroupText.OptionRankHeadings</p>
-                        <div class="rank-choices">
-                            @foreach (var choice in Model.HeadingChoices) {
-                                <label>
-                                    <input type="checkbox" name="h" value="@choice.Rank" checked="@choice.Picked">
-                                    @GroupList.Capitalize(choice.Rank)
-                                    @if (choice.FromCol) {
-                                        <abbr class="col-marker" title="@GroupText.ColMarkerTitle">@GroupText.ColMarker</abbr>
-                                    }
-                                    <partial name="_OptionCount" model="@(new OptionCountModel("h:" + choice.Rank, choice.Headings))" />
-                                </label>
-                            }
-                        </div>
-                    }
-                    <label><input type="hidden" name="names" value="0"><input type="checkbox" name="names" value="1" checked="@options.HeadingNames"> @GroupText.OptionHeadingNames</label>
-                    <label class="inline-select">@GroupText.OptionTopLevel
-                        <select name="level">
-                            @for (var level = 2; level <= 4; level++) {
-                                <option value="@level" selected="@(options.TopLevel == level)">@GroupText.LevelOption(level)</option>
-                            }
-                        </select>
-                    </label>
-                </fieldset>
-                @* aria-labelledby names the group by the legend's text alone, without the info button's name. *@
-                <fieldset class="option-group" aria-labelledby="legend-categories">
-                    <legend><span id="legend-categories">@GroupText.OptionCategories</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-categories", GroupText.InfoTipLabel(GroupText.OptionCategories), GroupText.CategoriesHelp))" /></legend>
-                    <input type="hidden" name="cat" value="">
-                    <div class="category-choices">
-                        @foreach (var statusSection in StatusSection.All) {
-                            @* data-live-sync: ticking CoL or Wikidata includes NE, so after a live update site.js
-                               ticks the box as the server does. *@
-                            <label><input type="checkbox" name="cat" value="@statusSection.Key" checked="@(options.Sections.Contains(statusSection.Key))" data-live-sync="@(statusSection.Key == StatusSection.NotEvaluated ? "" : null)"> <span><partial name="_Badge" model="@BadgeModel.ForStatusCode(statusSection.Key, showLabel: true)" /> <partial name="_OptionCount" model="@(new OptionCountModel("cat:" + statusSection.Key, Model.SectionLines.GetValueOrDefault(statusSection.Key)))" /></span></label>
-                        }
-                    </div>
-                </fieldset>
-                <fieldset class="option-group" data-list-type="bullets" hidden="@Model.Table.IsTable">
-                    <legend>@GroupText.OptionTaxa</legend>
-                    @foreach (var (mode, label) in new[] { (InfraMode.None, GroupText.InfraNone), (InfraMode.Separate, GroupText.InfraSeparate), (InfraMode.UnderSpecies, GroupText.InfraUnder) }) {
-                        <label><input type="radio" name="infra" value="@GroupListQuery.InfraKey(mode)" checked="@(options.Infra == mode)"> @label</label>
-                    }
-                    <label><input type="hidden" name="subpop" value="0"><input type="checkbox" name="subpop" value="1" checked="@options.Subpopulations"> @GroupText.OptionSubpopulations</label>
-                </fieldset>
-                <div data-list-type="bullets" hidden="@Model.Table.IsTable">
-                    <partial name="_ListSourceOptions" model="@options.Sources" />
-                    <partial name="_ListLineOptions" model="@options.Line" />
-                </div>
-                <fieldset class="option-group">
-                    <legend>@GroupText.OptionSort</legend>
-                    <label><input type="radio" name="sort" value="first" checked="@(options.Sort == ListSort.FirstName)"> @GroupText.SortFirst</label>
-                    <label><input type="radio" name="sort" value="sci" checked="@(options.Sort == ListSort.ScientificName)"> @GroupText.SortSci</label>
-                    <label><input type="radio" name="sort" value="common" checked="@(options.Sort == ListSort.CommonName)"> @GroupText.SortCommon</label>
-                </fieldset>
-                <partial name="_SpeciesTableOptions" model="Model" />
-                <button type="submit">@GroupText.UpdateList</button>
-                <p class="live-status" role="status" data-live-status hidden></p>
-                <p><a href="@SiteUrls.Group(group)#wikitext">@GroupText.ResetOptions</a></p>
-            </fieldset>
-        </form>
-
-        <div class="list-output" id="list-output" data-live-region>
-            @if (Model.TooLong && Model.Table.IsTable) {
-                <p class="note">@GroupText.TablesTooLong(Model.LineCount, Model.MaxLines, Model.Table.References != TableReferences.None)</p>
-            } else if (Model.TooLong) {
-                <p class="note">@(options.Line.HasReferences ? GroupLineText.TooLongWithReferences(Model.LineCount, Model.MaxLines) : GroupText.TooLong(Model.LineCount, GroupList.MaxLines))</p>
-                @if (options.Sources.HasOtherSources) {
-                    <p class="note">@GroupSourceText.TooLongNote</p>
-                }
-            } else if (Model.Tables is { RowCount: > 0 }) {
-                <partial name="_SpeciesTableOutput" model="Model" />
-            } else if (Model.List is not { LineCount: > 0 } list) {
-                <p class="note">@GroupText.EmptyList(group.Name)</p>
-            } else {
-                <p class="list-size">@GroupText.ListSize(list.LineCount)@GroupSourceText.ExtraCountSuffix(GroupListSources.ExtraLineCount(list))</p>
-                @if (Model.NoticeGroups is { IsEmpty: false } duplicates) {
-                    <p class="notices-summary"><a href="#list-notices">@GroupSourceText.NoticesHeading</a>: @GroupSourceText.SummaryCounts(duplicates.LeftOut.EntryCount, duplicates.Kept.PairCount)</p>
-                }
-                @if (list.SkippedRanks.Count > 0) {
-                    <p class="note">@GroupText.RanksLeftOut(list.SkippedRanks)</p>
-                }
-                <div class="wikitext-box">
-                    <partial name="_WikitextBoxContent" model="@(new WikitextBox("list-wikitext", GroupText.WikitextLabel, "list", Model.Wikitext, Math.Min(30, Math.Max(6, list.Blocks.Count + 2)), GroupText.CopyListAccessible))" />
-                </div>
-                <details class="list-preview" id="list-preview">
-                    <summary>@GroupText.Preview</summary>
-                    <p class="help">@GroupText.PreviewNote</p>
-                    @if (Model.Sources is not null) {
-                        <p class="help">@GroupSourceText.PreviewNote</p>
-                    }
-                    <div class="preview-body">
-                        @Html.Raw(WikitextPreview.ToHtml(Model.Wikitext, Model.Sources is null ? null : GroupListSources.PreviewSuffixes(list, Model.Sources)))
-                    </div>
-                </details>
-                @if (Model.NoticeGroups is { } noticeGroups) {
-                    <partial name="_ListNotices" model="@(new ListNoticesModel(noticeGroups, group.IsCol ? null : group.Rank))" />
-                }
-            }
-        </div>
-    </div>
+<section class="tools" id="tools" aria-labelledby="tools-heading">
+    <h2 id="tools-heading">@SiteText.HeadingTools</h2>
+    <ul class="tool-links">
+        <li><a href="@SiteUrls.GroupList(group)">@GroupText.ToolListLink(GroupList.HeadingText(group))</a> <span class="help">@GroupText.ToolListHelp</span></li>
+        <li><a href="/update">@SiteText.ToolUpdateLink</a> <span class="help">@SiteText.ToolUpdateHelp</span></li>
+    </ul>
 </section>

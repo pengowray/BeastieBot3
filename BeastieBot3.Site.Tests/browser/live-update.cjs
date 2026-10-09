@@ -97,7 +97,7 @@ async function waitForCite(page, test, what) {
     });
 
     // Polar bear: every option of the form.
-    await page.goto(`${base}/species/${polarBear}`);
+    await page.goto(`${base}/species/${polarBear}/wikitext`);
     await mark(page);
     check(await page.locator("form.options-form button[type=submit]").isHidden(), "the Update wikitext button is hidden");
     check(await page.locator("[data-live-status]").isVisible() || (await page.locator("[data-live-status]").count()) === 1,
@@ -180,7 +180,7 @@ async function waitForCite(page, test, what) {
     check((await cite(page)) === before, "loading the address again gives the same wikitext");
 
     // Tiger: the full given names option and the Wikidata part.
-    await page.goto(`${base}/species/${tiger}`);
+    await page.goto(`${base}/species/${tiger}/wikitext`);
     await mark(page);
     check(await page.locator("#wikidata-cite").isVisible(), "the tiger page has the Wikidata part");
     await page.locator("input[name=fullnames]").check();
@@ -195,14 +195,14 @@ async function waitForCite(page, test, what) {
 
     // At phone width.
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto(`${base}/species/${tiger}#wikitext`);
+    await page.goto(`${base}/species/${tiger}/wikitext#wikitext`);
     await shot(page, "tiger-phone", "#wikitext");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(overflow <= 0, "no sideways scrolling at phone width (" + overflow + "px)");
 
     // At phone width the boxes wrap, so a longer citation makes them taller: the page scrolls by as
     // much, and the form stays where it was on the screen.
-    await page.goto(`${base}/species/${polarBear}`);
+    await page.goto(`${base}/species/${polarBear}/wikitext`);
     const phoneLastFirst = page.locator("input[name=authors][value=lastfirst]");
     await phoneLastFirst.scrollIntoViewIfNeeded();
     const phoneTop = await page.locator("form.options-form").evaluate((form) => form.getBoundingClientRect().top);
@@ -218,7 +218,7 @@ async function waitForCite(page, test, what) {
     check(consoleErrors.length === 0, "no console errors" + (consoleErrors.length ? ": " + consoleErrors.join(" | ") : ""));
 
     // When the request fails, the browser loads the page the normal way.
-    await page.goto(`${base}/species/${polarBear}`);
+    await page.goto(`${base}/species/${polarBear}/wikitext`);
     await mark(page);
     let failed = false;
     await page.route("**/species/**", (route) => {
@@ -239,7 +239,7 @@ async function waitForCite(page, test, what) {
 
     // The group page's list: ticking a source updates the list in place and ticks Not Evaluated,
     // as the server does (data-live-sync).
-    await page.goto(`${base}/taxa/genus/ursus`);
+    await page.goto(`${base}/taxa/genus/ursus/list`);
     await mark(page);
     const ne = page.locator("input[name=cat][value=NE]");
     check(!(await ne.isChecked()), "group list: Not Evaluated starts unticked");
