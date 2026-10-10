@@ -844,7 +844,7 @@ public sealed class StatusUpdaterTests {
     [Fact]
     public void EditSummaryNamesEachCategoryChange() {
         var result = Run("* {{IUCN status|VU|4828/111|1|year=2008}}\n* ''Panthera tigris'' {{IUCN status|EN}}\n* {{IUCN status|VU|1087/1|1}}\n");
-        Assert.Equal("IUCN Red List 2026-1: Amblysomus hottentotus VU\u2192EN; 1 other IUCN status updated (ids, year, reference or trend) (assisted by Species Check)",
+        Assert.Equal("IUCN Red List 2026-1: Amblysomus hottentotus VU\u2192EN; 1 other IUCN status updated (ids, year, reference or trend) (assisted by species.pengowray.com)",
             EditSummary.For(result, "2026-1"));
     }
 
@@ -856,7 +856,7 @@ public sealed class StatusUpdaterTests {
             lookup.Taxon(1000 + i, $"Genus speciesnumber{i}", i % 2 == 0 ? "EN" : "LC", 2020, 9000 + i);
             text.Append($"* {{{{IUCN status|VU|{1000 + i}/1|1|year=2008}}}}\n");
         }
-        Assert.Equal("IUCN Red List: 40 IUCN statuses changed (20 to EN, 20 to LC) (assisted by Species Check)",
+        Assert.Equal("IUCN Red List: 40 IUCN statuses changed (20 to EN, 20 to LC) (assisted by species.pengowray.com)",
             EditSummary.For(Run(text.ToString(), lookup), null));
     }
 

@@ -2260,7 +2260,7 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   ("Ursus maritimus EN→VU"), read from the item's text before and after; when that list would pass
   300 characters (MediaWiki keeps 500, and the rest of the line takes about 130), the changes counted by new category in IUCN's order ("40 IUCN statuses changed
   (20 to EN, 20 to LC)"); then counts of the other status entries and the citations that changed,
-  and "(assisted by Pengo Wray's Species Check)". It is left out when nothing changed.
+  and "(assisted by species.pengowray.com)". It is left out when nothing changed.
 - The updated wikitext is in a read-only box of fixed height (24rem, at most 70% of the window)
   that scrolls, with its own colours (`--output-bg`, `--output-border`) and "(read only)" in its
   label, so it is not taken for the box text is pasted into; `site.js` grows every other wikitext

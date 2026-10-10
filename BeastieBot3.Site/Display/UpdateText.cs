@@ -94,7 +94,7 @@ public static partial class UpdateText {
     public const string EditSummaryLabel = "Edit summary";
     public const string CopyEditSummaryAccessible = "Copy edit summary";
     public const string EditSummaryHelp = "A starting point for the edit summary on Wikipedia. Check it before you save.";
-    public const string EditSummaryCredit = "assisted by Species Check";
+    public const string EditSummaryCredit = "assisted by species.pengowray.com";
     public const string EditSummaryStatusesUpdated = "{{IUCN statuses}} counts updated";
     public const string EditSummaryStatusesAdded = "{{IUCN statuses}} added";
 
