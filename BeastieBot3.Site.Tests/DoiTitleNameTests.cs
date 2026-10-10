@@ -125,3 +125,35 @@ public sealed class RankMarkerKeysTests {
         Assert.Equal([BeastieBot3.Shared.SiteData.SiteNameKey.Fold(name)], Data.RankMarkerKeys.For(name));
     }
 }
+
+/// "Named in IUCN's taxonomic notes" (notes_taxon). In the fixture, Platanista gangetica's notes name
+/// Platanista minor as "Platanista gangetica minor", and Platanista minor's name Platanista gangetica.
+public sealed class NotesTaxaPageTests(SiteFactory factory) : IClassFixture<SiteFactory> {
+    private readonly HttpClient _client = factory.Client();
+
+    [Fact]
+    public async Task ListsTheNamedTaxa_WithTheNameTheNotesUse() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Gangetica}");
+        var section = Html.Between(html, "<h3 id=\"notes-taxa\">", "</section>");
+        Assert.Contains("Named in IUCN's taxonomic notes", Html.Text(html));
+        Assert.Contains($"Found by searching the taxonomic notes of <a href=\"https://www.iucnredlist.org/species/{FixtureDb.Gangetica}/{FixtureDb.GangeticaLatest}\">the 2022 global assessment</a>"
+            + " for the scientific names and IUCN synonyms of other taxa in Red List version 2026-1.", section);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.Minor}\"><i>Platanista minor</i></a>", section);
+        Assert.Contains("<div class=\"match-note\">Name in the notes: <i>Platanista gangetica minor</i></div>", section);
+    }
+
+    [Fact]
+    public async Task NoNameNote_WhenTheNotesUseTheTaxonsOwnName() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Minor}");
+        var section = Html.Between(html, "<h3 id=\"notes-taxa\">", "</section>");
+        Assert.Contains($"<a href=\"/species/{FixtureDb.Gangetica}\"><i>Platanista gangetica</i></a>", section);
+        Assert.DoesNotContain("Name in the notes", section);
+    }
+
+    [Fact]
+    public async Task NoSection_WhenTheNotesNameNoOtherTaxon() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
+        Assert.DoesNotContain("notes-taxa", html);
+        Assert.DoesNotContain("Named in IUCN's taxonomic notes", html);
+    }
+}

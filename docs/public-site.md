@@ -229,6 +229,21 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   empty notes as markup such as `<em><br/></em>`), 0 when it has none, and NULL when the payload is
   not cached. The notes are narrative text, so the database holds only this flag. In the build of
   3 October 2026, 93,587 of the 366,258 assessments have notes.
+- `notes_taxon` (schema 29) lists the other taxa in the release named in the taxonomic notes of a
+  taxon's latest global assessment (`SiteNotesTaxa`). Only the names are read from the notes:
+  `TaxonomicNotesNames` takes the text in italics (`<i>`, `<em>`) that is a whole name ("Cebuella
+  pygmaea niveiventris", "Callithrix (Cebuella) pygmaea") or a name with the genus, or the genus and
+  species, abbreviated ("C. niveiventris", "C. p. niveiventris"), which it expands from the latest
+  whole name with those initials (before the first one, from the assessed taxon's own name). A name
+  is the taxon in the release, in the same kingdom, with that scientific name (rank markers ignored),
+  else the one taxon whose IUCN synonyms have it. A name is left out when it is the taxon's own name
+  or one of its own IUCN synonyms, when it fits two or more taxa, and when it is the taxon's own
+  species or one of its own subspecies, varieties or subpopulations (the page lists those already).
+  `name_in_notes` keeps the name as the notes write it when it is not the named taxon's own name;
+  `position` keeps the order of first mention. The build summary rows are "Taxa whose latest global
+  assessment's taxonomic notes name another taxon in the release", "Taxa named in another taxon's
+  taxonomic notes (notes_taxon rows)" and "Names in taxonomic notes that fit two or more taxa (left
+  out)". In 2026-1, the notes of 15,742 taxa name 22,366 other taxa (1,540 by another name, such as an old subspecies name); 27 names fit two or more taxa. 22,350 of the links are within one order; the other 16 are taxa of other orders that the notes mention, such as *Pan troglodytes* in the notes of the West Africa subpopulation of *Panthera pardus*.
 - `epbc_listing` has one row per SPRAT profile of a taxon (schema version 3; version 2 had the
   columns `taxon.sprat_taxon_id` and `taxon.epbc_status` instead). `applies_to` is `taxon` for the
   profile of the whole taxon (matched by the taxon's scientific name, or by one of the IUCN names
@@ -1687,6 +1702,52 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
 - Run locally with `dotnet run --project BeastieBot3.Site`. `appsettings.Development.json` points to
   `~/datasets/beastiebot/site.sqlite`; set `Site__DatabasePath` to use another file.
 
+### Names in DOI titles
+
+IUCN cites every assessment, old ones included, under the taxon's current name: the 2008 assessment
+of IUCN id 136926 is "Cebuella pygmaea" in IUCN's citation, although IUCN assessed the taxon then as
+the subspecies *Cebuella pygmaea* ssp. *pygmaea*. The title registered with Crossref for its DOI
+keeps the older name: "Cebuella pygmaea ssp. pygmaea: Rylands, A.B. & de la Torre, S."
+(`IucnCitationParts.RegisteredName`, from `iucn resolve-dois`). In 2026-1, 9,327 assessments (of
+7,934 taxa) have a DOI title whose name differs from the taxon's current name, most of them after a
+move to another genus; 3,148 of them are latest assessments.
+
+The name in a DOI title is the name current when the DOI was created, which is not always the name
+the assessment was published under. IUCN created the DOIs of the assessments published before 2015
+in 2015 and 2016 (Crossref's `created` dates: 83,255 of IUCN's DOIs were created in 2015, and about
+92,000 DOIs of assessments published in 2014 or earlier were created in 2015 or later); later
+assessments got their DOI when they were published. Depositing a record again keeps its title: the
+2008 Cebuella DOI was created on 10 September 2015 and deposited again on 28 February 2025 with the
+same title. IUCN's own website has the name each assessment was published under ("2008 — Least
+Concern (LC) as *Cebuella pygmaea* ssp. *pygmaea*", from `previousAssessments[].synonyms` of its
+website's own API), but IUCN's public API does not.
+
+- The assessment tables (global history, combined history and regional assessments) show "Name in
+  DOI title: X" under the year (or region) of a row whose DOI title names the taxon differently from
+  the current name of the row's own taxon (`TaxonPageModel.DoiTitleName`,
+  `IucnCitationParts.RegisteredNameDifferentFrom`), and one note under the table that says where
+  the name comes from. Names that differ only in "ssp." and "subsp.", brackets or spacing
+  (`WikidataCitation.SameName`) and IUCN's internal names ("Physella acuta_new") are not shown.
+- The citations page writes that name in the citation title, with the current name as an option
+  (see [Citation options](#citation-options)).
+
+### Synonyms that are another taxon's name, and taxa named in the notes
+
+- An IUCN synonym that is the scientific name of another taxon in the release, in the same kingdom
+  (rank markers ignored: `RankMarkerKeys`, which gives the `name_key` keys of a trinomial with and
+  without "ssp.", "subsp." and "var."), has "Also the scientific name of IUCN id N" under it in the
+  Synonyms table, and those synonyms come first in the table. The page of the other taxon says
+  "IUCN lists X as a synonym of Y" (or "of N other taxa: ..."). Usually the taxon was split: IUCN
+  lists *Zosterops palpebrosus* (Temminck, 1824) *pro parte* as a synonym of *Zosterops auriventer*
+  and of *Zosterops melanurus*. In 2026-1, about 1,700 IUCN synonyms are the name of another taxon
+  in the release. Both are page-time lookups (`SiteQueries.GetTaxaNamed`,
+  `GetTaxaWithIucnSynonym`), only on pages of taxa in the release; an old id's links are in its
+  combined history.
+- "Named in IUCN's taxonomic notes" lists the taxa in `notes_taxon` for the taxon, in the order the
+  notes name them, with "Name in the notes: X" under one that the notes name differently, and a
+  link to the assessment on the IUCN Red List website. The site does not say how the taxa are
+  related: the notes say that, and the site does not show them.
+
 ### Comparative classification (`ladder_node`)
 
 The species page's comparative classification (headed "Classification" on the page; the hidden
@@ -1943,6 +2004,14 @@ links to other assessments of the taxon keep the options.
 - The `{{cite Q}}` box uses the same ref options as `{{cite iucn}}` (`ToCiteQOptions`). The access
   date option applies to it only when the item has a URL: `WikidataCite.Build` sets
   `CiteQOptions.ItemHasUrl` when the item's `wikidata_item_properties` include P953.
+- "Name in the citation title" (`titlename=current`): by default the `|title=` of `{{cite iucn}}`
+  (and of the other Wikipedias' citations) has the name in the title registered with Crossref for
+  the assessment's DOI (`CiteIucnOptions.RegisteredNameInTitle`, see [Names in DOI titles](#names-in-doi-titles)),
+  and `titlename=current` gives the taxon's current name, as IUCN's own citation does. The option is
+  shown only when the two names differ; a `titlename=current` already chosen is kept in a hidden
+  field for the next assessment. The French citation leaves out the authority with the name from
+  the DOI title, because the authority is the current name's. The status update page, the group
+  page's lists and species tables use the current name.
 - "Citation in taxobox status_ref" (`cite=q`, off by default): the taxobox lines' `status_ref` holds
   `{{cite Q}}` instead of `{{cite iucn}}` when the assessment has a Wikidata item. The `{{cite iucn}}`
   and `{{cite Q}}` boxes do not change. `Pages/IucnReference.cs` makes the choice for every page

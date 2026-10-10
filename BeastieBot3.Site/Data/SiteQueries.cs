@@ -157,6 +157,30 @@ public sealed partial class SiteQueries {
             .OrderBy(t => t.ScientificName, StringComparer.Ordinal)
             .ToList();
 
+    /// The other taxa in the release named in the taxonomic notes of the taxon's latest global
+    /// assessment (notes_taxon), in the order the notes name them.
+    public IReadOnlyList<NotesTaxonRow> GetNotesTaxa(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT {SummaryColumns}, nt.name_in_notes, nt.assessment_id, na.year_published
+            FROM notes_taxon nt
+            JOIN taxon t ON t.taxon_id = nt.named_taxon_id
+            {SummaryJoin}
+            LEFT JOIN assessment na ON na.assessment_id = nt.assessment_id
+            WHERE nt.taxon_id = @id
+            ORDER BY nt.position
+            """;
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        var rows = new List<NotesTaxonRow>();
+        while (reader.Read()) {
+            rows.Add(new NotesTaxonRow(SummaryAt(reader, 0), Text(reader, SummaryColumnCount), reader.GetInt64(SummaryColumnCount + 1),
+                reader.IsDBNull(SummaryColumnCount + 2) ? null : reader.GetInt32(SummaryColumnCount + 2)));
+        }
+        return rows;
+    }
+
     // The taxa in the release with an IUCN name of the type under one of the folded keys.
     private List<(string Key, TaxonSummary Taxon)> TaxaByNameKeys(IEnumerable<string> keys, string nameType, string? kingdom, long excludeTaxonId) {
         var rows = new List<(string, TaxonSummary)>();

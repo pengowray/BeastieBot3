@@ -144,6 +144,7 @@ internal sealed class SiteDbBuild {
             assessments.WriteAll(cache, writer, dois, ct);
             return $"{_stats.CitationsParsed:N0} citations parsed, {_stats.AssessmentsGlobalLatest + _stats.AssessmentsRegionalLatest + _stats.AssessmentsHistory:N0} assessments written";
         });
+        var notesTaxa = SiteNotesTaxa.Find(taxonList, assessments.NotesNames, _stats);
 
         // 6. Common names store.
         var colCrossReferences = new Dictionary<long, string>();
@@ -297,6 +298,8 @@ internal sealed class SiteDbBuild {
             foreach (var link in taxonLinks) {
                 writer.AddTaxonLink(link);
             }
+            writer.InsertRows("INSERT INTO notes_taxon (taxon_id, named_taxon_id, assessment_id, name_in_notes, position) VALUES (@t, @n, @a, @w, @p)",
+                ["@t", "@n", "@a", "@w", "@p"], notesTaxa.Select(r => new object?[] { r.TaxonId, r.NamedTaxonId, r.AssessmentId, r.NameInNotes, r.Position }));
             writer.AddGreenStatuses(greenStatuses);
             foreach (var list in _otherStatusLists) {
                 writer.AddOtherStatusList(list);

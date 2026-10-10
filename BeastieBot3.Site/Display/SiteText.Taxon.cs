@@ -185,6 +185,19 @@ public static partial class SiteText {
     public static string ListedAsSynonymMiddle(int count) =>
         count == 1 ? " as a synonym of " : $" as a synonym of {count} other taxa: ";
 
+    /// The subsection of the Names section listing the other taxa in the release named in the
+    /// taxonomic notes of the taxon's latest global assessment: heading (the owner's wording), then
+    /// NotesTaxaIntroBefore + link(NotesTaxaIntroLink, to the assessment on the IUCN Red List website)
+    /// + NotesTaxaIntroAfter, then the taxa, with NameInNotesLabel + italic name under each one the
+    /// notes name differently.
+    public const string NamesNotesTaxa = "Named in IUCN's taxonomic notes";
+    public const string NotesTaxaIntroBefore = "Found by searching the taxonomic notes of ";
+    public static string NotesTaxaIntroLink(int? year) => year is null ? "the latest global assessment" : $"the {year} global assessment";
+    public static string NotesTaxaIntroAfter(string? version) =>
+        (version is null ? " for the scientific names and IUCN synonyms of other taxa on the Red List." : $" for the scientific names and IUCN synonyms of other taxa in Red List version {version}.")
+        + " Read the notes on the IUCN Red List website to see what they say about each taxon.";
+    public const string NameInNotesLabel = "Name in the notes:";
+
     /// Before item index (from 0) of count in a list of taxa: "", ", " or " and ".
     public static string TaxonListSeparator(int index, int count) => index == 0 ? string.Empty : index == count - 1 ? " and " : ", ";
 

@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 28;
+    public const int Version = 29;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -152,6 +152,20 @@ public static class SiteDbSchema {
             PRIMARY KEY (taxon_id, current_taxon_id)
         ) WITHOUT ROWID;
         CREATE INDEX taxon_link_current ON taxon_link(current_taxon_id);
+
+        -- Other taxa in the release named in the taxonomic notes of a taxon's latest global assessment
+        -- (SiteNotesTaxa): by scientific name, else by an IUCN synonym of one taxon only, in the same
+        -- kingdom; never the taxon itself, its own synonyms, its species or its own subspecies. Only
+        -- the names are read from the notes, which are narrative text and are not stored.
+        CREATE TABLE notes_taxon (
+            taxon_id       INTEGER NOT NULL,              -- the taxon whose assessment's notes name the other
+            named_taxon_id INTEGER NOT NULL,              -- the taxon named
+            assessment_id  INTEGER NOT NULL,              -- the taxon's latest global assessment, whose notes these are
+            name_in_notes  TEXT,                          -- the name as the notes write it ('C. p. niveiventris', 'Cebuella pygmaea
+                                                          -- niveiventris'), when it is not named_taxon_id's scientific name; NULL otherwise
+            position       INTEGER NOT NULL,              -- the order of first mention in the notes, from 0
+            PRIMARY KEY (taxon_id, named_taxon_id)
+        ) WITHOUT ROWID;
 
         -- SPRAT profiles of the taxon (Australia's Species Profile and Threats Database) and their
         -- EPBC Act listings. One row per SPRAT profile: the profile whose name is the taxon's name (or

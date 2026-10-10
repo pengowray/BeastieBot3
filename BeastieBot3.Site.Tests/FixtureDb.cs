@@ -691,6 +691,10 @@ public static class FixtureDb {
         w.Name(GangeticaOld, "Platanista gangetica", "scientific", null, "iucn");
         w.TaxonLink(GangeticaOld, Gangetica, "same-name");
         w.TaxonLink(GangeticaOld, Minor, "iucn-synonym");
+        // Made up: the taxonomic notes of Platanista gangetica's latest assessment name Platanista minor
+        // by its old name, and Platanista minor's name it by its own.
+        w.NotesTaxon(Gangetica, Minor, GangeticaLatest, "Platanista gangetica minor", 0);
+        w.NotesTaxon(Minor, Gangetica, MinorLatest, null, 0);
 
         // Ids with no global assessments.
         w.Taxon(Clessiniola, "Clessiniola variabilis", "species", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "LITTORINIMORPHA", "HYDROBIIDAE", "Clessiniola",
@@ -1094,6 +1098,10 @@ public static class FixtureDb {
 
         public void ProbableScope(long assessmentId, string scope, string kind, string evidence) =>
             Run("INSERT INTO probable_scope(assessment_id, scope, kind, evidence) VALUES (@a, @b, @c, @d)", assessmentId, scope, kind, evidence);
+
+        public void NotesTaxon(long taxonId, long namedTaxonId, long assessmentId, string? nameInNotes, int position) =>
+            Run("INSERT INTO notes_taxon(taxon_id, named_taxon_id, assessment_id, name_in_notes, position) VALUES (@a, @b, @c, @d, @e)",
+                taxonId, namedTaxonId, assessmentId, nameInNotes, position);
 
         public void TaxonLink(long taxonId, long currentTaxonId, string kind) =>
             Run("INSERT INTO taxon_link(taxon_id, current_taxon_id, link_kind) VALUES (@a, @b, @c)", taxonId, currentTaxonId, kind);

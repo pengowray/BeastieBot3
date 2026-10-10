@@ -118,6 +118,11 @@ public sealed record ProbableScopeRow(long AssessmentId, string Scope, string Ki
 
 /// An assessment of another taxon shown in a taxon page's table: Taxon is the IUCN record it was
 /// published under.
+/// A taxon named in the taxonomic notes of another taxon's latest global assessment (notes_taxon):
+/// the name as the notes write it when it is not the taxon's own (NameInNotes), and the assessment
+/// whose notes they are, with its year.
+public sealed record NotesTaxonRow(TaxonSummary Taxon, string? NameInNotes, long AssessmentId, int? AssessmentYear);
+
 public sealed record LinkedAssessment(AssessmentRow Assessment, TaxonRow Taxon);
 
 /// One SPRAT profile of a taxon (epbc_listing). Status: the EPBC Act category code, null when the

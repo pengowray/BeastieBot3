@@ -83,6 +83,12 @@ internal sealed class SiteAssessmentPass {
     private readonly AssessorNamePool _names = new();
     // The countries and areas of each taxon's latest global assessment.
     private readonly SiteAreaCollector _areas = new();
+    // The names in the taxonomic notes of each taxon's latest global assessment (TaxonomicNotesNames).
+    private readonly Dictionary<long, (long AssessmentId, IReadOnlyList<NotesName> Names)> _notesNames = new();
+
+    /// The names in the taxonomic notes of each taxon's latest global assessment, by taxon id, for
+    /// SiteNotesTaxa; only taxa whose notes name something.
+    public IReadOnlyDictionary<long, (long AssessmentId, IReadOnlyList<NotesName> Names)> NotesNames => _notesNames;
     // credit_name: each distinct credit entry or "full" string, with its id.
     private readonly Dictionary<string, long> _creditNames = new(StringComparer.Ordinal);
     // Rows with a damaged author name, parsed again once _names is complete.
@@ -323,6 +329,10 @@ internal sealed class SiteAssessmentPass {
             assessment.PopulationSize = PopulationSize(root);
             if (_taxa.TryGetValue(assessment.TaxonId, out var taxon) && taxon.LatestGlobalAssessmentId == assessment.AssessmentId) {
                 _areas.Add(assessment.TaxonId, root);
+                var notesNames = TaxonomicNotesNames.Read(TaxonomicNotes(root), taxon.Genus, taxon.SpeciesEpithet);
+                if (notesNames.Count > 0) {
+                    _notesNames[assessment.TaxonId] = (assessment.AssessmentId, notesNames);
+                }
             }
             assessment.CreditsJson = Credits(root);
             assessment.HasTaxonomicNotes = HasTaxonomicNotes(root);
@@ -527,12 +537,16 @@ internal sealed class SiteAssessmentPass {
         return id;
     }
 
-    // documentation.taxonomic_notes: HTML text, or null. Only whether it has text is kept; the notes
-    // are narrative text, which the site database must not hold.
-    private static bool HasTaxonomicNotes(JsonElement root) =>
+    // documentation.taxonomic_notes: HTML text, or null. Only whether it has text, and the names in the
+    // latest global assessment's (TaxonomicNotesNames), are kept; the notes are narrative text, which
+    // the site database must not hold.
+    private static bool HasTaxonomicNotes(JsonElement root) => SiteBuildRules.HasText(TaxonomicNotes(root));
+
+    private static string? TaxonomicNotes(JsonElement root) =>
         root.ValueKind == JsonValueKind.Object
         && root.TryGetProperty("documentation", out var documentation) && documentation.ValueKind == JsonValueKind.Object
-        && SiteBuildRules.HasText(SiteApiTaxaReader.ReadString(documentation, "taxonomic_notes"));
+            ? SiteApiTaxaReader.ReadString(documentation, "taxonomic_notes")
+            : null;
 
     // population_trend: {"description": {"en": "Unknown"}, "code": "3"}
     private static string? PopulationTrend(JsonElement root) {

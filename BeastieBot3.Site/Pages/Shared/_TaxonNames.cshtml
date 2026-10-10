@@ -112,4 +112,11 @@
             </table>
         </div>
     }
+
+    @if (Model.NotesTaxa.Count > 0) {
+        var notes = Model.NotesTaxa[0];
+        <h3 id="notes-taxa">@SiteText.NamesNotesTaxa</h3>
+        <p class="names-intro">@SiteText.NotesTaxaIntroBefore<a href="@SiteFormat.IucnAssessmentUrl(Model.TaxonId, notes.AssessmentId)">@SiteText.NotesTaxaIntroLink(notes.AssessmentYear)</a>@SiteText.NotesTaxaIntroAfter(Model.Version)</p>
+        <partial name="_TaxonList" model="Model.NotesTaxaItems" />
+    }
 </section>
