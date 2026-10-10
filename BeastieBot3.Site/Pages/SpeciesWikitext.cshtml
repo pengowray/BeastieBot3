@@ -159,6 +159,17 @@
                             <input type="hidden" name="fullnames" value="1">
                         }
                     }
+                    @if (Model.RegisteredTitleName is { } registeredName && Model.Parts is { } titleParts) {
+                        <fieldset class="option-group">
+                            <legend>@SiteText.TitleNameLegend</legend>
+                            <label><input type="radio" name="@WikitextOptions.TitleNameKey" value="@WikitextOptions.TitleNameDoi" checked="@(!Model.Options.CurrentNameInTitle)" aria-describedby="titlename-help"> @SiteText.TitleNameFromDoi (<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(registeredName))</span>)</label>
+                            <label><input type="radio" name="@WikitextOptions.TitleNameKey" value="@WikitextOptions.TitleNameCurrent" checked="@Model.Options.CurrentNameInTitle" aria-describedby="titlename-help"> @SiteText.TitleNameCurrentName (<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(titleParts.ScientificName, titleParts.SubpopulationName))</span>)</label>
+                            <p class="help" id="titlename-help">@SiteText.TitleNameHelp</p>
+                        </fieldset>
+                    } else if (Model.Options.CurrentNameInTitle) {
+                        @* Kept for the next assessment shown, whose DOI's title may name the taxon differently. *@
+                        <input type="hidden" name="@WikitextOptions.TitleNameKey" value="@WikitextOptions.TitleNameCurrent">
+                    }
                     <fieldset class="option-group">
                         <legend>@SiteText.AccessLabel</legend>
                         @if (Model.DownloadDateText is not null) {

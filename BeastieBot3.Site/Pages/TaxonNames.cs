@@ -10,7 +10,12 @@ public sealed record EnglishCommonName(string Name, IReadOnlyList<string> Source
 /// A source whose authority differs from the one shown has it in OtherAuthority.
 public sealed record SynonymSource(string Label, string? OtherAuthority);
 
-public sealed record SynonymRow(string Name, string? Authority, IReadOnlyList<SynonymSource> Sources);
+/// FromIucn: IUCN is one of the sources. SameNameTaxa: the other taxa in the release (same kingdom)
+/// whose IUCN scientific name this synonym is, usually because a species was split; set only for
+/// IUCN's synonyms of a taxon in the release.
+public sealed record SynonymRow(string Name, string? Authority, IReadOnlyList<SynonymSource> Sources, bool FromIucn = false) {
+    public IReadOnlyList<TaxonSummary> SameNameTaxa { get; init; } = [];
+}
 
 /// A common name in a language other than English, in the form most of its sources give, with the
 /// labels of its sources in OtherLanguageSourceOrder. Latin: its transliteration into Latin letters
@@ -35,6 +40,21 @@ public sealed record TaxonNames(
     IReadOnlyList<LanguageGroup> OtherLanguages,
     IReadOnlyList<SynonymRow> Synonyms) {
     public IReadOnlyList<PossibleSynonym> PossibleSynonyms { get; init; } = [];
+
+    /// The other taxa in the release (same kingdom) whose IUCN synonyms include this taxon's name
+    /// (ScientificName, with SubpopulationName for the italics).
+    public IReadOnlyList<TaxonSummary> ListedAsSynonymBy { get; init; } = [];
+    public string ScientificName { get; init; } = string.Empty;
+    public string? SubpopulationName { get; init; }
+
+    /// The synonyms with SameNameTaxa set from taxaNamed (GetTaxaNamed, by synonym name), the
+    /// synonyms that are another taxon's name first, so the table's short list keeps them.
+    public TaxonNames WithSameNameTaxa(IReadOnlyDictionary<string, IReadOnlyList<TaxonSummary>> taxaNamed) => taxaNamed.Count == 0 ? this : this with {
+        Synonyms = Synonyms
+            .Select(s => s.FromIucn && taxaNamed.TryGetValue(s.Name, out var taxa) ? s with { SameNameTaxa = taxa } : s)
+            .OrderByDescending(s => s.SameNameTaxa.Count > 0)
+            .ToList(),
+    };
 
     /// commonNameEn: the taxon's English name for display, listed second after IUCN's main name.
     public static TaxonNames Build(IReadOnlyList<NameRow> names, string? commonNameEn) {
@@ -111,7 +131,7 @@ public sealed record TaxonNames(
                     return new SynonymSource(SiteText.SourceLabel(s.Key), other);
                 })
                 .ToList();
-            return new SynonymRow(rows[0].Name, authority, sources);
+            return new SynonymRow(rows[0].Name, authority, sources, FromIucn: rows.Any(r => r.Source == "iucn"));
         })
         .OrderBy(s => s.Name, StringComparer.Ordinal)
         .ToList();

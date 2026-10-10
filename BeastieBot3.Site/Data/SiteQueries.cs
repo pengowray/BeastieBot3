@@ -120,6 +120,78 @@ public sealed partial class SiteQueries {
         return flags;
     }
 
+    /// The taxa in the release in the kingdom (any kingdom when null), other than excludeTaxonId,
+    /// whose IUCN scientific name is one of names, by the name it matches. A name matches with or
+    /// without a rank marker (RankMarkerKeys): IUCN lists "Sarotherodon tournieri liberiensis" as a
+    /// synonym of one taxon and has another named "Sarotherodon tournieri ssp. liberiensis".
+    public IReadOnlyDictionary<string, IReadOnlyList<TaxonSummary>> GetTaxaNamed(IReadOnlyCollection<string> names, string? kingdom, long excludeTaxonId) {
+        var byKey = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var name in names) {
+            foreach (var key in RankMarkerKeys.For(name)) {
+                if (!byKey.TryGetValue(key, out var list)) {
+                    byKey[key] = list = [];
+                }
+                list.Add(name);
+            }
+        }
+        var found = new Dictionary<string, List<TaxonSummary>>(StringComparer.Ordinal);
+        foreach (var (key, taxon) in TaxaByNameKeys(byKey.Keys, NameTypes.Scientific, kingdom, excludeTaxonId)) {
+            foreach (var name in byKey[key]) {
+                if (!found.TryGetValue(name, out var list)) {
+                    found[name] = list = [];
+                }
+                if (list.All(t => t.TaxonId != taxon.TaxonId)) {
+                    list.Add(taxon);
+                }
+            }
+        }
+        return found.ToDictionary(p => p.Key, p => (IReadOnlyList<TaxonSummary>)p.Value, StringComparer.Ordinal);
+    }
+
+    /// The taxa in the release in the kingdom (any kingdom when null), other than excludeTaxonId,
+    /// whose IUCN synonyms include name (with or without a rank marker, as GetTaxaNamed), by name.
+    public IReadOnlyList<TaxonSummary> GetTaxaWithIucnSynonym(string name, string? kingdom, long excludeTaxonId) =>
+        TaxaByNameKeys(RankMarkerKeys.For(name), NameTypes.Synonym, kingdom, excludeTaxonId)
+            .Select(p => p.Taxon)
+            .DistinctBy(t => t.TaxonId)
+            .OrderBy(t => t.ScientificName, StringComparer.Ordinal)
+            .ToList();
+
+    // The taxa in the release with an IUCN name of the type under one of the folded keys.
+    private List<(string Key, TaxonSummary Taxon)> TaxaByNameKeys(IEnumerable<string> keys, string nameType, string? kingdom, long excludeTaxonId) {
+        var rows = new List<(string, TaxonSummary)>();
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        var parameters = new List<string>();
+        foreach (var key in keys.Distinct(StringComparer.Ordinal)) {
+            var parameter = "@k" + parameters.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            parameters.Add(parameter);
+            command.Parameters.AddWithValue(parameter, key);
+        }
+        if (parameters.Count == 0) {
+            return rows;
+        }
+        command.CommandText = $"""
+            SELECT {SummaryColumns}, k.key
+            FROM name_key k
+            JOIN name n ON n.name_id = k.name_id
+            JOIN taxon t ON t.taxon_id = k.taxon_id
+            {SummaryJoin}
+            WHERE k.key IN ({string.Join(", ", parameters)})
+              AND n.name_type = @type AND n.source = 'iucn'
+              AND t.in_release = 1 AND t.taxon_id <> @exclude
+              AND (@kingdom IS NULL OR t.kingdom = @kingdom)
+            """;
+        command.Parameters.AddWithValue("@type", nameType);
+        command.Parameters.AddWithValue("@exclude", excludeTaxonId);
+        command.Parameters.AddWithValue("@kingdom", (object?)kingdom ?? DBNull.Value);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            rows.Add((reader.GetString(SummaryColumnCount), SummaryAt(reader, 0)));
+        }
+        return rows;
+    }
+
     /// The taxon's SPRAT profiles and EPBC Act listings: the profile of the whole taxon first, then
     /// the profiles of populations by name.
     public IReadOnlyList<EpbcListingRow> GetEpbcListings(long taxonId) {

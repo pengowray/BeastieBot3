@@ -130,6 +130,12 @@ public static partial class OtherWikipedias {
     /// The citation of the assessment for the wiki, wrapped in <ref> when options.WrapInRef. English
     /// and the wikis with a copy of its {{cite iucn}} (edition.CiteIucnCopy) go through CiteIucnRenderer.
     public static string Citation(WikipediaEdition edition, IucnCitationParts parts, AssessmentFacts facts, CiteIucnOptions options) {
+        if (options.RegisteredNameInTitle && parts.WithRegisteredNameInTitle() is var registered && !ReferenceEquals(registered, parts)) {
+            // The taxon's authority goes with its current name: after a move to another genus the
+            // brackets differ, so the name in the DOI's title is written without one.
+            parts = registered;
+            facts = facts with { Authority = null };
+        }
         var template = edition.CiteIucnCopy is { } dialect
             ? CiteIucnRenderer.Render(parts, options with { WrapInRef = false, Dialect = dialect })
             : edition.Code switch {

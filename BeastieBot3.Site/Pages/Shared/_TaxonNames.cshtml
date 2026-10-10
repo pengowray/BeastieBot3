@@ -67,8 +67,17 @@
         </div>
     }
 
-    @if (Model.Synonyms.Count > 0) {
+    @if (Model.Synonyms.Count > 0 || Model.ListedAsSynonymBy.Count > 0) {
         <h3>@SiteText.NamesSynonyms</h3>
+    }
+    @if (Model.ListedAsSynonymBy.Count > 0) {
+        @* <text> keeps the whitespace of the code lines out of the sentence. *@
+        <p class="names-intro listed-as-synonym">@SiteText.ListedAsSynonymBefore<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(Model.ScientificName, Model.SubpopulationName))</span>@SiteText.ListedAsSynonymMiddle(Model.ListedAsSynonymBy.Count)@for (var i = 0; i < Model.ListedAsSynonymBy.Count; i++) {
+                var other = Model.ListedAsSynonymBy[i];
+                <text>@SiteText.TaxonListSeparator(i, Model.ListedAsSynonymBy.Count)<a href="/species/@other.TaxonId" class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(other.ScientificName, other.SubpopulationName))</a></text>
+            }.</p>
+    }
+    @if (Model.Synonyms.Count > 0) {
         @* One table; the synonyms after the first few are hidden until the box is ticked. *@
         <div class="more-list">
             <partial name="_SynonymTable" model="Model.Synonyms" />

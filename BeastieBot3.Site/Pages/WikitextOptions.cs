@@ -8,6 +8,8 @@ namespace BeastieBot3.Site.Pages;
 /// The citation options form on a taxon page, read from and written to the query string:
 ///   authors=author|lastfirst   fullnames=1   access=download|today|none   ref=1   refname=...   amp=1   opts=1   cite=iucn|q|new
 ///   gsyear=assessed|published (the year of a Green Status citation; assessed by default)
+///   titlename=current (|title= gives the taxon's current name; by default it gives the name in the
+///   title registered for the assessment's DOI when that differs)
 /// Unticked checkboxes are not sent by the browser, so the form also sends opts=1: with it, a
 /// missing ref or amp means "off" and a missing or empty refname means a plain <ref>; without it (a
 /// plain link) the defaults apply. fullnames is off by default, so it needs no opts=1: fullnames=1
@@ -60,6 +62,18 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
 
     public const string WikiKey = "wiki";
 
+    /// |title= gives the taxon's current name, as IUCN's citation does, instead of the name in the title
+    /// registered for the assessment's DOI (titlename=current; CiteIucnOptions.RegisteredNameInTitle).
+    public bool CurrentNameInTitle { get; init; }
+
+    public const string TitleNameKey = "titlename";
+    public const string TitleNameCurrent = "current";
+    /// The value of the default choice, the name in the DOI's title; any value but "current" reads as it.
+    public const string TitleNameDoi = "doi";
+
+    public static bool ReadCurrentNameInTitle(string? value) =>
+        string.Equals(value?.Trim(), TitleNameCurrent, StringComparison.OrdinalIgnoreCase);
+
     /// The Wikipedia a query value names, else English.
     public static string ReadWiki(string? value) => OtherWikipedias.Find(value)?.Code ?? OtherWikipedias.English.Code;
 
@@ -108,6 +122,7 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
         RefName = RefName,
         NameListStyleAmp = Amp,
         FullGivenNames = FullGivenNames,
+        RegisteredNameInTitle = !CurrentNameInTitle,
     };
 
     /// {{cite Q}} takes the same ref options as {{cite iucn}}, and the access date when the item has a
@@ -144,6 +159,9 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
         }
         if (GreenStatusYear == GreenStatusYearRule.Published) {
             parts.Add(GreenStatusYearKey + "=" + GreenStatusYearPublished);
+        }
+        if (CurrentNameInTitle) {
+            parts.Add(TitleNameKey + "=" + TitleNameCurrent);
         }
         if (Wiki != OtherWikipedias.English.Code) {
             parts.Add(WikiKey + "=" + Wiki);

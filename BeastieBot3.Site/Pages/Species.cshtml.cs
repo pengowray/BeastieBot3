@@ -218,6 +218,15 @@ public sealed class SpeciesModel : TaxonPageModel {
         }
         Names = TaxonNames.Build(_queries.GetNames(taxon.TaxonId), taxon.CommonNameEn);
         Names = Names with { PossibleSynonyms = PossibleSynonyms(Names.Synonyms) };
+        if (taxon.InRelease) {
+            // An old id's IUCN synonyms are already links in the combined history (taxon_link).
+            var iucnSynonyms = Names.Synonyms.Where(s => s.FromIucn).Select(s => s.Name).ToList();
+            Names = Names.WithSameNameTaxa(_queries.GetTaxaNamed(iucnSynonyms, taxon.Kingdom, taxon.TaxonId)) with {
+                ListedAsSynonymBy = _queries.GetTaxaWithIucnSynonym(taxon.ScientificName, taxon.Kingdom, taxon.TaxonId),
+                ScientificName = taxon.ScientificName,
+                SubpopulationName = taxon.SubpopulationName,
+            };
+        }
         SubspeciesList = SubspeciesRows.Load(_queries, taxon);
         LoadRelatedTaxa();
         LoadArrival(q);

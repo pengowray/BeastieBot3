@@ -657,8 +657,10 @@ button:hover {
     color: var(--muted);
 }
 
-/* "Errata version, published 2016" and similar, under the year in the assessment tables. */
-.version-note {
+/* "Errata version, published 2016" and similar, under the year in the assessment tables; and the
+   name in the title registered for the assessment's DOI, when it differs from the current name. */
+.version-note,
+.doi-title-name {
     display: block;
     font-size: 0.85rem;
     color: var(--muted);

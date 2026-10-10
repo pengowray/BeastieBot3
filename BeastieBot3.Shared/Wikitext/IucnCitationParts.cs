@@ -88,6 +88,25 @@ public sealed record IucnCitationParts {
     /// ids and `iucn resolve-dois` stored Crossref's title for it; null otherwise.
     public string? RegisteredName { get; init; }
 
+    /// RegisteredName when it names the taxon differently from currentName (more than "ssp." for
+    /// "subsp.", brackets or spacing: WikidataCitation.SameName) and is not one of IUCN's internal
+    /// names ("Physella acuta_new"); null otherwise. The history tables compare it with the row's
+    /// taxon's current name, and a citation with ScientificName.
+    public string? RegisteredNameDifferentFrom(string? currentName) {
+        var registered = WikidataCitation.NameText(RegisteredName);
+        return registered.Length == 0 || WikidataCitation.IsIucnInternalName(registered)
+            || WikidataCitation.SameName(registered, currentName) ? null : registered;
+    }
+
+    /// These parts with the name in the DOI's registered title (RegisteredNameDifferentFrom) as
+    /// ScientificName, for a citation whose |title= takes that name; the parts unchanged when it
+    /// names the taxon as ScientificName does. SubpopulationName is cleared, since the registered
+    /// name is written whole ("Sousa chinensis (Eastern Taiwan Strait subpopulation)").
+    public IucnCitationParts WithRegisteredNameInTitle() =>
+        RegisteredNameDifferentFrom(ScientificName) is { } registered
+            ? this with { ScientificName = registered, SubpopulationName = null }
+            : this;
+
     /// IUCN's citation text from the payload with its "Accessed on ..." sentence removed.
     public string? IucnCitationText { get; init; }
 

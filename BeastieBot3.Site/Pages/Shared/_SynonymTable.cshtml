@@ -12,7 +12,12 @@
             @for (var row = 0; row < Model.Count; row++) {
                 var s = Model[row];
                 <tr class="@(row >= SpeciesModel.ShortListLength ? "more-item" : null)">
-                    <th scope="row">@Html.Raw(ScientificNameMarkup.ToSynonymHtml(s.Name))@if (s.Authority is not null) {<text> </text><span class="authority">@s.Authority</span>}</th>
+                    <th scope="row">@Html.Raw(ScientificNameMarkup.ToSynonymHtml(s.Name))@if (s.Authority is not null) {<text> </text><span class="authority">@s.Authority</span>}@if (s.SameNameTaxa.Count > 0) {
+                            <div class="match-note">@SiteText.SynonymIsTaxonBefore@for (var t = 0; t < s.SameNameTaxa.Count; t++) {
+                                var other = s.SameNameTaxa[t];
+                                <text>@SiteText.TaxonListSeparator(t, s.SameNameTaxa.Count)<a href="/species/@other.TaxonId">@SiteText.IucnIdLink(other.TaxonId)</a></text>
+                            }</div>
+                        }</th>
                     <td>@for (var i = 0; i < s.Sources.Count; i++) {
                             var source = s.Sources[i];
                             if (i > 0) {<text>, </text>}

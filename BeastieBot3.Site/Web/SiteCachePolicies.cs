@@ -34,7 +34,7 @@ public static class SiteCachePolicies {
     public const string DatabaseTag = "site-db";
 
     /// The query parameters a taxon's wikitext page reads (SpeciesWikitext.cshtml.cs and WikitextOptions).
-    public static readonly string[] SpeciesQueryKeys = ["assessment", "authors", "fullnames", "access", "opts", "ref", "refname", "amp", Pages.IucnReference.QueryKey, Pages.WikitextOptions.GreenStatusYearKey, Pages.WikitextOptions.WikiKey];
+    public static readonly string[] SpeciesQueryKeys = ["assessment", "authors", "fullnames", "access", "opts", "ref", "refname", "amp", Pages.IucnReference.QueryKey, Pages.WikitextOptions.GreenStatusYearKey, Pages.WikitextOptions.WikiKey, Pages.WikitextOptions.TitleNameKey];
 
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
 

@@ -25,6 +25,9 @@ public static partial class CiteIucnRenderer {
     /// {{cite iucn}} for one assessment, on one line.
     public static string Render(IucnCitationParts parts, CiteIucnOptions? options = null) {
         options ??= new CiteIucnOptions();
+        if (options.RegisteredNameInTitle) {
+            parts = parts.WithRegisteredNameInTitle();
+        }
 
         var rawName = WikitextValue.Clean(parts.ScientificName);
         rawName = StripAnnotations(rawName, out var errataFromTitle, out var amendsFromTitle, out var scopeFromTitle);

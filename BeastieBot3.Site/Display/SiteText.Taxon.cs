@@ -154,6 +154,40 @@ public static partial class SiteText {
         return $"IUCN gives full given names for {withNames} of the {people} authors, such as {example}. "
             + (others == 1 ? "The other author is written as in IUCN's citation." : $"The other {others} authors are written as in IUCN's citation.");
     }
+    /// The name in the title registered with Crossref for an assessment's DOI, when it differs from the
+    /// taxon's current name: under the year (or region) of the row in an assessment table, with the
+    /// italic name after DoiTitleNameLabel, and DoiTitleNameNote once under the table. The name is the
+    /// one current when the DOI record was made or last updated, so the text never says the assessment
+    /// was published under it.
+    public const string DoiTitleNameLabel = "Name in DOI title: ";
+    public const string DoiTitleNameNote =
+        "Name in DOI title: the scientific name in the title registered with Crossref for the assessment's DOI. "
+        + "It is usually the name the assessment was published under, but some DOI records were made years after the assessment "
+        + "and have the name IUCN used when the record was made. IUCN's own citations give every assessment under the taxon's current name.";
+
+    /// The citation option for the name in |title=, shown when the DOI's title names the taxon
+    /// differently: TitleNameFromDoi or TitleNameCurrentName, then " (" + italic name + ")".
+    public const string TitleNameLegend = "Name in the citation title";
+    public const string TitleNameFromDoi = "Name in DOI title";
+    public const string TitleNameCurrentName = "Current name";
+    public const string TitleNameHelp =
+        "Name in DOI title: the scientific name in the title registered with Crossref for this assessment's DOI. "
+        + "Current name: the name IUCN's own citations now use for every assessment, including older assessments.";
+
+    /// Under an IUCN synonym in the Synonyms table that is the scientific name of another taxon in the
+    /// release: SynonymIsTaxonBefore + link("IUCN id {id}") [+ TaxonListSeparator + link ...].
+    public const string SynonymIsTaxonBefore = "Also the scientific name of ";
+
+    /// Above the Synonyms table, for the other taxa in the release whose IUCN synonyms include this
+    /// taxon's name: ListedAsSynonymBefore + italic name + ListedAsSynonymMiddle(count) + links
+    /// (TaxonListSeparator between them) + ".".
+    public const string ListedAsSynonymBefore = "IUCN lists ";
+    public static string ListedAsSynonymMiddle(int count) =>
+        count == 1 ? " as a synonym of " : $" as a synonym of {count} other taxa: ";
+
+    /// Before item index (from 0) of count in a list of taxa: "", ", " or " and ".
+    public static string TaxonListSeparator(int index, int count) => index == 0 ? string.Empty : index == count - 1 ? " and " : ", ";
+
     public const string AccessLabel = "Access date";
     public static string AccessDownload(string date) => $"Date downloaded from IUCN ({date})";
     public static string AccessToday(string date) => $"Today ({date}, UTC)";
