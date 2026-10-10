@@ -90,7 +90,10 @@ internal static class ExtraSpeciesNameRules {
     ///   F  two edits in epithets of 7 or more letters, with the same authors, when one epithet is
     ///      rare or the edits come after the first 3 letters (tnaculatus and maculatus).
     public static string? SpellingMatch(string a, string b, bool rare, bool sameAuthor) {
-        if (string.Equals(a, b, StringComparison.Ordinal) || IsGenderVariant(a, b)) {
+        // Most pairs in a genus are far apart; a cheap distance on the epithets as written leaves
+        // them out before the normalising. No branch matches epithets more than MaxRawEdits apart.
+        if (string.Equals(a, b, StringComparison.Ordinal) || Math.Abs(a.Length - b.Length) > MaxRawEdits
+            || Distance(a, b, MaxRawEdits) > MaxRawEdits || IsGenderVariant(a, b)) {
             return null;
         }
         var x = Normalize(a);
@@ -222,6 +225,31 @@ internal static class ExtraSpeciesNameRules {
             i++;
         }
         return i;
+    }
+
+    private const int MaxRawEdits = 4;
+
+    // Levenshtein distance, stopping early once it passes the limit.
+    private static int Distance(string a, string b, int limit) {
+        var previous = new int[b.Length + 1];
+        var current = new int[b.Length + 1];
+        for (var j = 0; j <= b.Length; j++) {
+            previous[j] = j;
+        }
+        for (var i = 1; i <= a.Length; i++) {
+            current[0] = i;
+            var rowMin = current[0];
+            for (var j = 1; j <= b.Length; j++) {
+                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), previous[j - 1] + cost);
+                rowMin = Math.Min(rowMin, current[j]);
+            }
+            if (rowMin > limit) {
+                return limit + 1;
+            }
+            (previous, current) = (current, previous);
+        }
+        return previous[b.Length];
     }
 
     // Optimal string alignment distance: Levenshtein, with a swap of neighbouring letters counted as one.
