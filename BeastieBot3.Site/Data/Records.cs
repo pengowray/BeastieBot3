@@ -101,10 +101,20 @@ public sealed record TaxonSummary(
 /// latest global assessment (all null when it has none).
 public sealed record RelatedTaxonRow(TaxonSummary Taxon, string? Criteria, int? YearPublished, long? LatestGlobalAssessmentId);
 
-/// A taxon linked to the page's taxon in taxon_link. Kind: TaxonLinkKinds.SameName or IucnSynonym.
-public sealed record TaxonLinkRow(TaxonRow Taxon, string Kind) {
+/// A taxon linked to the page's taxon in taxon_link. Kind: a TaxonLinkKinds value. IsFrom: the
+/// page's taxon is the link's taxon_id (for a working name, the "_new" record; for a provisional
+/// name, the taxon with the provisional name).
+public sealed record TaxonLinkRow(TaxonRow Taxon, string Kind, bool IsFrom = false) {
     public bool IsSynonym => Kind == TaxonLinkKinds.IucnSynonym;
+    /// An old IUCN id and a taxon in the release (same name, or an IUCN synonym).
+    public bool IsEarlierId => TaxonLinkKinds.IsEarlierId(Kind);
+    public bool IsWorkingName => Kind == TaxonLinkKinds.WorkingName;
+    public bool IsProvisionalName => Kind == TaxonLinkKinds.ProvisionalName;
 }
+
+/// An assessment of another taxon shown in a taxon page's table: Taxon is the IUCN record it was
+/// published under.
+public sealed record LinkedAssessment(AssessmentRow Assessment, TaxonRow Taxon);
 
 /// One SPRAT profile of a taxon (epbc_listing). Status: the EPBC Act category code, null when the
 /// profile is not listed. Population: for a profile of one population, the population's name.
@@ -173,6 +183,9 @@ public static class NameTypes {
     public const string Scientific = "scientific";
     public const string Common = "common";
     public const string Synonym = "synonym";
+    /// A species code IUCN lists among the English names ("Po" for "Species code: Po"). Search finds
+    /// it; the names section leaves it out.
+    public const string Code = "code";
 }
 
 public static class TaxonKinds {

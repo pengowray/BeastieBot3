@@ -7,7 +7,9 @@ namespace BeastieBot3.Tests.SiteBuild;
 
 // `site build-db`'s species from the Catalogue of Life and Wikidata that IUCN does not have
 // (extra_species, extra_overlap, higher_taxon_extra), over a CoL database and a Wikidata taxon sweep
-// cut down to a few cats. IUCN has Panthera leo, Panthera pardus and Felis silvestris.
+// cut down to a few cats. IUCN has Panthera leo, Panthera pardus and Felis silvestris, and two made-up
+// records: "Panthera sp. nov. 'zdanskyi'" (a provisional name) and "Felis lybica_new" (a record named
+// as IUCN names the ones it made for national assessments).
 public sealed class SiteDbBuildExtraSpeciesTests : IDisposable {
     private readonly SiteBuildSourceFixture _sources = new();
 
@@ -61,6 +63,11 @@ public sealed class SiteDbBuildExtraSpeciesTests : IDisposable {
         Assert.Contains(overlaps, o => (string)o[0]! == "Felis ornata" && (string?)o[2] == "Felis lybica" && (string)o[3]! == OverlapReason.WikidataSynonym);
         // "parda" is "pardus" with another gender ending.
         Assert.Contains(overlaps, o => (string)o[0]! == "Panthera parda" && (long?)o[1] == 15954 && (string)o[3]! == OverlapReason.GenderEnding);
+        // The quoted epithet of IUCN's provisional name, and IUCN's "_new" record of the name: possible, not likely.
+        Assert.Contains(overlaps, o => (string)o[0]! == "Panthera zdanskyi" && (long?)o[1] == 900020 && (string)o[3]! == OverlapReason.ProvisionalName
+            && (long)o[4]! == 0);
+        Assert.Contains(overlaps, o => (string)o[0]! == "Felis lybica" && (long?)o[1] == 900021 && (string)o[3]! == OverlapReason.WorkingName
+            && (long)o[4]! == 0);
     }
 
     [Fact]
@@ -139,11 +146,15 @@ public sealed class SiteDbBuildExtraSpeciesTests : IDisposable {
             WriteIucnCsv(iucn, "2026-1", """
                     (1, 15951, 'Panthera leo', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'FELIDAE', 'Panthera', 'leo', NULL, NULL, NULL, NULL, '(Linnaeus, 1758)', NULL),
                     (1, 15954, 'Panthera pardus', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'FELIDAE', 'Panthera', 'pardus', NULL, NULL, NULL, NULL, '(Linnaeus, 1758)', NULL),
-                    (1, 60354, 'Felis silvestris', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'FELIDAE', 'Felis', 'silvestris', NULL, NULL, NULL, NULL, 'Schreber, 1777', NULL)
+                    (1, 60354, 'Felis silvestris', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'FELIDAE', 'Felis', 'silvestris', NULL, NULL, NULL, NULL, 'Schreber, 1777', NULL),
+                    (1, 900020, 'Panthera sp. nov. ''zdanskyi''', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'FELIDAE', 'Panthera', 'sp. nov. ''zdanskyi''', NULL, NULL, NULL, NULL, NULL, NULL),
+                    (1, 900021, 'Felis lybica_new', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'FELIDAE', 'Felis', 'lybica_new', NULL, NULL, NULL, NULL, 'Forster, 1780', NULL)
                 """, """
                     (1, 1, 15951, 'Panthera leo', 'Vulnerable', NULL, '2025', NULL, '3.1', NULL, NULL, NULL, 'false', 'false', 'Global'),
                     (1, 2, 15954, 'Panthera pardus', 'Vulnerable', NULL, '2025', NULL, '3.1', NULL, NULL, NULL, 'false', 'false', 'Global'),
-                    (1, 3, 60354, 'Felis silvestris', 'Least Concern', NULL, '2022', NULL, '3.1', NULL, NULL, NULL, 'false', 'false', 'Global')
+                    (1, 3, 60354, 'Felis silvestris', 'Least Concern', NULL, '2022', NULL, '3.1', NULL, NULL, NULL, 'false', 'false', 'Global'),
+                    (1, 4, 900020, 'Panthera sp. nov. ''zdanskyi''', 'Data Deficient', NULL, '2010', NULL, '3.1', NULL, NULL, NULL, 'false', 'false', 'Pan-Africa'),
+                    (1, 5, 900021, 'Felis lybica_new', 'Endangered', NULL, '2019', NULL, '3.1', NULL, NULL, NULL, 'false', 'false', '')
                 """);
             WriteApiCache(cache, [], []);
             WriteCol(col);

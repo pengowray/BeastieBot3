@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 27;
+    public const int Version = 28;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -138,11 +138,17 @@ public static class SiteDbSchema {
         -- can have two links: the taxon with its name, and the one taxon whose IUCN synonyms list its
         -- name (when a taxon was split).
         CREATE TABLE taxon_link (
-            taxon_id         INTEGER NOT NULL,                -- the taxon not in the release
+            taxon_id         INTEGER NOT NULL,                -- the taxon not in the release (for 'working-name' and 'provisional-name',
+                                                              -- a taxon in the release)
             current_taxon_id INTEGER NOT NULL,                -- the taxon in the release
             link_kind        TEXT NOT NULL,                   -- 'same-name': the same scientific name (taxon.current_taxon_id);
                                                               -- 'iucn-synonym': the current taxon's IUCN synonyms include the old taxon's
-                                                              -- scientific name, and no other taxon in the release in that kingdom lists it
+                                                              -- scientific name, and no other taxon in the release in that kingdom lists it;
+                                                              -- 'working-name': taxon_id's name is current_taxon_id's with '_new' after it
+                                                              -- ('Balaenoptera edeni_new'), same kingdom and kind;
+                                                              -- 'provisional-name': taxon_id has a provisional name ('Notogomphus sp. nov.
+                                                              -- 'gorilla'') and current_taxon_id's name is the one built from its quoted
+                                                              -- epithet ('Notogomphus gorilla'), same kingdom (ProvisionalNames.Read)
             PRIMARY KEY (taxon_id, current_taxon_id)
         ) WITHOUT ROWID;
         CREATE INDEX taxon_link_current ON taxon_link(current_taxon_id);
@@ -404,7 +410,10 @@ public static class SiteDbSchema {
                                                           -- Wikidata synonym (P1420) of the taxon; 'gender-ending': same genus, epithets that
                                                           -- differ by a Latin gender ending; 'spelling': same genus, epithets one or two letters
                                                           -- apart; 'other-genus': same epithet in another genus of the same family, with the same
-                                                          -- author and year (or, for a Wikidata species, an epithet no other species there has)
+                                                          -- author and year (or, for a Wikidata species, an epithet no other species there has);
+                                                          -- 'provisional-name': the IUCN taxon has a provisional name ('Notogomphus sp. nov.
+                                                          -- 'lateralis'') and its name is the one built from the quoted epithet; 'working-name':
+                                                          -- the IUCN taxon's name is its name with '_new' after it ('Aquilegia ottonis_new')
             likely           INTEGER NOT NULL             -- 1 for the synonym and gender-ending reasons: a list leaves out the entry from the
                                                           -- less preferred source; 0: a list shows both, with a notice
         );
@@ -494,7 +503,8 @@ public static class SiteDbSchema {
             name_id      INTEGER PRIMARY KEY,
             taxon_id     INTEGER NOT NULL,
             name         TEXT NOT NULL,
-            name_type    TEXT NOT NULL,                       -- 'scientific' | 'common' | 'synonym'
+            name_type    TEXT NOT NULL,                       -- 'scientific' | 'common' | 'synonym' | 'code': a species code IUCN gives among
+                                                              -- the English names ('Species code: Po' is stored as 'Po'), for search only
             language     TEXT,                                -- ISO 639-1 code where one exists ('en', 'fr'), else the ISO 639-3 code ('yue'); IUCN's names
                                                               -- can also have IUCN's ISO 639-2 or 639-5 code ('phi'). NULL when not given (IUCN only)
             source       TEXT NOT NULL,                       -- 'iucn' | 'col' | 'wikidata' | 'wikipedia' (an article title: English Wikipedia's for 'en',
@@ -646,5 +656,8 @@ public static class SiteDbSchema {
         public const string WikidataSweepFinished = "wikidata_sweep_finished";
         public const string TaxonCount = "taxon_count";
         public const string AssessmentCount = "assessment_count";
+        /// Assessments IUCN published with no geographic scope (assessment.scope = ''), for the note
+        /// that says how rare they are.
+        public const string NoScopeAssessmentCount = "no_scope_assessment_count";
     }
 }

@@ -221,6 +221,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Not in the release, with a taxon of the same name in the release", s.NotInReleaseWithCurrentTaxon);
         Row("Not in the release, linked to the one taxon in the release whose IUCN synonyms list its name", s.NotInReleaseSynonymLinks);
         Row("Not in the release, with a name that two or more taxa in the release list as a synonym (not linked)", s.NotInReleaseSynonymOfSeveral);
+        Row("Taxa named with \"_new\" linked to the taxon named without it", s.WorkingNameLinks);
+        Row("Taxa with a provisional name (sp. nov.) linked to the taxon named with its quoted epithet", s.ProvisionalNameLinks);
         Row("API taxon records not in the release with no scientific name (left out)", s.NotInReleaseRecordsUnusable);
 
         Section("Assessments");
@@ -290,6 +292,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Common names", s.NamesByType.GetValueOrDefault(SiteNameType.Common));
         Row("Common names in English", s.CommonNamesEnglish);
         Row("Common names left out as junk (wiki markup, author citations, OCR errors)", s.CommonNamesJunk);
+        Row("Species codes kept for search only (\"Species code: Po\")", s.SpeciesCodes);
         Row("Common names repaired before storing (wiki markup or extra text removed, OCR errors fixed)", s.CommonNamesRepaired);
         Row("Synonyms (one row per source that gives the name)", s.NamesByType.GetValueOrDefault(SiteNameType.Synonym));
         Row("Catalogue of Life synonyms with an authority from the CoL database", s.ColSynonymAuthorities);

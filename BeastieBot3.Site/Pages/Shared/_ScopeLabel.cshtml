@@ -1,0 +1,9 @@
+@model ScopeLabelModel
+@* A region in the regional table and the status summary. An assessment IUCN published with no scope
+   gets a warning label and a help tip (_InfoTip). The tip's id has the assessment id and the place,
+   so two tips on one page never share an id. *@
+@if (Model.HasNoScope) {
+    <span class="no-scope"><span class="no-scope-icon" aria-hidden="true">!</span>@SiteText.NoScopeLabel</span><partial name="_InfoTip" model="@(new InfoTipModel($"tip-no-scope-{Model.Place}-{Model.AssessmentId}", SiteText.NoScopeHelpLabel, Model.Help))" />
+} else {
+    @Model.Scope
+}

@@ -84,4 +84,20 @@ public class SiteNameSetQualityTests {
         Assert.True(names.Add("Pholidoscelis polops (Cope", "synonym", null, "col"));
         Assert.Equal(0, names.JunkCommonNames);
     }
+
+    // IUCN lists seagrass species codes among the English names ("Species code: Po" for Posidonia
+    // oceanica). They are kept as codes, for search, one row whatever the source, and are not junk.
+    [Fact]
+    public void SpeciesCodes_AreKeptAsCodes() {
+        var names = new SiteNameSet();
+
+        Assert.False(names.Add("Species code: Po", "common", "en", "iucn"));
+        Assert.False(names.Add("Species code: Po", "common", "en", "col"));
+        Assert.False(names.Add("Species code Po", "common", "en", "wikidata"));
+        Assert.True(names.Add("Neptune Grass", "common", "en", "iucn"));
+
+        Assert.Equal(new[] { ("Po", "code", "iucn"), ("Neptune Grass", "common", "iucn") },
+            names.Names.Select(n => (n.Name, n.NameType, n.Source)));
+        Assert.Equal((1, 0), (names.Codes, names.JunkCommonNames));
+    }
 }

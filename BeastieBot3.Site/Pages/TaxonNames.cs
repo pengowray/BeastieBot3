@@ -21,12 +21,21 @@ public sealed record OtherLanguageName(string Name, IReadOnlyList<string> Source
 /// attribute, or null.
 public sealed record LanguageGroup(string Language, string? Lang, IReadOnlyList<OtherLanguageName> Names, bool NotGiven = false);
 
+/// A name that may belong to the same species as the page's taxon, found by comparing a provisional
+/// name ("Notogomphus sp. nov. 'gorilla'") with the name built from its quoted epithet ("Notogomphus
+/// gorilla"). IsProvisional: Name is the provisional one (the page's taxon has the built name).
+/// TaxonId: the other IUCN taxon; null for a species from the Catalogue of Life or Wikidata, whose
+/// sources are InCol and InWikidata.
+public sealed record PossibleSynonym(string Name, string Url, bool IsProvisional, long? TaxonId, bool InCol = false, bool InWikidata = false);
+
 /// The names section of a taxon page: English common names with their sources, the other
-/// languages' names, and synonyms with their authorities and sources.
+/// languages' names, synonyms with their authorities and sources, and possible synonyms.
 public sealed record TaxonNames(
     IReadOnlyList<EnglishCommonName> English,
     IReadOnlyList<LanguageGroup> OtherLanguages,
     IReadOnlyList<SynonymRow> Synonyms) {
+    public IReadOnlyList<PossibleSynonym> PossibleSynonyms { get; init; } = [];
+
     /// commonNameEn: the taxon's English name for display, listed second after IUCN's main name.
     public static TaxonNames Build(IReadOnlyList<NameRow> names, string? commonNameEn) {
         var english = names

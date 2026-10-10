@@ -42,6 +42,12 @@ public sealed record ReasonCellModel(ReasonCell? Cell);
 /// Label: the button's accessible name, naming what the text explains.
 public sealed record InfoTipModel(string Id, string Label, string Text);
 
+/// The region of an assessment for _ScopeLabel. Place: where on the page ("status", "regional"), for
+/// the help tip's id. Help: the text of the tip shown beside "No scope given".
+public sealed record ScopeLabelModel(string Scope, long AssessmentId, string Place, string Help) {
+    public bool HasNoScope => string.IsNullOrWhiteSpace(Scope);
+}
+
 /// The number after a list option (_OptionCount): how many headings a rank adds, or how many lines a
 /// Red List category adds. Key names the option for live updates ("h:genus", "cat:CR"). A null
 /// Count shows nothing.
@@ -77,6 +83,8 @@ public sealed record TaxonListItem(TaxonSummary Taxon, string? MatchNoteLabel = 
         switch (hit.MatchedNameType) {
             case NameTypes.Synonym:
                 return new TaxonListItem(taxon, SiteText.MatchSynonymLabel, ScientificNameMarkup.ToHtml(hit.MatchedName));
+            case NameTypes.Code:
+                return new TaxonListItem(taxon, SiteText.MatchCodeLabel, SiteHtml.Encode(hit.MatchedName));
             case NameTypes.Common:
                 if (taxon.CommonNameEn is not null && SiteNameKey.Fold(taxon.CommonNameEn) == SiteNameKey.Fold(hit.MatchedName)) {
                     return new TaxonListItem(taxon);

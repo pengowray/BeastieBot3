@@ -1,7 +1,8 @@
 @model TaxonNames
 @* The names section of a taxon page: English common names, names in other languages (each with its
    transliteration into Latin letters when it is in another script) and synonyms, each with its
-   sources. The lists after the first SpeciesModel.ShortListLength items are hidden until their box is ticked. *@
+   sources, then the possible synonyms found by comparing a provisional name with the name built
+   from its quoted epithet. The lists after the first SpeciesModel.ShortListLength items are hidden until their box is ticked. *@
 <section class="names" aria-labelledby="names-heading">
     <h2 id="names-heading">@SiteText.HeadingNames</h2>
     <h3>@SiteText.NamesEnglish</h3>
@@ -74,6 +75,32 @@
             @if (Model.Synonyms.Count > SpeciesModel.ShortListLength) {
                 <p class="more-toggle"><label><input type="checkbox" class="show-more" autocomplete="off"> @SiteText.ShowMoreSynonyms(Model.Synonyms.Count - SpeciesModel.ShortListLength)</label></p>
             }
+        </div>
+    }
+
+    @if (Model.PossibleSynonyms.Count > 0) {
+        <h3 id="possible-synonyms">@SiteText.NamesPossibleSynonyms</h3>
+        <p class="names-intro">@SiteText.PossibleSynonymsIntro</p>
+        <div class="table-scroll">
+            <table class="names-table possible-synonyms-table">
+                <thead>
+                    <tr>
+                        <th scope="col">@SiteText.ColName</th>
+                        <th scope="col">@SiteText.ColPossibleSynonymFoundIn</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Model.PossibleSynonyms) {
+                        <tr>
+                            <th scope="row">
+                                <a href="@p.Url" class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(p.Name))</a>
+                                <div class="match-note">@(p.IsProvisional ? SiteText.PossibleSynonymProvisionalName : SiteText.PossibleSynonymFormalName)</div>
+                            </th>
+                            <td>@(p.TaxonId is { } id ? SiteText.PossibleSynonymIucnSource(id) : SiteText.ExtraSourcesName(p.InCol, p.InWikidata))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     }
 </section>

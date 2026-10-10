@@ -15,10 +15,12 @@ using BeastieBot3.Shared.SiteData;
 //     In languages other than English, two common names are the same only when they differ in case
 //     or Unicode normalisation alone (SiteNameKey.CaseFold): accents and other marks are part of the
 //     name ("Ñandú" is not "Nandu", and Fold would make the Japanese "ガエル" and "カエル" one).
+//   - codes: one row per code, whatever the source.
 // The first spelling added is kept; a later copy can only turn is_preferred on.
-// Common names in every language go through CommonNameQuality first: junk (wiki markup, author
-// citations, OCR errors, names cut off at a bracket) is left out, and a name with a fixable extra
-// ("Sunda slow loris{sfn|...}", "Mountain_gorilla") is added repaired. The set counts both for the
+// Common names in every language go through CommonNameQuality first: a species code ("Species code:
+// Po") is added as a code ("Po"), so search finds it while the page leaves it out of the names; other
+// junk (wiki markup, author citations, OCR errors, names cut off at a bracket) is left out, and a
+// name with a fixable extra ("Sunda slow loris{sfn|...}", "Mountain_gorilla") is added repaired. The set counts both for the
 // build summary: junk once per name, language and source (the store repeats IUCN's names, so the
 // same junk name can be offered twice), and a repaired name only when it is added.
 
@@ -38,6 +40,9 @@ internal sealed class SiteNameSet {
     /// folded name, language and source.
     public int JunkCommonNames => _junkCommonNames.Count;
 
+    /// Species codes added (name_type 'code'), from names such as "Species code: Po".
+    public int Codes { get; private set; }
+
     /// Common names added with CommonNameQuality's repair. A repaired name that repeats one already
     /// added is not added, so is not counted. SiteBuildRules.CleanName's tidying, which comes first
     /// (HTML tags and entities, leading backslashes), is not counted as a repair.
@@ -54,6 +59,12 @@ internal sealed class SiteNameSet {
         var repaired = false;
         if (nameType == SiteNameType.Common) {
             var quality = CommonNameQuality.Assess(cleaned, language);
+            if (quality.Flaw == CommonNameFlaw.SpeciesCode && CommonNameQuality.SpeciesCode(cleaned) is { } code) {
+                if (Add(code, SiteNameType.Code, null, source)) {
+                    Codes++;
+                }
+                return false;
+            }
             if (quality.IsJunk) {
                 _junkCommonNames.Add((SiteNameKey.Fold(cleaned), language, source));
                 return false;
@@ -99,6 +110,7 @@ internal sealed class SiteNameSet {
         SiteNameType.Common when language == "en" => (folded, nameType, language, source),
         SiteNameType.Common => (SiteNameKey.CaseFold(name), nameType, language, source),
         SiteNameType.Synonym => (folded, nameType, null, source),
+        // Scientific names and codes.
         _ => (folded, nameType, null, null),
     };
 

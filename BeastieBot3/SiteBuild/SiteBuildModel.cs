@@ -305,6 +305,8 @@ internal sealed class SiteBuildStats {
     /// Common names in any language that CommonNameQuality found to be junk (left out of the name
     /// table), and that it repaired (stored repaired). Counted per taxon by SiteNameSet.
     public int CommonNamesJunk;
+    /// Species codes kept for search (name_type 'code'), from names such as "Species code: Po".
+    public int SpeciesCodes;
     public int CommonNamesRepaired;
     public int CommonNameEn;
     public int CommonNameEnUnusable;
@@ -428,6 +430,10 @@ internal sealed class SiteBuildStats {
     public int NotInReleaseSynonymLinks;
     public int NotInReleaseSynonymOfSeveral;
     public int NotInReleaseLatestHeaders;
+    /// Links between taxa in the release (SiteTaxonLinks.FindInRelease): a "_new" record and the taxon
+    /// named without it, and a provisional name and the taxon named with its quoted epithet.
+    public int WorkingNameLinks;
+    public int ProvisionalNameLinks;
 
     /// `iucn resolve-dois`'s cache: assessments it checked, of those with a DOI, and its newest check.
     public int DoiChecksRead;

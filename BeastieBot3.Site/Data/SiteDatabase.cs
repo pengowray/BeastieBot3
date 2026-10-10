@@ -20,8 +20,13 @@ public sealed class SiteSnapshot {
     /// Red List version of the data ("2026-1").
     public string? IucnRelease => Get(SiteDbSchema.MetaKeys.IucnRelease);
 
-    public long? AssessmentCount =>
-        long.TryParse(Get(SiteDbSchema.MetaKeys.AssessmentCount), NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : null;
+    public long? AssessmentCount => Count(SiteDbSchema.MetaKeys.AssessmentCount);
+
+    /// Assessments IUCN published with no geographic scope.
+    public long? NoScopeAssessmentCount => Count(SiteDbSchema.MetaKeys.NoScopeAssessmentCount);
+
+    private long? Count(string key) =>
+        long.TryParse(Get(key), NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : null;
 }
 
 /// The site database, opened read-only. The site serves pages only when the file opens and its

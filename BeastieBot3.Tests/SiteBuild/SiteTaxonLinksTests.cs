@@ -45,6 +45,41 @@ public sealed class SiteTaxonLinksTests : IDisposable {
         IucnSynonyms = synonyms.Select(s => new SiteSynonym(s)).ToList(),
     };
 
+    // Two kinds of link between taxa in the release: a "_new" record and the taxon named without it
+    // (Balaenoptera edeni_new, 217123456, and Balaenoptera edeni, 2476; IUCN's ids), and a
+    // provisional name and the taxon named with its quoted epithet (Notogomphus sp. nov. 'gorilla',
+    // 184257, and Notogomphus gorilla, 84380222). No link: a "_new" name with no taxon of that name
+    // in its kingdom (Aquilegia ottonis_new), a provisional tag that is not an epithet, a "cf." tag,
+    // and a provisional taxon whose IUCN synonyms name another described species.
+    [Fact]
+    public void FindInRelease_LinksWorkingNamesAndProvisionalNames() {
+        SiteTaxon Make(long id, string name, string genus, string epithet, string kingdom = "ANIMALIA", params string[] synonyms) => new() {
+            TaxonId = id, ScientificName = name, Kind = SiteTaxonKind.Species, Kingdom = kingdom, InRelease = true,
+            Genus = genus, SpeciesEpithet = epithet, IucnSynonyms = synonyms.Select(s => new SiteSynonym(s)).ToList(),
+        };
+        var taxa = new List<SiteTaxon> {
+            Make(2476, "Balaenoptera edeni", "Balaenoptera", "edeni"),
+            Make(217123456, "Balaenoptera edeni_new", "Balaenoptera", "edeni_new", "ANIMALIA", "Balaenoptera edeni"),
+            Make(297325963, "Aquilegia ottonis_new", "Aquilegia", "ottonis_new", "PLANTAE"),
+            Make(84380222, "Notogomphus gorilla", "Notogomphus", "gorilla"),
+            Make(184257, "Notogomphus sp. nov. 'gorilla'", "Notogomphus", "sp. nov. 'gorilla'"),
+            Make(84380239, "Notogomphus intermedius", "Notogomphus", "intermedius"),
+            Make(184241, "Notogomphus sp. nov. 'intermedius'", "Notogomphus", "sp. nov. 'intermedius'", "ANIMALIA", "Notogomphus lujai"),
+            Make(900010, "Barbus gurneyi", "Barbus", "gurneyi"),
+            Make(900011, "Barbus sp. nov. 'cf. gurneyi'", "Barbus", "sp. nov. 'cf. gurneyi'"),
+            Make(900012, "Oncorhynchus sp. nov. 'Bavispe Trout'", "Oncorhynchus", "sp. nov. 'Bavispe Trout'"),
+        };
+        var stats = new SiteBuildStats();
+
+        var links = SiteTaxonLinks.FindInRelease(taxa, stats);
+
+        Assert.Equal(new[] {
+            new SiteTaxonLink(184257, 84380222, TaxonLinkKinds.ProvisionalName),
+            new SiteTaxonLink(217123456, 2476, TaxonLinkKinds.WorkingName),
+        }, links);
+        Assert.Equal((1, 1), (stats.WorkingNameLinks, stats.ProvisionalNameLinks));
+    }
+
     [Fact]
     public void Find_LinksBySameNameAndByTheOnlyTaxonListingTheNameAsASynonym() {
         var taxa = new List<SiteTaxon> {

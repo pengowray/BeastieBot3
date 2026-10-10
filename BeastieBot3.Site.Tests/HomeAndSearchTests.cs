@@ -443,9 +443,18 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     [InlineData(FixtureDb.Lion, "but the reference cites another assessment (ID 99999).")]
     public async Task TheSpeciesPageComparesTheTaxoboxStatusWithTheLatestAssessment(long taxonId, string text) {
         var client = factory.CreateClient();
-        // The taxon page has it in the links section.
-        Assert.Contains("<dt>Status in the Wikipedia taxobox</dt>", await client.GetStringAsync($"/species/{taxonId}"));
+        // The taxon page has it after the assessment history, not in the links section.
+        var page = await client.GetStringAsync($"/species/{taxonId}");
+        Assert.Contains("<h2 id=\"taxobox-status-heading\">Status in the Wikipedia taxobox</h2>", page);
+        Assert.True(page.IndexOf(">Assessment history</h2>", StringComparison.Ordinal) < page.IndexOf("id=\"taxobox-status-heading\"", StringComparison.Ordinal));
+        Assert.True(page.IndexOf("id=\"taxobox-status-heading\"", StringComparison.Ordinal) < page.IndexOf(">Links to other sites</h2>", StringComparison.Ordinal));
+        Assert.DoesNotContain("<dt>Status in the Wikipedia taxobox</dt>", page);
+        // With a link to the status parameters box on the Citations page.
+        // The box is {{Subspeciesbox}}'s for the Sumatran tiger.
+        Assert.Contains($"The Citations page has the <a href=\"/species/{taxonId}/wikitext#wikitext-speciesbox\">", page);
+        Assert.Contains(" status parameters</a> for the latest assessment.", page);
         var html = await client.GetStringAsync($"/species/{taxonId}/wikitext");
+        Assert.Contains("id=\"wikitext-speciesbox\"", html);
         Assert.Contains("Status in the Wikipedia taxobox", html);
         Assert.Contains(text, html);
         // The full stop follows the badge with no space before it.

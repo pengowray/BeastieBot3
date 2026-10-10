@@ -570,6 +570,7 @@ internal sealed class SiteDbBuild {
             }
         }
         _stats.CommonNamesJunk += names.JunkCommonNames;
+        _stats.SpeciesCodes += names.Codes;
         _stats.CommonNamesRepaired += names.RepairedCommonNames;
         // The lists are not needed again.
         taxon.IucnCommonNames = new List<IucnCommonName>();
@@ -653,6 +654,7 @@ internal sealed class SiteDbBuild {
         }
         writer.SetMeta(SiteDbSchema.MetaKeys.TaxonCount, taxonCount.ToString(CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.AssessmentCount, assessmentCount);
+        writer.SetMeta(SiteDbSchema.MetaKeys.NoScopeAssessmentCount, writer.Scalar("SELECT COUNT(*) FROM assessment WHERE scope = ''"));
     }
 
     // ------------------------------------------------------------ IUCN summary tables

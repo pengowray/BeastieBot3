@@ -188,11 +188,52 @@ public static partial class SiteText {
     /// A region in the regional table and the status summary; "" is an assessment IUCN published with no scope.
     public static string RegionLabel(string region) => string.IsNullOrWhiteSpace(region) ? NoScopeLabel : region;
     public const string NoScopeLabel = "No scope given";
+    public const string NoScopeHelpLabel = "Help for No scope given";
+    /// The help beside NoScopeLabel. noScope, total: assessments on the site with no scope, and all of
+    /// them (meta); the sentence with the counts is left out when they are unknown.
+    public static string NoScopeHelp(long? noScope, long? total) =>
+        "This assessment is not counted as a global assessment on this site, because IUCN published it with no geographic scope. "
+        + "Other assessments have the scope Global, or a region such as Europe, the Mediterranean or Pan-Africa. "
+        + "The scope of this assessment is empty in both IUCN's API and IUCN's CSV download, so filtering IUCN's data to the Global scope leaves it out."
+        + (noScope is { } n && total is { } t && t > 0
+            ? $" {SiteFormat.Number(n)} of the {SiteFormat.Number(t)} assessments on this site ({Percent(n, t)}) have no scope."
+            : "")
+        + " Their citations and range descriptions suggest that most of them are national Red List assessments: from the UAE National Red List "
+        + "Workshops (2018 and 2019), Greece (2023 to 2025) and South Africa (2013 and 2016). IUCN has not described them as national assessments.";
+    private static string Percent(long n, long total) {
+        var percent = 100.0 * n / total;
+        return percent < 0.01 && n > 0 ? "less than 0.01%" : $"{percent.ToString(percent < 1 ? "0.##" : "0.#", CultureInfo.InvariantCulture)}%";
+    }
+    /// Under the region of a row of the regional table that IUCN published under a "_new" record of
+    /// the taxon: PublishedUnderBefore + italic name + PublishedUnderMiddle + link("IUCN id {id}") + PublishedUnderAfter.
+    public const string PublishedUnderBefore = "Published under ";
+    public const string PublishedUnderMiddle = " (";
+    public const string PublishedUnderAfter = ")";
+    /// The note under the name of a taxon IUCN named with "_new" after its name: WorkingNameLabel,
+    /// WorkingNameBefore(kind) + the name (linked to IUCN's other record, "Balaenoptera edeni (IUCN id
+    /// 2476)", or to the species from the Catalogue of Life and Wikidata followed by its sources in
+    /// brackets) + ". ", then for no other IUCN record WorkingNameOnlyRecord(name), then WorkingNameRecord(second).
+    public const string WorkingNameLabel = "Name ending in \"_new\": ";
+    public static string WorkingNameBefore(string kind) => kind == "species" ? "The species' name is " : "The taxon's name is ";
+    public static string WorkingNameOnlyRecord(string name) => $"IUCN has no record of {name} other than this one. ";
+    public static string WorkingNameRecord(bool second) =>
+        (second ? "IUCN made this second record" : "IUCN made this record") + " for an assessment published with no geographic scope.";
+    /// The link under the taxobox status comparison to the Citations page's box: TaxoboxWikitextBefore
+    /// + link(box: "{{Speciesbox}} status parameters") + TaxoboxWikitextAfter.
+    public const string TaxoboxWikitextBefore = "The Citations page has the ";
+    public const string TaxoboxWikitextAfter = " for the latest assessment.";
     /// Under the heading of a taxon IUCN assessed under a working name. marker: "sp. nov.";
     /// rank: "species", "subspecies" or "variety". hasSynonyms: the page has a Synonyms table.
-    public static string ProvisionalName(string marker, string rank, bool hasSynonyms) =>
+    public static string ProvisionalName(string marker, string rank, bool hasSynonyms, bool hasPossibleSynonyms = false) =>
         $"Provisional name: \"{marker}\" means new {rank}. The {rank} had not been formally described when IUCN assessed it."
-        + (hasSynonyms ? " If it has been described since, its published name may be in the Synonyms table." : "");
+        + (hasPossibleSynonyms ? " If it has been described since, its published name may be listed under Possible synonyms, in the Names section."
+            : hasSynonyms ? " If it has been described since, its published name may be in the Synonyms table." : "");
+    /// The sources of a species from the Catalogue of Life and Wikidata ("Catalogue of Life, Wikidata").
+    public static string ExtraSourcesName(bool inCol, bool inWikidata) => (inCol, inWikidata) switch {
+        (true, true) => "Catalogue of Life, Wikidata",
+        (true, false) => "Catalogue of Life",
+        _ => "Wikidata",
+    };
     /// The status summary of a taxon with no global assessment, some of whose current assessments
     /// have no scope. withNoGlobal: the line comes first, so it starts with "No global assessment.".
     public static string NoScopeLine(int count, bool withNoGlobal) =>

@@ -270,7 +270,7 @@ internal sealed class SiteDbWriter : IDisposable {
         var key = SiteNameKey.Fold(name.Name);
         if (key.Length > 0) {
             _nameKeys.Add((key, taxonId, nameId));
-            if (name.NameType != "common" || name.Language == "en") {
+            if (name.NameType is SiteNameType.Scientific or SiteNameType.Synonym || name.Language == "en") {
                 _wordKeys.Add(key);
             }
         }

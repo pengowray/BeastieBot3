@@ -1,4 +1,5 @@
 using BeastieBot3.CommonNames;
+using BeastieBot3.Taxonomy;
 
 // The species of `site build-db` that are in the Catalogue of Life or Wikidata but are not IUCN
 // taxa, for the group pages' lists (extra_species, extra_overlap, higher_taxon_extra and
@@ -101,6 +102,7 @@ internal sealed class SiteExtraSpeciesBuild {
         progress("Comparing names");
         build.AddWikidataSynonymOverlaps(wikidataOnly);
         build.AddSynonymListOverlaps();
+        build.AddProvisionalAndWorkingNameOverlaps();
         build.AddNameOverlaps();
         build.SetPositions(taxonList);
         build.CountNodes(tree);
@@ -403,6 +405,22 @@ internal sealed class SiteExtraSpeciesBuild {
                 foreach (var (taxon, reason) in matches) {
                     AddOverlap(entry, taxon.TaxonId, null, reason);
                 }
+            }
+        }
+    }
+
+    // An IUCN species with a provisional name whose quoted epithet gives the entry's name, and an IUCN
+    // species named with "_new" after the entry's name (SiteTaxonLinks links the same kinds of name
+    // when the other name is an IUCN taxon).
+    private void AddProvisionalAndWorkingNameOverlaps() {
+        foreach (var ((kingdom, name), taxon) in _iucnSpecies) {
+            var other = SiteTaxonLinks.WorkingNameBase(name) is { } baseName
+                ? (Name: baseName, Reason: OverlapReason.WorkingName)
+                : ProvisionalNames.Read(name, taxon.Genus, taxon.SpeciesEpithet, infraspecific: false).CandidateName is { } candidate
+                    ? (Name: candidate, Reason: OverlapReason.ProvisionalName)
+                    : default;
+            if (other.Name is not null && _byName.TryGetValue((kingdom, other.Name), out var entry)) {
+                AddOverlap(entry, taxon.TaxonId, null, other.Reason);
             }
         }
     }

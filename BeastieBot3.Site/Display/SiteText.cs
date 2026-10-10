@@ -52,6 +52,7 @@ public static partial class SiteText {
         $"Showing the first {shown} of {SiteFormat.Number(n)} taxa. Type more of the name to narrow the search.";
     public const string MatchSynonymLabel = "Matched synonym:";
     public const string MatchCommonNameLabel = "Matched common name:";
+    public const string MatchCodeLabel = "Matched species code:";
     public const string MatchTaxonIdLabel = "Matched IUCN taxon ID:";
     public const string MatchAssessmentIdLabel = "Matched IUCN assessment ID:";
     /// "14871490 (Global, 2016)".
@@ -92,12 +93,27 @@ public static partial class SiteText {
     // Taxon page: arriving from a search
     public static string ArrivedSynonym(string query) => $"“{query}” is a synonym of this taxon.";
     public static string ArrivedCommonName(string query) => $"“{query}” is a common name of this taxon.";
+    public static string ArrivedCode(string query) => $"“{query}” is a species code that IUCN lists for this taxon.";
+    /// The line for a search that found this taxon by a name of this type (NameTypes).
+    public static string Arrived(string? nameType, string query) => nameType switch {
+        "synonym" => ArrivedSynonym(query),
+        "code" => ArrivedCode(query),
+        _ => ArrivedCommonName(query),
+    };
     public static string ArrivedAllResults(string query) => $"See all search results for “{query}”";
 
     // Taxon page: names
     public const string NamesEnglish = "English common names";
     public const string NamesOtherLanguages = "Common names in other languages";
     public const string NamesSynonyms = "Synonyms";
+    public const string NamesPossibleSynonyms = "Possible synonyms";
+    public const string PossibleSynonymsIntro = "Found by comparing names. No source lists these names as synonyms of this taxon, so check each one before treating it as a synonym.";
+    public const string ColPossibleSynonymFoundIn = "Found in";
+    /// The note under a possible synonym: on the provisional name's page, the formal name; on the
+    /// formal name's page, the provisional name.
+    public const string PossibleSynonymFormalName = "May be the formal name of this species, described after IUCN assessed it.";
+    public const string PossibleSynonymProvisionalName = "May be the provisional name IUCN used for this species before it was formally described.";
+    public static string PossibleSynonymIucnSource(long taxonId) => $"IUCN Red List (IUCN id {taxonId})";
     public const string ColName = "Name";
     public const string ColLanguage = "Language";
     public const string ColSource = "Source";

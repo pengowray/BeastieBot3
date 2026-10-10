@@ -14,7 +14,8 @@ using System.Text.RegularExpressions;
 //     ("AtrcanTidenr Bat AfrcanTrdent nosed Bat");
 //   - names cut off at a bracket ("Pholidoscelis polops (Cope", "and grant)");
 //   - glosses: "Da Xiong Mao (meaning large bear cat)", "meaning large bear cat";
-//   - IUCN placeholder names in Wikidata: "Species code: Rc";
+//   - species codes IUCN lists among the English names of seagrasses, copied into the Catalogue of
+//     Life and Wikidata: "Species code: Rc", "Species code Sf" (site build-db keeps the code for search);
 //   - codes in Catalogue of Life names labelled English: four-letter bird banding codes ("TIGR"
 //     for the lowland tiny greenbul) and six-letter USDA plant symbols ("FICVER"), 1,570 names.
 // Assess is pure. The two OCR rules for the scanned Catalogue of Life names and the code rule only
@@ -89,7 +90,7 @@ internal enum CommonNameFlaw {
     UnbalancedBrackets,
     /// <summary>A gloss with no name ("meaning large bear cat").</summary>
     GlossOnly,
-    /// <summary>IUCN's placeholder for a species without a name ("Species code: Rc").</summary>
+    /// <summary>A species code IUCN lists among a seagrass's English names ("Species code: Rc", "Species code Sf").</summary>
     SpeciesCode,
     /// <summary>One word of up to <see cref="CommonNameQuality.MaxCodeLength"/> capital letters, in a
     /// name labelled English: a bird banding code ("TIGR") or a USDA plant symbol ("FICVER").</summary>
@@ -126,7 +127,8 @@ internal static class CommonNameQuality {
     private static readonly Regex ExclamationBrackets = new(@"\s*\([^()]*!\)\s*$", Options);
     private static readonly Regex Whitespace = new(@"\s+", Options);
 
-    private static readonly Regex SpeciesCodePattern = new(@"^species\s+code\s*:", Options | RegexOptions.IgnoreCase);
+    // "Species code: Po", also written "Species code Sf" (IUCN's seagrass assessments).
+    private static readonly Regex SpeciesCodePattern = new(@"^species\s+code\b\s*:?\s*(?<code>.*?)\s*$", Options | RegexOptions.IgnoreCase);
     private static readonly Regex GlossStart = new(@"^meaning\b", Options | RegexOptions.IgnoreCase);
     private static readonly Regex Italics = new(@"''[^']+''", Options);
     // "basket=grass"; not "European pilchard (=sardine)" or "Τσιμούχα = Tsimoucha".
@@ -139,6 +141,18 @@ internal static class CommonNameQuality {
     private static readonly Regex DigitForLetter = new(@"\p{L}\s\d\s(?:\p{Ll}|[-’'])|\p{L}\s[01]\s\p{L}", Options);
 
     /// <summary>
+    /// The code in a species code that IUCN lists among the English names of seagrasses ("Po" for
+    /// "Species code: Po" or "Species code Po"); null for any other name.
+    /// </summary>
+    public static string? SpeciesCode(string? name) {
+        if (string.IsNullOrWhiteSpace(name)) {
+            return null;
+        }
+        var match = SpeciesCodePattern.Match(name.Trim());
+        return match.Success && match.Groups["code"].Length > 0 ? match.Groups["code"].Value : null;
+    }
+
+    /// <summary>
     /// The verdict on <paramref name="name"/> in <paramref name="language"/> (an ISO 639 code,
     /// "en" for English; the two OCR rules only apply to English, so not to a name with no language).
     /// </summary>
@@ -147,6 +161,10 @@ internal static class CommonNameQuality {
             return new CommonNameAssessment(CommonNameVerdict.Junk, name ?? string.Empty, CommonNameFlaw.Empty);
         }
         var english = string.Equals(language, "en", StringComparison.OrdinalIgnoreCase);
+        // Before NeedsCheck: "Species code Sf" has no character that would make it look further.
+        if (SpeciesCodePattern.IsMatch(name.Trim())) {
+            return Junk(name, CommonNameFlaw.SpeciesCode);
+        }
         if (english && IsLetterCode(name.Trim())) {
             return Junk(name, CommonNameFlaw.LetterCode);
         }

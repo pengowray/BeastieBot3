@@ -109,4 +109,9 @@ public static class SiteFormat {
     }
 
     public static bool IsProvisionalName(string scientificName) => ProvisionalMarker(scientificName) is not null;
+
+    /// The name before "_new" in a name IUCN gave a second record of a taxon, made for a national
+    /// assessment ("Balaenoptera edeni" for "Balaenoptera edeni_new"); null for any other name.
+    public static string? WorkingNameBase(string scientificName) =>
+        scientificName.EndsWith("_new", StringComparison.Ordinal) && scientificName.Length > 4 ? scientificName[..^4] : null;
 }

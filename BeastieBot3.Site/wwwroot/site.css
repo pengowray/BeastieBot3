@@ -37,6 +37,11 @@
     --id-mark-6: #1a7f80;
     /* The shadow under an info tip's text (_InfoTip), which is drawn over the page. */
     --tip-shadow: rgba(0, 0, 0, 0.18);
+    /* A problem in IUCN's data ("No scope given"): text at least 4.5:1 on the background, and the
+       border and icon at least 3:1 against the background and --bg. */
+    --problem-fg: #8a1c1c;
+    --problem-bg: #fdecea;
+    --problem-border: #c0392b;
     color-scheme: light;
 }
 
@@ -72,6 +77,9 @@
         --id-tint-6: #152f30;
         --id-mark-6: #4dbfbf;
         --tip-shadow: rgba(0, 0, 0, 0.6);
+        --problem-fg: #f6b9b4;
+        --problem-bg: #3b1d1b;
+        --problem-border: #e5766b;
         color-scheme: dark;
     }
 }
@@ -107,6 +115,9 @@
     --id-tint-6: #152f30;
     --id-mark-6: #4dbfbf;
     --tip-shadow: rgba(0, 0, 0, 0.6);
+    --problem-fg: #f6b9b4;
+    --problem-bg: #3b1d1b;
+    --problem-border: #e5766b;
     color-scheme: dark;
 }
 
@@ -549,6 +560,58 @@ button:hover {
 .match-note {
     font-size: 0.9rem;
     color: var(--muted);
+}
+
+/* "No scope given" (_ScopeLabel): a problem in IUCN's data, so it is marked like one, with an
+   exclamation mark in a circle before the text; its info tip follows. */
+.no-scope {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    padding: 0 0.45em;
+    color: var(--problem-fg);
+    background: var(--problem-bg);
+    border: 1px solid var(--problem-border);
+    border-radius: 3px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.no-scope-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    border-radius: 50%;
+    background: var(--problem-border);
+    color: var(--problem-bg);
+    font-size: 0.8em;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Under the region of a regional table row published under another IUCN record ("_new"). */
+.published-under {
+    margin-top: 0.15rem;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--muted);
+}
+
+/* The taxobox status comparison after the assessment history, and its link to the Citations page. */
+.taxobox-wikitext-link {
+    margin: 0.4rem 0 0;
+}
+
+.names-intro {
+    margin: 0 0 0.4rem;
+    color: var(--muted);
+}
+
+/* A link to one of the Citations page's boxes (#wikitext-speciesbox) leaves room for its label. */
+.wikitext-box textarea {
+    scroll-margin-top: 3rem;
 }
 
 /* History tables: numbered references to the footnotes under the table, the "Reason for change"

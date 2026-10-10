@@ -136,7 +136,26 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   the site. The build of 6 October 2026 has 33 such rows: 28 current ones from the CSV export and
   24 rows from API taxon records that are not in the CSV export (the build summary rows "Stored
   with no scope", which overlap). These are the assessments of the audit site's "Assessments with
-  no geographic scope" page.
+  no geographic scope" page. Their citations and range text show national Red List assessments
+  published to the global Red List: the UAE National Red List Workshops of 2018 and 2019 (6), Greek
+  assessors in 2023 to 2025 (25) and South African assessors in 2013 and 2016 (2). Meta
+  `no_scope_assessment_count` (schema 28) has their number, for the help beside "No scope given".
+- Four of those national assessments are on taxon records that IUCN named with "_new" after the
+  species' name (Balaenoptera edeni_new, Capparis spinosa_new, Ptenopus garrulus_new, Aquilegia
+  ottonis_new). Schema 28 links three of them to the taxon of the name without "_new" (`taxon_link`
+  kind `working-name`, `SiteTaxonLinks.FindInRelease`: same kingdom and kind, exactly one such
+  taxon). Aquilegia ottonis is not an IUCN taxon; its pair with the Catalogue of Life species is an
+  `extra_overlap` row with reason `working-name` (not likely, so a list keeps the CoL species).
+- A provisional name whose quoted tag is a would-be epithet (`ProvisionalNames.Read`, in
+  `Taxonomy/`, shared with the audit's provisional-names report) is linked to the one IUCN taxon of
+  the same kingdom named with that epithet (`taxon_link` kind `provisional-name`: Notogomphus sp.
+  nov. 'gorilla' and Notogomphus gorilla), or paired with the extra species of that name
+  (`extra_overlap` reason `provisional-name`, not likely; 10 in 2026-1). No link when IUCN's
+  synonyms of the provisional taxon name a described species that is not the built name.
+- IUCN lists species codes among the English names of 67 seagrasses ("Species code: Po" for
+  Posidonia oceanica; one is written "Species code Sf"). They are `name` rows of type `code` with
+  the bare code ("Po"), so search finds them; they are not shown among the names, not in
+  `name_word`, and never a strong match for going straight to a group.
 - `assessment.api_not_found` is 1 for an assessment that the IUCN API answered 404 for, although
   the taxon's record lists it (`failed_requests` in the API cache, endpoint `assessment`): 3 rows,
   the audit site's "Historical assessments missing from the API". The rows keep the citation from
@@ -1581,12 +1600,28 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   spacing, has it in brackets after its name ("Catalogue of Life (authority: Phipps, 1774)").
 - A taxon assessed under a working name (`sp. nov.`, `ssp. nov.`, `subsp. nov.`, `var. nov.`;
   `SiteFormat.IsProvisionalName`, 168 taxa in 2026-1) has a line under its heading saying the name
-  is provisional. The site does not look for the published name; the audit site's "Provisional
-  (sp. nov.) names with a described name in another source" does.
+  is provisional. When the build linked it to a taxon or paired it with an extra species named
+  with its quoted epithet, the Names section lists that name under "Possible synonyms" (Name |
+  Found in), and the page of the other taxon lists the provisional name there too
+  (`TaxonNames.PossibleSynonyms`, from `LinkedTaxa` and `ExtraPairs`); the duplicates section
+  leaves those pairs out (`SpeciesModel.DuplicatePairs`). The audit site's "Provisional (sp. nov.)
+  names with a described name in another source" also checks the Catalogue of Life by name.
 - An assessment with no scope is listed in the Regional assessments table as "No scope given"
-  (headed "Assessments with no geographic scope" when every row has no scope). The status summary
-  of a taxon with no global assessment counts regions without it and says how many of its
-  assessments have no scope.
+  (headed "Assessments with no geographic scope" when every row has no scope). The label is marked
+  as a problem in IUCN's data (`_ScopeLabel`, `--problem-*` tokens), in the table and in the status
+  summary, with a help tip that gives the site's count of such assessments and what they appear to
+  be. The status summary of a taxon with no global assessment counts regions without it and says
+  how many of its assessments have no scope.
+- A taxon with a "_new" record (`working-name` link) lists that record's assessments in its
+  Regional assessments table after its own, with "Published under Balaenoptera edeni_new (IUCN id
+  217123456)" under the region (`TaxonPageModel.WorkingNameRows`); on the Citations pages the row
+  links that record's own page. The "_new" record's page has a note under its name with the name
+  without "_new", linked to the IUCN taxon or the extra species. These links are not earlier ids:
+  `TaxonLinkRow.IsEarlierId` (same-name and iucn-synonym) decides what goes into a combined
+  history and the "Earlier assessments" lines.
+- The status in the English Wikipedia taxobox (`TaxoboxStatusCheck`) is in its own section after
+  the assessment history, before the regional table, with a link to the Citations page's
+  "{{Speciesbox}} status parameters" box (`#wikitext-speciesbox`) when that page has the box.
 - An assessment with `api_not_found = 1` has "Not found in the IUCN API" beside its IUCN Red List
   link.
 - Search, `/name/{name}` and `/api/suggest` rank taxa in the release before taxa that are not,

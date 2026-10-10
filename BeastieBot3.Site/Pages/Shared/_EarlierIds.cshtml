@@ -3,7 +3,7 @@
    each old id linked to it (none of them has a global assessment). An old id's own page names the
    taxa it is linked to in its status section instead. *@
 @if (Model.InRelease) {
-    foreach (var link in Model.LinkedTaxa) {
+    foreach (var link in Model.EarlierIds) {
         var earlier = link.Taxon;
         if (link.IsSynonym) {
             var oldName = ScientificNameMarkup.ToHtml(earlier.ScientificName, earlier.SubpopulationName);

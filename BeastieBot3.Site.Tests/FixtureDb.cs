@@ -62,6 +62,27 @@ public static class FixtureDb {
     public const long PlantSubspeciesSibling = 32278;
     public const long NoScopeOnly = 155555;
     public const long NoScopeOnlyLatest = 155555001;
+
+    // Bryde's whale and the second IUCN record IUCN made for a national assessment of it (UAE 2018),
+    // named "Balaenoptera edeni_new" and published with no scope; and Aquilegia ottonis_new, whose
+    // name without "_new" is only a species from the Catalogue of Life and Wikidata (extra species 4).
+    public const long Brydes = 2476;
+    public const long BrydesLatest = 50349178;
+    public const long BrydesNew = 217123456;
+    public const long BrydesNewUae = 280430982;
+    public const long AquilegiaNew = 297325963;
+    public const long AquilegiaNewGreece = 297328394;
+    // A provisional name and the IUCN taxon named with its quoted epithet, and a provisional name whose
+    // epithet names a Wikidata species (extra species 5).
+    public const long NotogomphusProvisional = 184257;
+    public const long NotogomphusProvisionalPanAfrica = 8255920;
+    public const long NotogomphusGorilla = 84380222;
+    public const long NotogomphusGorillaLatest = 84382271;
+    public const long NotogomphusLateralisProvisional = 184241;
+    public const long NotogomphusLateralisProvisionalPanAfrica = 8255800;
+    // A seagrass with an IUCN species code ("Species code: Po" is stored as the code "Po").
+    public const long Posidonia = 153534;
+    public const long PosidoniaLatest = 153534001;
     public const long PlantSubspeciesLatest = 2812588;
     public const long PlantSubspecies1998Nt = 9692717;
     public const long PlantSubspecies1998Vu = 9692643;
@@ -695,6 +716,40 @@ public static class FixtureDb {
         w.Assessment(NoScopeOnlyLatest, NoScopeOnly, "", true, "DD", criteriaVersion: "3.1", year: 2011, date: "2010-06-01");
         w.Name(NoScopeOnly, "Hauffenia sp. nov.", "scientific", null, "iucn");
 
+        w.Taxon(Brydes, "Balaenoptera edeni", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "ARTIODACTYLA", "BALAENOPTERIDAE", "Balaenoptera",
+            authority: "Anderson, 1879", commonEn: "Bryde's whale", latest: BrydesLatest);
+        w.Assessment(BrydesLatest, Brydes, "Global", true, "LC", criteriaVersion: "3.1", year: 2018, date: "2017-12-27");
+        w.Name(Brydes, "Balaenoptera edeni", "scientific", null, "iucn");
+        w.Taxon(BrydesNew, "Balaenoptera edeni_new", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "ARTIODACTYLA", "BALAENOPTERIDAE", "Balaenoptera",
+            authority: "Anderson, 1879");
+        w.Assessment(BrydesNewUae, BrydesNew, "", true, "DD", criteriaVersion: "3.1", year: 2018, date: "2018-09-27");
+        w.Name(BrydesNew, "Balaenoptera edeni_new", "scientific", null, "iucn");
+        w.Name(BrydesNew, "Balaenoptera edeni", "synonym", null, "iucn");
+        w.TaxonLink(BrydesNew, Brydes, "working-name");
+        w.Taxon(AquilegiaNew, "Aquilegia ottonis_new", "species", "PLANTAE", "TRACHEOPHYTA", "MAGNOLIOPSIDA", "RANUNCULALES", "RANUNCULACEAE", "Aquilegia",
+            authority: "Orph. ex Boiss.");
+        w.Assessment(AquilegiaNewGreece, AquilegiaNew, "", true, "DD", criteriaVersion: "3.1", year: 2023, date: "2023-06-12");
+        w.Name(AquilegiaNew, "Aquilegia ottonis_new", "scientific", null, "iucn");
+
+        w.Taxon(NotogomphusProvisional, "Notogomphus sp. nov. 'gorilla'", "species", "ANIMALIA", "ARTHROPODA", "INSECTA", "ODONATA", "GOMPHIDAE", "Notogomphus");
+        w.Assessment(NotogomphusProvisionalPanAfrica, NotogomphusProvisional, "Pan-Africa", true, "DD", criteriaVersion: "3.1", year: 2010, date: "2009-05-01");
+        w.Name(NotogomphusProvisional, "Notogomphus sp. nov. 'gorilla'", "scientific", null, "iucn");
+        w.Taxon(NotogomphusGorilla, "Notogomphus gorilla", "species", "ANIMALIA", "ARTHROPODA", "INSECTA", "ODONATA", "GOMPHIDAE", "Notogomphus",
+            authority: "Dijkstra, 2015", latest: NotogomphusGorillaLatest);
+        w.Assessment(NotogomphusGorillaLatest, NotogomphusGorilla, "Global", true, "LC", criteriaVersion: "3.1", year: 2017, date: "2016-09-28");
+        w.Name(NotogomphusGorilla, "Notogomphus gorilla", "scientific", null, "iucn");
+        w.TaxonLink(NotogomphusProvisional, NotogomphusGorilla, "provisional-name");
+        w.Taxon(NotogomphusLateralisProvisional, "Notogomphus sp. nov. 'lateralis'", "species", "ANIMALIA", "ARTHROPODA", "INSECTA", "ODONATA", "GOMPHIDAE", "Notogomphus");
+        w.Assessment(NotogomphusLateralisProvisionalPanAfrica, NotogomphusLateralisProvisional, "Pan-Africa", true, "DD", criteriaVersion: "3.1", year: 2010, date: "2009-05-01");
+        w.Name(NotogomphusLateralisProvisional, "Notogomphus sp. nov. 'lateralis'", "scientific", null, "iucn");
+
+        w.Taxon(Posidonia, "Posidonia oceanica", "species", "PLANTAE", "TRACHEOPHYTA", "LILIOPSIDA", "ALISMATALES", "POSIDONIACEAE", "Posidonia",
+            authority: "(L.) Delile", commonEn: "Neptune grass", latest: PosidoniaLatest);
+        w.Assessment(PosidoniaLatest, Posidonia, "Global", true, "LC", criteriaVersion: "3.1", year: 2010, date: "2010-01-01");
+        w.Name(Posidonia, "Posidonia oceanica", "scientific", null, "iucn");
+        w.Name(Posidonia, "Neptune Grass", "common", "en", "iucn", preferred: true);
+        w.Name(Posidonia, "Po", "code", null, "iucn");
+
         // A variety, for the kind label.
         w.Taxon(Variety, "Cupressus arizonica var. glabra", "variety", "PLANTAE", "TRACHEOPHYTA", "PINOPSIDA", "PINALES", "CUPRESSACEAE", "Cupressus",
             authority: "(Sudw.) Little", latest: 34010001, infraRank: "var.", infraName: "glabra");
@@ -738,6 +793,12 @@ public static class FixtureDb {
         w.ExtraSpecies(2, 1, "Ursus arctos", "COLAR", null, null, null, 7, 0, authority: "Linnaeus, 1758");
         w.ExtraSpecies(3, 2, "Ursus maritima", null, 1003, null, null, 7, 1);
         w.ExtraOverlap(3, PolarBear, null, "gender-ending", likely: true);
+        // The species named without "_new" and the one named with the quoted epithet (in Abronia and
+        // Lipotes, which no test lists).
+        w.ExtraSpecies(4, 3, "Aquilegia ottonis", "FZTZ", 15365494, null, "Aquilegia ottonis", 10, 2, authority: "Orph. ex Boiss.");
+        w.ExtraOverlap(4, AquilegiaNew, null, "working-name", likely: false);
+        w.ExtraSpecies(5, 2, "Notogomphus lateralis", null, 10337705, null, null, 12, 30);
+        w.ExtraOverlap(5, NotogomphusLateralisProvisional, null, "provisional-name", likely: false);
         foreach (var id in Enumerable.Range(1, 7)) {
             w.ExtraCounts(id, 7, col: 1, wikidata: 1, both: 1);
             w.ExtraSplit(id, sources: 1, underFamily: false, iucnLikely: false, 1);
@@ -779,9 +840,10 @@ public static class FixtureDb {
         w.Meta(SiteDbSchema.MetaKeys.WikidataItemModel, wikidataItemModelJson);
         w.Meta(SiteDbSchema.MetaKeys.TaxonCount, w.TaxonCount.ToString(CultureInfo.InvariantCulture));
         w.Meta(SiteDbSchema.MetaKeys.AssessmentCount, w.AssessmentCount.ToString(CultureInfo.InvariantCulture));
+        w.Meta(SiteDbSchema.MetaKeys.NoScopeAssessmentCount, w.NoScopeAssessmentCount.ToString(CultureInfo.InvariantCulture));
     }
 
-    public static int GlobalTaxonCount => 20 + FillerCount;
+    public static int GlobalTaxonCount => 23 + FillerCount;
 
     public const string GbifCitation =
         "IUCN (2026). The IUCN Red List of Threatened Species. Version 2026-1. https://www.iucnredlist.org. Downloaded on 2026-07-28. https://doi.org/10.15468/0qnb58";
@@ -889,6 +951,7 @@ public static class FixtureDb {
         }
         public int TaxonCount { get; private set; }
         public int AssessmentCount { get; private set; }
+        public int NoScopeAssessmentCount { get; private set; }
 
         public void Meta(string key, string value) => Run("INSERT INTO meta(key, value) VALUES (@a, @b)", key, value);
 
@@ -936,6 +999,9 @@ public static class FixtureDb {
             string? wikidataItemTitles = null, string? wikidataItemLabelEn = null, long? wikidataItemAssessment = null,
             bool? taxonomicNotes = null, bool apiNotFound = false) {
             AssessmentCount++;
+            if (scope.Length == 0) {
+                NoScopeAssessmentCount++;
+            }
             Run("""
                 INSERT INTO assessment(assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                     possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json,

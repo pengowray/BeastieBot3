@@ -471,7 +471,9 @@ The common names store (`common_names.sqlite`) contains:
 When aggregating common names, certain entries are filtered out:
 
 ### IUCN Source
-- **Species codes**: Entries matching "Species code: XX" pattern (placeholder names)
+- **Species codes**: Entries matching "Species code: XX" (also "Species code XX", without the
+  colon): the seagrass species codes IUCN lists among the English names. `site build-db` keeps
+  the code for search only (`name_type` `code`).
 - **Scientific names**: Entries that match the taxon's actual scientific name parts (genus, species, infraspecific epithet)
 
 ### Wikipedia titles, taxobox names and Wikidata labels
@@ -533,7 +535,7 @@ the ambiguity rule never use a junk name, and use a repairable name in its repai
   OCR errors from scanned books in the Catalogue of Life (a backslash inside a name, or, in a name
   labelled English, a digit standing for a letter or capitals inside words), names cut off at a
   bracket ("Pholidoscelis polops (Cope"), a gloss with no name ("meaning large bear cat"), and
-  IUCN's placeholder "Species code: X".
+  IUCN's seagrass species codes ("Species code: X", also written without the colon).
 - **Repairable**: a good name with extra text, such as a citation template after the name ("Sunda
   slow loris{sfn|Groves|2005|p=122}"), the next infobox parameter, a footnote marker, an author and
   year in brackets, or a translation in brackets ("Da Xiong Mao (meaning large bear cat)"). The

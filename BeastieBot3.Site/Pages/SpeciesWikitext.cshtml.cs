@@ -122,10 +122,9 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
     /// The "Show wikitext" link of a combined history row under another IUCN id: that id's wikitext
     /// page with the assessment and the current options. The ref name goes along only when the
     /// visitor chose it, as on this page; otherwise the default that page gives the assessment applies.
-    public override string OtherIdOptionsUrl(CombinedRow row) {
-        var other = row.Id.Taxon;
-        var targetDefault = DefaultRefNames.For(row.Assessment, other.InRelease ? other.LatestGlobalAssessmentId : null, row.Id.Global);
-        return PathFor(other.TaxonId, Options.ToQuery(row.Assessment.AssessmentId, targetDefault));
+    public override string OtherTaxonOptionsUrl(TaxonRow other, AssessmentRow assessment, IReadOnlyList<AssessmentRow> otherGlobal) {
+        var targetDefault = DefaultRefNames.For(assessment, other.InRelease ? other.LatestGlobalAssessmentId : null, otherGlobal);
+        return PathFor(other.TaxonId, Options.ToQuery(assessment.AssessmentId, targetDefault));
     }
 
     public override string ToolColumnHeading => SiteText.ColWikitext;

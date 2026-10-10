@@ -112,7 +112,7 @@ public sealed partial class SiteQueries {
     /// 3. any other name whose words start with the words typed (name_fts).
     /// Within each group taxa in the release come before taxa that are not (no current assessment);
     /// then a scientific name beats an English common name, which beats a common name in another
-    /// language, which beats a synonym, and in group 1 the taxon's English name
+    /// language, which beats a synonym, which beats a species code, and in group 1 the taxon's English name
     /// (taxon.common_name_en) beats its other English names; species come before infraspecific taxa
     /// and subpopulations; then shorter names first.
     /// With exactOnly, only group 1 is searched. TotalTaxa is counted only when countAll is set and
@@ -172,13 +172,14 @@ public sealed partial class SiteQueries {
                                               WHEN h.name_id NOT IN (SELECT name_id FROM name_key WHERE key = @key) THEN 2
                                               WHEN site_fold(t.common_name_en) = @key THEN 1
                                               ELSE 2 END
+                                     WHEN 'code' THEN 5
                                      ELSE 4 END * 10000
                                + CASE t.kind WHEN 'species' THEN 0 ELSE 1 END * 1000
                                + CASE WHEN LENGTH(h.name) > 999 THEN 999 ELSE LENGTH(h.name) END) AS score,
                            h.name, h.name_type, h.language,
                            -- SUM, not MAX: with MIN the only min() or max() aggregate, SQLite takes the bare
                            -- columns (h.name, h.name_type, h.language) from the row with the lowest score.
-                           SUM(h.name_type <> 'common' AND h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)) > 0 AS exact_not_common,
+                           SUM(h.name_type IN ('scientific', 'synonym') AND h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)) > 0 AS exact_not_common,
                            SUM(h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)
                                AND (h.name_type <> 'common' OR COALESCE(h.language, '') IN ('en', 'eng') OR COALESCE(h.language, '') LIKE 'en-%')) > 0
                                AS exact_not_other_language

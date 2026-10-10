@@ -89,13 +89,20 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
                 "every other assessment row in the export has a scope. The rest are historical assessments, which the export does not include, so they are visible only through the API.\n\n" +
                 "Until shortly before this site release, the API returned HTTP 500 (a server error) for every one of these records, and they could not be read at all. " +
                 "They now return normally, with the scope still blank. On the species page at iucnredlist.org, the region line for these assessments displays as a bare \"&\" with no region text.\n\n" +
-                "A few of the affected taxa have a scientific name ending in \"_new\" (Balaenoptera edeni_new, for example), which suggests working or draft records were published by accident.\n\n" +
+                "Most of these assessments appear to be national assessments published to the global Red List with no scope. " +
+                "Their citations credit the UAE National Red List Workshop (2018 and 2019), Greek assessors (2023 to 2025) or South African assessors (2013 and 2016), " +
+                "and their range text describes the species within one country (\"A widespread and common species in Greece\").\n\n" +
+                "Four taxa have a scientific name ending in \"_new\": Balaenoptera edeni_new, Capparis spinosa_new, Ptenopus garrulus_new and Aquilegia ottonis_new. " +
+                "Each of these taxon records was made for one of the national assessments. " +
+                "Three of the four names without \"_new\" are taxa already on the Red List, so each of those three species now has two taxon records.\n\n" +
                 "### Why it matters\n\n" +
                 "Any data consumer that filters assessments by scope silently drops these records, and filtering to \"Global\" is the standard first step, including for anyone reproducing the Red List's own summary statistics. " +
                 "For some taxa the blank-scope record is the only assessment, or the only current one, so the taxon has no usable scope anywhere.\n\n" +
                 "### Suggestion\n\n" +
-                "Add the correct scope to each record, and add a validation rule so an assessment cannot be published without one. " +
-                "For the records whose scientific name ends in \"_new\", check whether they were meant to be published at all.",
+                "Check whether national assessments were meant to be published on the global Red List. " +
+                "If they are kept on the Red List, give each one its geographic scope, and add a validation rule so an assessment cannot be published without one. " +
+                "Publish the assessments of Balaenoptera edeni_new, Capparis spinosa_new and Ptenopus garrulus_new under the existing records of Balaenoptera edeni, Capparis spinosa and Ptenopus garrulus. " +
+                "Aquilegia ottonis has no other record.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.Custom("authority", "Authority", AuditColumnType.Code),
@@ -315,7 +322,7 @@ WHERE a.scopes IS NULL OR TRIM(a.scopes) = ''";
             finding.Notes.Add("The taxon has no other assessment with a scope.");
         }
         if (r.ScientificName?.EndsWith("_new", StringComparison.Ordinal) == true) {
-            finding.Notes.Add("The scientific name ends in \"_new\", which looks like a draft record.");
+            finding.Notes.Add("The scientific name ends in \"_new\": a taxon record that appears to have been made for this national assessment.");
         }
         return finding;
     }

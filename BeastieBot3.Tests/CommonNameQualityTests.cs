@@ -46,9 +46,11 @@ public class CommonNameQualityTests {
     [InlineData("Grewia crenata (J.R.Forst. & G.Forst.) Schinz & Guillaumin (1921), non (Unger) Heer (1857)", nameof(CommonNameFlaw.AuthorCitation))]
     [InlineData("Paradoxa confirmata Fernandes & Rolán, 1990", nameof(CommonNameFlaw.AuthorCitation))]
     [InlineData("Phragmites vallatoria [(L.) Veldkamp (1992)]", nameof(CommonNameFlaw.AuthorCitation))]
-    // Wikidata: IUCN's placeholder.
+    // IUCN's seagrass species codes, copied into Wikidata and the Catalogue of Life; IUCN also
+    // writes one without the colon.
     [InlineData("Species code: Rc", nameof(CommonNameFlaw.SpeciesCode))]
     [InlineData("Species Code: Ha", nameof(CommonNameFlaw.SpeciesCode))]
+    [InlineData("Species code Sf", nameof(CommonNameFlaw.SpeciesCode))]
     // A stray equals sign.
     [InlineData("basket=grass", nameof(CommonNameFlaw.WikiMarkup))]
     // Nothing left.
@@ -221,4 +223,14 @@ public class CommonNameQualityTests {
         Assert.Equal(CommonNameVerdict.Good, result.Verdict);
         Assert.Equal(" Polar bear ", result.Name);
     }
+
+    [Theory]
+    [InlineData("Species code: Po", "Po")]
+    [InlineData("Species code Sf", "Sf")]
+    [InlineData(" species  code :  Hy ", "Hy")]
+    [InlineData("Species code:", null)]
+    [InlineData("Neptune Grass", null)]
+    [InlineData("Species codes of seagrasses", null)]
+    public void SpeciesCode_IsTheCodeAfterTheWords(string name, string? code) =>
+        Assert.Equal(code, CommonNameQuality.SpeciesCode(name));
 }

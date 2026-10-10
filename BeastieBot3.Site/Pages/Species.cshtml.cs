@@ -2,6 +2,7 @@ using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Display;
+using BeastieBot3.Site.Lists;
 using BeastieBot3.Site.Web;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -28,6 +29,19 @@ public sealed class SpeciesModel : TaxonPageModel {
 
     /// Species from the Catalogue of Life and Wikidata that may be the same as this taxon.
     public IReadOnlyList<ExtraPairRow> ExtraPairs { get; private set; } = [];
+
+    /// ExtraPairs without the ones the page shows elsewhere: a provisional name's pair under Possible
+    /// synonyms, and a "_new" record's pair in the note under the name.
+    public IReadOnlyList<ExtraPairRow> DuplicatePairs =>
+        ExtraPairs.Where(p => p.Reason is not (ExtraOverlapReasons.ProvisionalName or ExtraOverlapReasons.WorkingName)).ToList();
+
+    /// For a taxon IUCN named with "_new" after a name ("Aquilegia ottonis_new"): the name without
+    /// it. Null for any other name.
+    public string? WorkingNameBase { get; private set; }
+
+    /// For such a taxon when IUCN has no taxon with the name without "_new": the species from the
+    /// Catalogue of Life or Wikidata with that name, or null.
+    public ExtraSpeciesRow? WorkingNameExtra { get; private set; }
     /// The groups the taxon is in, kingdom first, with the Catalogue of Life groups between IUCN's
     /// ranks. Empty for a taxon not in the release, whose page lists its ranks as IUCN gave them.
     public IReadOnlyList<GroupRow> Classification { get; private set; } = [];
@@ -188,6 +202,10 @@ public sealed class SpeciesModel : TaxonPageModel {
         OtherStatuses = _queries.GetOtherStatuses(taxon.TaxonId);
         OtherStatusSection = OtherStatuses.Count == 0 ? null : Display.OtherStatusSection.Build(OtherStatuses, taxon.Kind, OtherStatusSourceDate);
         ExtraPairs = _queries.GetExtraOverlapsOfTaxon(taxon.TaxonId);
+        WorkingNameBase = SiteFormat.WorkingNameBase(taxon.ScientificName);
+        WorkingNameExtra = WorkingNameOf is null
+            ? ExtraPairs.FirstOrDefault(p => p.Reason == ExtraOverlapReasons.WorkingName)?.Extra
+            : null;
         var externalIds = _queries.GetExternalIds(taxon.TaxonId);
         (CommonsGallery, CommonsCategory) = BeastieBot3.Shared.SiteData.ExternalDatabases.Commons(externalIds);
         ExternalLinks = BeastieBot3.Shared.SiteData.ExternalDatabases.Links(externalIds);
@@ -195,12 +213,23 @@ public sealed class SpeciesModel : TaxonPageModel {
             StatusParts = PartsOf(status);
             StatusCredits = CreditsView.Build(_queries.GetCredits(status.AssessmentId));
         }
-        Names = TaxonNames.Build(_queries.GetNames(taxon.TaxonId), taxon.CommonNameEn);
+        Names = TaxonNames.Build(_queries.GetNames(taxon.TaxonId), taxon.CommonNameEn) with { PossibleSynonyms = PossibleSynonyms() };
         SubspeciesList = SubspeciesRows.Load(_queries, taxon);
         LoadRelatedTaxa();
         LoadArrival(q);
         ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, $"/species/{taxon.TaxonId}");
         return Page();
+    }
+
+    // The other IUCN taxa linked by a provisional name, then the species from the Catalogue of Life
+    // and Wikidata named with this taxon's quoted epithet.
+    private List<PossibleSynonym> PossibleSynonyms() {
+        var list = LinkedTaxa.Where(l => l.IsProvisionalName)
+            .Select(l => new PossibleSynonym(l.Taxon.ScientificName, $"/species/{l.Taxon.TaxonId}", IsProvisional: !l.IsFrom, l.Taxon.TaxonId))
+            .ToList();
+        list.AddRange(ExtraPairs.Where(p => p.Reason == ExtraOverlapReasons.ProvisionalName && p.Extra is not null)
+            .Select(p => new PossibleSynonym(p.Extra!.ScientificName, SiteUrls.Extra(p.Extra), IsProvisional: false, null, p.Extra.InCol, p.Extra.InWikidata)));
+        return list;
     }
 
     private void LoadRelatedTaxa() {
@@ -224,7 +253,7 @@ public sealed class SpeciesModel : TaxonPageModel {
         // Only say "X is a synonym of this taxon" when it is one, so the line cannot be used to put
         // arbitrary text on the page.
         var type = _queries.NameTypeFor(Taxon!.TaxonId, text);
-        if (type is NameTypes.Synonym or NameTypes.Common) {
+        if (type is NameTypes.Synonym or NameTypes.Common or NameTypes.Code) {
             ArrivedQuery = text;
             ArrivedNameType = type;
             ArrivedNameIsShown = type == NameTypes.Common && Taxon.CommonNameEn is not null

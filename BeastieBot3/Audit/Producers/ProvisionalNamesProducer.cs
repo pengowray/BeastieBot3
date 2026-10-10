@@ -9,6 +9,7 @@ using BeastieBot3.Audit.Model;
 using BeastieBot3.Audit.Producers.ColCrosscheck;
 using BeastieBot3.Col;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Taxonomy;
 
 // Provisional (undescribed) names that another catalogue now records as a described species.
 //

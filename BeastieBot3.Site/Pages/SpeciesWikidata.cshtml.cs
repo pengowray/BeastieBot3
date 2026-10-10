@@ -57,7 +57,8 @@ public sealed class SpeciesWikidataModel : AssessmentToolModel {
     public override string OptionsUrl(long? assessmentId) =>
         WikidataPath(Taxon?.TaxonId ?? RequestedTaxonId, assessmentId is { } id ? $"?assessment={id}" : "");
 
-    public override string OtherIdOptionsUrl(CombinedRow row) => WikidataPath(row.Id.TaxonId, $"?assessment={row.Assessment.AssessmentId}");
+    public override string OtherTaxonOptionsUrl(TaxonRow other, AssessmentRow assessment, IReadOnlyList<AssessmentRow> otherGlobal) =>
+        WikidataPath(other.TaxonId, $"?assessment={assessment.AssessmentId}");
 
     public override string ToolColumnHeading => SiteText.ColWikidata;
     public override string ShowLinkText => SiteText.ShowWikidata;

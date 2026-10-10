@@ -84,7 +84,11 @@ public abstract class AssessmentToolModel : TaxonPageModel {
     public abstract string OptionsUrl(long? assessmentId);
 
     /// This kind of page of another IUCN id for an assessment of a combined history row.
-    public abstract string OtherIdOptionsUrl(CombinedRow row);
+    public string OtherIdOptionsUrl(CombinedRow row) => OtherTaxonOptionsUrl(row.Id.Taxon, row.Assessment, row.Id.Global);
+
+    /// This kind of page of another IUCN id for one of its assessments. otherGlobal: that taxon's
+    /// global assessments, newest first.
+    public abstract string OtherTaxonOptionsUrl(TaxonRow other, AssessmentRow assessment, IReadOnlyList<AssessmentRow> otherGlobal);
 
     /// The heading of the assessment tables' column that links each assessment's output ("Wikitext").
     public abstract string ToolColumnHeading { get; }
@@ -101,6 +105,8 @@ public abstract class AssessmentToolModel : TaxonPageModel {
 
     /// The key of a combined history row's link under another IUCN id, which cannot be one of this
     /// page's own keys (an assessment id, or "default").
-    public static string OtherIdOptionsLinkKey(CombinedRow row) =>
-        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{row.Id.TaxonId}-{row.Assessment.AssessmentId}");
+    public static string OtherIdOptionsLinkKey(CombinedRow row) => OtherIdOptionsLinkKey(row.Id.TaxonId, row.Assessment.AssessmentId);
+
+    public static string OtherIdOptionsLinkKey(long taxonId, long assessmentId) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{taxonId}-{assessmentId}");
 }

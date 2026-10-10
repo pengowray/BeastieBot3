@@ -1,7 +1,9 @@
 @model TaxonPageModel
 @* The taxon's assessment tables: the global assessment history (or the combined history of the
-   linked IUCN ids) and the latest assessment in each region. On the wikitext page they have a
-   column that picks the assessment (AssessmentToolModel: "Show wikitext" on the Wikipedia page). *@
+   linked IUCN ids) and the latest assessment in each region, with the assessments IUCN published
+   under a "_new" record of the taxon after the taxon's own. On the wikitext page they have a column
+   that picks the assessment (AssessmentToolModel: "Show wikitext" on the Wikipedia page). On the
+   taxon page, the taxobox status comparison comes between the two tables. *@
 @{
     var tool = Model as AssessmentToolModel;
 }
@@ -59,16 +61,27 @@
         <partial name="_HistoryTableNotes" model="historyNotes" />
         <partial name="_EarlierIds" model="Model" />
     </section>
-} else if (Model.InRelease && Model.LinkedTaxa.Count > 0) {
+} else if (Model.InRelease && Model.EarlierIds.Count > 0) {
     <section class="history" aria-labelledby="history-heading">
         <h2 id="history-heading">@SiteText.HeadingHistory</h2>
         <partial name="_EarlierIds" model="Model" />
     </section>
 }
 
-@if (Model.RegionalRows.Count > 0) {
+@if (tool is null && Model.TaxoboxCheck is { } taxoboxCheck) {
+    <section class="taxobox-check" id="taxobox-status" aria-labelledby="taxobox-status-heading">
+        <h2 id="taxobox-status-heading">@SiteText.TaxoboxStatusHeading</h2>
+        <div class="taxobox-status"><partial name="_TaxoboxStatus" model="@(new TaxoboxStatusView(taxoboxCheck, Model.LatestGlobal))" /></div>
+        @if (Model.TaxoboxWikitextUrl is { } taxoboxUrl) {
+            <p class="taxobox-wikitext-link">@SiteText.TaxoboxWikitextBefore<a href="@taxoboxUrl">@Model.TaxoboxWikitextLabel</a>@SiteText.TaxoboxWikitextAfter</p>
+        }
+    </section>
+}
+
+@if (Model.RegionalRows.Count > 0 || Model.WorkingNameRows.Count > 0) {
+    var allNoScope = Model.RegionalRows.All(r => r.HasNoScope) && Model.WorkingNameRows.All(r => r.Assessment.HasNoScope);
     <section class="regional" id="regional" aria-labelledby="regional-heading">
-        <h2 id="regional-heading">@(Model.RegionalRows.All(r => r.HasNoScope) ? SiteText.HeadingNoScope : SiteText.HeadingRegional)</h2>
+        <h2 id="regional-heading">@(allNoScope ? SiteText.HeadingNoScope : SiteText.HeadingRegional)</h2>
         <div class="table-scroll">
             <table>
                 <thead>
@@ -89,7 +102,7 @@
                         var isDefault = a.AssessmentId == Model.StatusAssessment?.AssessmentId;
                         var versionNote = Model.VersionNote(a);
                         <tr class="@(isShown ? "shown" : null)">
-                            <th scope="row">@SiteText.RegionLabel(a.Scope)</th>
+                            <th scope="row"><partial name="_ScopeLabel" model="@(new ScopeLabelModel(a.Scope, a.AssessmentId, "regional", Model.NoScopeHelp))" /></th>
                             <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
                             <td>@a.Criteria</td>
                             <td>@a.YearPublished@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</td>
@@ -100,6 +113,26 @@
                                     } else {
                                         <a data-options-link="@AssessmentToolModel.OptionsLinkKey(isDefault ? null : a.AssessmentId)" href="@(tool.OptionsUrl(isDefault ? null : a.AssessmentId))#wikitext" aria-label="@tool.ShowLinkAccessible(a.Scope, a.YearPublished, versionNote)">@tool.ShowLinkText</a>
                                     }
+                                </td>
+                            }
+                            <td><partial name="_IucnAssessmentLink" model="a" /></td>
+                        </tr>
+                    }
+                    @foreach (var linked in Model.WorkingNameRows) {
+                        var a = linked.Assessment;
+                        var other = linked.Taxon;
+                        var versionNote = Model.VersionNote(a);
+                        <tr class="published-under-row">
+                            <th scope="row">
+                                <partial name="_ScopeLabel" model="@(new ScopeLabelModel(a.Scope, a.AssessmentId, "regional", Model.NoScopeHelp))" />
+                                <div class="published-under">@SiteText.PublishedUnderBefore<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(other.ScientificName, other.SubpopulationName))</span>@SiteText.PublishedUnderMiddle<a href="/species/@other.TaxonId">@SiteText.IucnIdLink(other.TaxonId)</a>@SiteText.PublishedUnderAfter</div>
+                            </th>
+                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
+                            <td>@a.Criteria</td>
+                            <td>@a.YearPublished@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</td>
+                            @if (tool is not null) {
+                                <td>
+                                    <a data-options-link="@AssessmentToolModel.OtherIdOptionsLinkKey(other.TaxonId, a.AssessmentId)" href="@(tool.OtherTaxonOptionsUrl(other, a, []))#wikitext" aria-label="@tool.ShowOtherIdAccessible(other.TaxonId, a.YearPublished, versionNote)">@tool.ShowOtherIdText(other.TaxonId)</a>
                                 </td>
                             }
                             <td><partial name="_IucnAssessmentLink" model="a" /></td>

@@ -35,8 +35,22 @@ public abstract class TaxonPageModel : PageModel {
 
     /// The taxa linked to this one in taxon_link. For a taxon not in the release: the taxa in the
     /// release with its name, or that IUCN lists its name as a synonym of. For a taxon in the
-    /// release: the taxa not in the release (old ids) linked to it in those ways.
+    /// release: the taxa not in the release (old ids) linked to it in those ways, and the taxa in the
+    /// release linked to it by a working name or a provisional name.
     public IReadOnlyList<TaxonLinkRow> LinkedTaxa { get; private set; } = [];
+
+    /// The old IUCN ids linked to this taxon, or for an old id the taxa in the release it is linked
+    /// to (LinkedTaxa of the same-name and iucn-synonym kinds).
+    public IReadOnlyList<TaxonLinkRow> EarlierIds { get; private set; } = [];
+
+    /// For a taxon IUCN named with "_new" after the name of another taxon in the release
+    /// ("Balaenoptera edeni_new"): that taxon. Null otherwise.
+    public TaxonRow? WorkingNameOf { get; private set; }
+
+    /// For a taxon in the release: the assessments IUCN published under a "_new" name of it
+    /// (Balaenoptera edeni_new for Balaenoptera edeni), the latest in each scope of each such record.
+    /// They are listed in the regional table after the taxon's own.
+    public IReadOnlyList<LinkedAssessment> WorkingNameRows { get; private set; } = [];
 
     /// The global assessments of this taxon and of the linked taxa in one table, shown in place of
     /// the assessment history; null when no linked taxon has a global assessment.
@@ -77,6 +91,15 @@ public abstract class TaxonPageModel : PageModel {
     /// global assessment.
     public TaxoboxStatusCheck? TaxoboxCheck { get; private set; }
 
+    /// The taxon's Citations page at its box of taxobox status parameters for the latest global
+    /// assessment, and that box's label ("{{Speciesbox}} status parameters"); null when that page has
+    /// no such box (no citation parts, or a category the taxobox has no code for).
+    public string? TaxoboxWikitextUrl { get; private set; }
+    public string? TaxoboxWikitextLabel { get; private set; }
+
+    /// The text of the help beside "No scope given", with how many of the site's assessments have no scope.
+    public string NoScopeHelp => SiteText.NoScopeHelp(_db.Snapshot?.NoScopeAssessmentCount, _db.Snapshot?.AssessmentCount);
+
     public IReadOnlyList<AssessmentRow> GlobalHistory { get; private set; } = [];
     /// The rows of the Regional assessments table. For a taxon in the release, the latest assessment
     /// in each region. For a taxon not in the release, none is current, so every regional assessment,
@@ -104,12 +127,23 @@ public abstract class TaxonPageModel : PageModel {
             Parent = _queries.GetSummary(parentId);
         }
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
+        EarlierIds = LinkedTaxa.Where(l => l.IsEarlierId).ToList();
+        WorkingNameOf = LinkedTaxa.FirstOrDefault(l => l.IsWorkingName && l.IsFrom)?.Taxon;
         GreenStatus = _queries.GetGreenStatus(Taxon.TaxonId);
         LoadAssessments();
+        WorkingNameRows = LinkedTaxa.Where(l => l.IsWorkingName && !l.IsFrom)
+            .SelectMany(l => LatestPerScope(_queries.GetAssessments(l.Taxon.TaxonId).Where(a => !a.IsGlobal))
+                .Select(a => new LinkedAssessment(a, l.Taxon)))
+            .ToList();
         TaxoboxCheck = LatestGlobal is { } latest && Taxon.EnwikiTitle is not null && _queries.GetEnwikiTaxoboxStatus(Taxon.TaxonId) is { } taxobox
             ? TaxoboxStatusCheck.For(taxobox, latest, GlobalHistory)
             : null;
-        Combined = CombinedHistory.Build(Taxon, LinkedTaxa,
+        // The same conditions as the box on the Citations page (SpeciesWikitextModel.BuildWikitext).
+        if (LatestGlobal is { } latestGlobal && PartsOf(latestGlobal) is not null && IucnCategories.HasTaxoboxCode(latestGlobal)) {
+            TaxoboxWikitextUrl = AssessmentToolModel.WikipediaPath(Taxon.TaxonId) + "#wikitext-speciesbox";
+            TaxoboxWikitextLabel = TaxoboxTemplate.For(Taxon.Kind, Taxon.Kingdom).Label;
+        }
+        Combined = CombinedHistory.Build(Taxon, EarlierIds,
             id => id == Taxon.TaxonId ? Assessments : _queries.GetAssessments(id), _queries.GetTaxonomicNotesFlags);
         var historyTaxa = Combined?.Ids.Select(i => i.TaxonId).ToList() ?? [Taxon.TaxonId];
         ChangeReasons = _queries.GetCategoryChanges(historyTaxa);
@@ -128,12 +162,7 @@ public abstract class TaxonPageModel : PageModel {
 
         var regional = all.Where(a => !a.IsGlobal);
         RegionalRows = Taxon.InRelease
-            // Latest per region: the row flagged latest, or the newest one when none is.
-            ? regional
-                .GroupBy(a => a.Scope.Trim(), StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.FirstOrDefault(a => a.IsLatest) ?? g.First())
-                .OrderBy(a => a.Scope.Trim(), StringComparer.OrdinalIgnoreCase)
-                .ToList()
+            ? LatestPerScope(regional)
             : regional
                 .OrderBy(a => a.Scope.Trim(), StringComparer.OrdinalIgnoreCase)
                 .ThenByDescending(a => a.YearPublished ?? 0)
@@ -147,6 +176,14 @@ public abstract class TaxonPageModel : PageModel {
             .ThenByDescending(a => a.AssessmentDate)
             .FirstOrDefault();
     }
+
+    // The latest assessment in each region: the row flagged latest, or the newest one when none is.
+    // assessments: newest first (SiteQueries.GetAssessments).
+    private static List<AssessmentRow> LatestPerScope(IEnumerable<AssessmentRow> assessments) => assessments
+        .GroupBy(a => a.Scope.Trim(), StringComparer.OrdinalIgnoreCase)
+        .Select(g => g.FirstOrDefault(a => a.IsLatest) ?? g.First())
+        .OrderBy(a => a.Scope.Trim(), StringComparer.OrdinalIgnoreCase)
+        .ToList();
 
     // citation_json written by `site build-db`. Unknown properties are ignored, so nothing but the
     // citation parts can reach the page.

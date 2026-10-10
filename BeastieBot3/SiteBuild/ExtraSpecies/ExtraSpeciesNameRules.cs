@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using BeastieBot3.Shared.SiteData;
 
 // The name tests that decide whether a species from the Catalogue of Life or Wikidata may be the
 // same as an IUCN taxon or as a species from the other source, when no id links them (see
@@ -23,6 +24,13 @@ internal static class OverlapReason {
     /// Same epithet in another genus of the same family, with the same author and year, or an
     /// epithet no other species in the family has.
     public const string OtherGenus = "other-genus";
+    /// The IUCN taxon has a provisional name ("Notogomphus sp. nov. 'lateralis'") and the entry's name
+    /// is the one built from its quoted epithet ("Notogomphus lateralis"): it may have been described since.
+    public const string ProvisionalName = ExtraOverlapReasons.ProvisionalName;
+    /// The IUCN taxon's name is the entry's name with "_new" after it ("Aquilegia ottonis_new"), a
+    /// record IUCN made for a national assessment. Not likely: the list keeps the entry, because the
+    /// IUCN taxon has no global assessment.
+    public const string WorkingName = ExtraOverlapReasons.WorkingName;
 
     public static bool IsLikely(string reason) =>
         reason is IucnSynonym or ColSynonym or WikidataSynonym or GenderEnding;

@@ -36,8 +36,11 @@
   title: Changes since 2025-2
   markdown: |
     Release 2025-2 had 23 of these records; 2026-1 has 52, so new ones are still being created.
-    Several of the new ones have scientific names ending in `_new`, which suggests draft records
-    that reached the published dataset.
+    Most of the assessments with no scope appear to be national assessments published to the global
+    Red List: their citations credit the UAE National Red List Workshop or Greek or South African
+    assessors, and their range text describes the species within one country. The four taxa whose
+    names end in `_new` (Balaenoptera edeni_new, for example) are records made for these national
+    assessments; for three of them, the name without `_new` is a taxon already on the Red List.
 
     Until late August 2026 the API returned HTTP 500 (Internal Server Error) for every one of these
     assessments. Between 24 August and 1 September 2026 the API began serving them normally. The

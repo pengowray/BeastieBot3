@@ -19,6 +19,8 @@ internal static class SiteNameType {
     public const string Scientific = "scientific";
     public const string Common = "common";
     public const string Synonym = "synonym";
+    /// A species code IUCN lists among the English names ("Species code: Po"), stored as the code ("Po").
+    public const string Code = "code";
 }
 
 internal static class SiteNameSource {

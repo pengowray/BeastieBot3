@@ -496,8 +496,13 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("No global assessment. IUCN published the current assessment of this taxon with no geographic scope.", text);
         Assert.DoesNotContain("This taxon has been assessed in", text);
         Assert.Contains("<h2 id=\"regional-heading\">Assessments with no geographic scope</h2>", html);
-        Assert.Contains("<th scope=\"row\">No scope given</th>", html);
-        Assert.Contains("Region No scope given", text);
+        // Marked as a problem, with a help tip in each place (ids by place and assessment).
+        Assert.Contains("<span class=\"no-scope\"><span class=\"no-scope-icon\" aria-hidden=\"true\">!</span>No scope given</span>", html);
+        Assert.Contains($"popovertarget=\"tip-no-scope-regional-{FixtureDb.NoScopeOnlyLatest}\"", html);
+        Assert.Contains($"popovertarget=\"tip-no-scope-status-{FixtureDb.NoScopeOnlyLatest}\"", html);
+        Assert.Contains("Region !No scope given", text);
+        // The help says how many of the site's assessments have no scope.
+        Assert.Contains(" 3 of the ", text);
         Assert.Contains("Wikitext for the assessment with no geographic scope: Data Deficient, published 2011.",
             Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.NoScopeOnly}/wikitext")));
     }

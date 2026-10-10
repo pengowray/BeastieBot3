@@ -6,10 +6,11 @@ using System.Text.RegularExpressions;
 // catalogues; where it is a locality, a collector code or a description ("Bavispe Trout",
 // "B = Bester 11112", "HC - blind"), there is nothing to look up.
 //
-// Split out from the producer because these are the decisions worth pinning in tests: what counts
-// as provisional at all, which tags yield a candidate, and which are deliberately left alone.
+// Shared by the audit's provisional-names report and site build-db (SiteTaxonLinks and the extra
+// species' overlaps), so both build the same candidate names. The decisions worth pinning in tests:
+// what counts as provisional at all, which tags yield a candidate, and which are deliberately left alone.
 
-namespace BeastieBot3.Audit.Producers;
+namespace BeastieBot3.Taxonomy;
 
 internal enum ProvisionalOutcome {
     /// Not a provisional name.

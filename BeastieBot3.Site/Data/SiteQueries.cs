@@ -69,18 +69,19 @@ public sealed partial class SiteQueries {
 
     /// The taxa linked to this one in taxon_link: for a taxon in the release, the taxa not in the
     /// release (old ids) linked to it; for a taxon not in the release, the taxa in the release it is
-    /// linked to. Taxa in the release first, then by id.
+    /// linked to; and the working-name and provisional-name links between taxa in the release, both
+    /// ways. Taxa in the release first, then by id.
     public IReadOnlyList<TaxonLinkRow> GetLinkedTaxa(long taxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         // Ordered and read by column name, so columns added to TaxonColumns cannot shift them.
         command.CommandText = $"""
             SELECT * FROM (
-                SELECT {TaxonColumns}, l.link_kind AS link_kind
+                SELECT {TaxonColumns}, l.link_kind AS link_kind, 1 AS is_from
                 FROM taxon_link l JOIN taxon t ON t.taxon_id = l.current_taxon_id
                 WHERE l.taxon_id = @id
                 UNION ALL
-                SELECT {TaxonColumns}, l.link_kind AS link_kind
+                SELECT {TaxonColumns}, l.link_kind AS link_kind, 0 AS is_from
                 FROM taxon_link l JOIN taxon t ON t.taxon_id = l.taxon_id
                 WHERE l.current_taxon_id = @id)
             ORDER BY in_release DESC, taxon_id
@@ -88,9 +89,10 @@ public sealed partial class SiteQueries {
         command.Parameters.AddWithValue("@id", taxonId);
         using var reader = command.ExecuteReader();
         var kind = reader.GetOrdinal("link_kind");
+        var isFrom = reader.GetOrdinal("is_from");
         var rows = new List<TaxonLinkRow>();
         while (reader.Read()) {
-            rows.Add(new TaxonLinkRow(TaxonAt(reader), reader.GetString(kind)));
+            rows.Add(new TaxonLinkRow(TaxonAt(reader), reader.GetString(kind), reader.GetInt64(isFrom) == 1));
         }
         return rows;
     }

@@ -1,3 +1,4 @@
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Site.Lists;
 
 namespace BeastieBot3.Site.Display;
@@ -75,6 +76,11 @@ public static class GroupSourceText {
     private static string Entries(int count) => count == 1 ? "1 entry" : $"{SiteFormat.Number(count)} entries";
     private static string Pairs(int count) => count == 1 ? "1 pair" : $"{SiteFormat.Number(count)} pairs";
 
+    public const string ReasonProvisionalName =
+        "Same genus, and the epithet is the quoted word in IUCN's provisional name (\"sp. nov.\"). The species may have been formally described since IUCN's assessment.";
+    public const string ReasonWorkingName =
+        "The names are the same apart from \"_new\" at the end of IUCN's name. IUCN made the \"_new\" record for an assessment published with no geographic scope.";
+
     public static string Reason(string reason) => reason switch {
         "iucn-synonym" => "IUCN lists one name as a synonym of the other.",
         "col-synonym" => "Catalogue of Life lists one name as a synonym of the other.",
@@ -82,6 +88,8 @@ public static class GroupSourceText {
         "gender-ending" => "Same genus, and the epithets differ only in the Latin gender ending.",
         "spelling" => "Same genus, and the epithets differ by one or two letters.",
         "other-genus" => "Same epithet in another genus of the same family. The species may have been moved to another genus.",
+        ExtraOverlapReasons.ProvisionalName => ReasonProvisionalName,
+        ExtraOverlapReasons.WorkingName => ReasonWorkingName,
         _ => reason,
     };
 }

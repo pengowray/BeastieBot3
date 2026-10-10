@@ -1,4 +1,4 @@
-using BeastieBot3.Audit.Producers;
+using BeastieBot3.Taxonomy;
 using Xunit;
 
 // Pins what the audit reads as a provisional name and which quoted tags it will turn into a
