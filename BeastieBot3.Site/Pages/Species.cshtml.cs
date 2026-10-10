@@ -176,6 +176,9 @@ public sealed class SpeciesModel : TaxonPageModel {
     /// Set when the visitor arrived from a search for a synonym or common name of this taxon.
     public string? ArrivedQuery { get; private set; }
     public string? ArrivedNameType { get; private set; }
+    /// The name that matched, as stored ("CROW" for "bird code: crow"), and its source.
+    public string? ArrivedName { get; private set; }
+    public string? ArrivedNameSource { get; private set; }
 
     /// True when the visitor searched for the common name shown under the heading. The page then
     /// leaves out the sentence saying it is a common name of this taxon and keeps only the link to
@@ -255,10 +258,15 @@ public sealed class SpeciesModel : TaxonPageModel {
         }
         // Only say "X is a synonym of this taxon" when it is one, so the line cannot be used to put
         // arbitrary text on the page.
-        var type = _queries.NameTypeFor(Taxon!.TaxonId, text);
+        if (_queries.NameMatchFor(Taxon!.TaxonId, text) is not { } found) {
+            return;
+        }
+        var type = found.Type;
         if (type is NameTypes.Synonym or NameTypes.Common or NameTypes.Code) {
             ArrivedQuery = text;
             ArrivedNameType = type;
+            ArrivedName = found.Name;
+            ArrivedNameSource = found.Source;
             ArrivedNameIsShown = type == NameTypes.Common && Taxon.CommonNameEn is not null
                 && SiteNameKey.Fold(Taxon.CommonNameEn) == SiteNameKey.Fold(text);
         }

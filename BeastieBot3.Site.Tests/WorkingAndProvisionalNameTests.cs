@@ -87,20 +87,37 @@ public sealed class WorkingAndProvisionalNameTests(SiteFactory factory) : IClass
         Assert.Contains("Possible synonyms", Html.Text(header[..header.IndexOf("</header>", StringComparison.Ordinal)]));
     }
 
+    // A code is found after every name and never opens a taxon by itself: "crow" lists the eagle
+    // whose English name starts with it before the owl whose bird code it is. "bird code: CROW"
+    // (and the like) searches codes only and goes straight to the taxon.
     [Fact]
-    public async Task ASpeciesCodeIsFoundBySearchAndLeftOutOfTheNames() {
-        // The only exact match: the search goes to the taxon page, which says how the text names it.
-        var search = await _client.GetAsync("/search?q=Po");
-        Assert.Equal(System.Net.HttpStatusCode.Redirect, search.StatusCode);
-        Assert.Equal($"/species/{FixtureDb.Posidonia}?q=Po", search.Headers.Location?.OriginalString);
-        var html = await Page(FixtureDb.Posidonia, "?q=Po");
-        Assert.Contains(BeastieBot3.Site.Display.SiteText.ArrivedCode("Po"), Html.Text(html));
-        Assert.Contains("<i>Posidonia oceanica</i>", html);
-        Assert.DoesNotContain(">Po<", Section(html, "names"));
+    public async Task ACodeIsFoundAfterEveryNameUnlessTheSearchSaysItIsACode() {
+        var crow = await _client.GetAsync("/search?q=crow");
+        Assert.Equal(System.Net.HttpStatusCode.OK, crow.StatusCode);
+        var list = await crow.Content.ReadAsStringAsync();
+        var eagle = list.IndexOf($"/species/{FixtureDb.CrownedEagle}\"", StringComparison.Ordinal);
+        var owl = list.IndexOf($"/species/{FixtureDb.CrestedOwl}\"", StringComparison.Ordinal);
+        Assert.True(eagle >= 0 && owl > eagle, $"eagle {eagle}, owl {owl}");
+        Assert.Contains(BeastieBot3.Site.Display.SiteText.MatchCodeLabel + " CROW", Html.Text(list));
 
-        // Listed with all results, with the match note.
-        var all = await _client.GetStringAsync("/search?q=Po&all=1");
-        Assert.Contains(BeastieBot3.Site.Display.SiteText.MatchCodeLabel, Html.Text(all));
+        foreach (var query in new[] { "bird code: CROW", "bird code crow", "code: CROW", "Code CROW" }) {
+            var found = await _client.GetAsync("/search?q=" + Uri.EscapeDataString(query));
+            Assert.Equal(System.Net.HttpStatusCode.Redirect, found.StatusCode);
+            Assert.StartsWith($"/species/{FixtureDb.CrestedOwl}?q=", found.Headers.Location?.OriginalString);
+        }
+        var page = await Page(FixtureDb.CrestedOwl, "?q=" + Uri.EscapeDataString("bird code: crow"));
+        Assert.Contains("“CROW” is a code that the Catalogue of Life lists among this taxon's English names.", Html.Text(page));
+        Assert.DoesNotContain(">CROW<", Section(page, "names"));
+    }
+
+    [Fact]
+    public async Task AnIucnSpeciesCodeIsFoundTheSameWay() {
+        var search = await _client.GetAsync("/search?q=" + Uri.EscapeDataString("Species code: Po"));
+        Assert.Equal(System.Net.HttpStatusCode.Redirect, search.StatusCode);
+        Assert.StartsWith($"/species/{FixtureDb.Posidonia}?q=", search.Headers.Location?.OriginalString);
+        var html = await Page(FixtureDb.Posidonia, "?q=" + Uri.EscapeDataString("Species code: Po"));
+        Assert.Contains("“Po” is a species code that IUCN lists for this taxon.", Html.Text(html));
+        Assert.DoesNotContain(">Po<", Section(html, "names"));
     }
 
     // A name that a source lists as a synonym is not repeated as a possible synonym, and the pair

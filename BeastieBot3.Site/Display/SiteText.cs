@@ -52,7 +52,7 @@ public static partial class SiteText {
         $"Showing the first {shown} of {SiteFormat.Number(n)} taxa. Type more of the name to narrow the search.";
     public const string MatchSynonymLabel = "Matched synonym:";
     public const string MatchCommonNameLabel = "Matched common name:";
-    public const string MatchCodeLabel = "Matched species code:";
+    public const string MatchCodeLabel = "Matched code:";
     public const string MatchTaxonIdLabel = "Matched IUCN taxon ID:";
     public const string MatchAssessmentIdLabel = "Matched IUCN assessment ID:";
     /// "14871490 (Global, 2016)".
@@ -93,11 +93,17 @@ public static partial class SiteText {
     // Taxon page: arriving from a search
     public static string ArrivedSynonym(string query) => $"“{query}” is a synonym of this taxon.";
     public static string ArrivedCommonName(string query) => $"“{query}” is a common name of this taxon.";
-    public static string ArrivedCode(string query) => $"“{query}” is a species code that IUCN lists for this taxon.";
-    /// The line for a search that found this taxon by a name of this type (NameTypes).
-    public static string Arrived(string? nameType, string query) => nameType switch {
+    /// code: as stored ("CROW"); source: the name's source ("iucn", "col", "wikidata").
+    public static string ArrivedCode(string code, string? source) => source switch {
+        "iucn" => $"“{code}” is a species code that IUCN lists for this taxon.",
+        "wikidata" => $"“{code}” is a code that Wikidata lists among this taxon's English names.",
+        _ => $"“{code}” is a code that the Catalogue of Life lists among this taxon's English names.",
+    };
+    /// The line for a search that found this taxon by a name of this type (NameTypes). name, source:
+    /// the matched name as stored and its source, for a code.
+    public static string Arrived(string? nameType, string query, string? name = null, string? source = null) => nameType switch {
         "synonym" => ArrivedSynonym(query),
-        "code" => ArrivedCode(query),
+        "code" => ArrivedCode(name ?? query, source),
         _ => ArrivedCommonName(query),
     };
     public static string ArrivedAllResults(string query) => $"See all search results for “{query}”";

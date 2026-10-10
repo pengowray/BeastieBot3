@@ -24,7 +24,7 @@
 @if (Model.ArrivedQuery is { } arrived) {
     <p class="arrival">
         @if (!Model.ArrivedNameIsShown) {
-            @SiteText.Arrived(Model.ArrivedNameType, arrived)
+            @SiteText.Arrived(Model.ArrivedNameType, arrived, Model.ArrivedName, Model.ArrivedNameSource)
         }
         <a href="/search?q=@Uri.EscapeDataString(arrived)&amp;all=1">@SiteText.ArrivedAllResults(arrived)</a>
     </p>

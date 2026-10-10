@@ -85,6 +85,11 @@ public static class FixtureDb {
     // A seagrass with an IUCN species code ("Species code: Po" is stored as the code "Po").
     public const long Posidonia = 153534;
     public const long PosidoniaLatest = 153534001;
+    // A bird with a Catalogue of Life bird code ("CROW"), and one whose English name starts with "Crow".
+    public const long CrestedOwl = 22689001;
+    public const long CrestedOwlLatest = 22689001001;
+    public const long CrownedEagle = 22696201;
+    public const long CrownedEagleLatest = 22696201001;
     public const long PlantSubspeciesLatest = 2812588;
     public const long PlantSubspecies1998Nt = 9692717;
     public const long PlantSubspecies1998Vu = 9692643;
@@ -757,6 +762,17 @@ public static class FixtureDb {
         w.Name(Posidonia, "Posidonia oceanica", "scientific", null, "iucn");
         w.Name(Posidonia, "Neptune Grass", "common", "en", "iucn", preferred: true);
         w.Name(Posidonia, "Po", "code", null, "iucn");
+        w.Taxon(CrestedOwl, "Lophostrix cristata", "species", "ANIMALIA", "CHORDATA", "AVES", "STRIGIFORMES", "STRIGIDAE", "Lophostrix",
+            commonEn: "Crested owl", latest: CrestedOwlLatest);
+        w.Assessment(CrestedOwlLatest, CrestedOwl, "Global", true, "LC", criteriaVersion: "3.1", year: 2016, date: "2016-10-01");
+        w.Name(CrestedOwl, "Lophostrix cristata", "scientific", null, "iucn");
+        w.Name(CrestedOwl, "Crested Owl", "common", "en", "iucn", preferred: true);
+        w.Name(CrestedOwl, "CROW", "code", null, "col");
+        w.Taxon(CrownedEagle, "Stephanoaetus coronatus", "species", "ANIMALIA", "CHORDATA", "AVES", "ACCIPITRIFORMES", "ACCIPITRIDAE", "Stephanoaetus",
+            commonEn: "Crowned eagle", latest: CrownedEagleLatest);
+        w.Assessment(CrownedEagleLatest, CrownedEagle, "Global", true, "NT", criteriaVersion: "3.1", year: 2021, date: "2021-08-01");
+        w.Name(CrownedEagle, "Stephanoaetus coronatus", "scientific", null, "iucn");
+        w.Name(CrownedEagle, "Crowned Eagle", "common", "en", "iucn", preferred: true);
 
         // A variety, for the kind label.
         w.Taxon(Variety, "Cupressus arizonica var. glabra", "variety", "PLANTAE", "TRACHEOPHYTA", "PINOPSIDA", "PINALES", "CUPRESSACEAE", "Cupressus",
@@ -853,7 +869,7 @@ public static class FixtureDb {
         w.Meta(SiteDbSchema.MetaKeys.NoScopeAssessmentCount, w.NoScopeAssessmentCount.ToString(CultureInfo.InvariantCulture));
     }
 
-    public static int GlobalTaxonCount => 24 + FillerCount;
+    public static int GlobalTaxonCount => 26 + FillerCount;
 
     public const string GbifCitation =
         "IUCN (2026). The IUCN Red List of Threatened Species. Version 2026-1. https://www.iucnredlist.org. Downloaded on 2026-07-28. https://doi.org/10.15468/0qnb58";

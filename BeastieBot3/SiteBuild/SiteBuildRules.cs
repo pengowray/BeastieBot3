@@ -19,7 +19,8 @@ internal static class SiteNameType {
     public const string Scientific = "scientific";
     public const string Common = "common";
     public const string Synonym = "synonym";
-    /// A species code IUCN lists among the English names ("Species code: Po"), stored as the code ("Po").
+    /// A code given among the English names, stored as the code: IUCN's seagrass species codes ("Po"
+    /// for "Species code: Po") and the Catalogue of Life's codes in capitals (bird codes such as "CROW").
     public const string Code = "code";
 }
 

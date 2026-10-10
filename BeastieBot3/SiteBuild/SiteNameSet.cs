@@ -18,7 +18,8 @@ using BeastieBot3.Shared.SiteData;
 //   - codes: one row per code, whatever the source.
 // The first spelling added is kept; a later copy can only turn is_preferred on.
 // Common names in every language go through CommonNameQuality first: a species code ("Species code:
-// Po") is added as a code ("Po"), so search finds it while the page leaves it out of the names; other
+// Po") or a code in capitals labelled English (the Catalogue of Life's bird codes, "CROW") is added
+// as a code ("Po", "CROW"), so search finds it while the page leaves it out of the names; other
 // junk (wiki markup, author citations, OCR errors, names cut off at a bracket) is left out, and a
 // name with a fixable extra ("Sunda slow loris{sfn|...}", "Mountain_gorilla") is added repaired. The set counts both for the
 // build summary: junk once per name, language and source (the store repeats IUCN's names, so the
@@ -59,7 +60,12 @@ internal sealed class SiteNameSet {
         var repaired = false;
         if (nameType == SiteNameType.Common) {
             var quality = CommonNameQuality.Assess(cleaned, language);
-            if (quality.Flaw == CommonNameFlaw.SpeciesCode && CommonNameQuality.SpeciesCode(cleaned) is { } code) {
+            var code = quality.Flaw switch {
+                CommonNameFlaw.SpeciesCode => CommonNameQuality.SpeciesCode(cleaned),
+                CommonNameFlaw.LetterCode => cleaned.Trim(),
+                _ => null,
+            };
+            if (code is not null) {
                 if (Add(code, SiteNameType.Code, null, source)) {
                     Codes++;
                 }

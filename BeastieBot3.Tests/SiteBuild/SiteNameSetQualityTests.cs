@@ -100,4 +100,16 @@ public class SiteNameSetQualityTests {
             names.Names.Select(n => (n.Name, n.NameType, n.Source)));
         Assert.Equal((1, 0), (names.Codes, names.JunkCommonNames));
     }
+
+    // The Catalogue of Life's codes in capitals labelled English (bird codes, USDA plant symbols)
+    // are kept as codes too.
+    [Fact]
+    public void LetterCodes_AreKeptAsCodes() {
+        var names = new SiteNameSet();
+
+        Assert.False(names.Add("CROW", "common", "en", "col"));
+        Assert.True(names.Add("Crested owl", "common", "en", "col"));
+
+        Assert.Equal(new[] { ("CROW", "code"), ("Crested owl", "common") }, names.Names.Select(n => (n.Name, n.NameType)));
+    }
 }

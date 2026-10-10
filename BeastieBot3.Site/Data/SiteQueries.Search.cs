@@ -85,25 +85,28 @@ public sealed partial class SiteQueries {
         }
     }
 
-    /// The name type ("scientific", "common", "synonym") by which the text names this taxon, best
-    /// first; null when it does not name it at all.
-    public string? NameTypeFor(long taxonId, string text) {
-        var key = SiteNameKey.Fold(text);
+    /// The name type ("scientific", "common", "synonym", "code") by which the text names this taxon,
+    /// best first, the source of that name, and the name; null when the text does not name it at all.
+    /// A code search ("bird code: CROW", CodeQuery) names a taxon only by a code.
+    public (string Type, string Source, string Name)? NameMatchFor(long taxonId, string text) {
+        var code = CodeQuery.Parse(text);
+        var key = SiteNameKey.Fold(code ?? text);
         if (key.Length == 0) {
             return null;
         }
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT n.name_type
+        command.CommandText = $"""
+            SELECT n.name_type, n.source, n.name
             FROM name_key k JOIN name n ON n.name_id = k.name_id
-            WHERE k.key = @key AND k.taxon_id = @id
-            ORDER BY CASE n.name_type WHEN 'scientific' THEN 0 WHEN 'common' THEN 1 ELSE 2 END
+            WHERE k.key = @key AND k.taxon_id = @id{(code is null ? "" : " AND n.name_type = 'code'")}
+            ORDER BY CASE n.name_type WHEN 'scientific' THEN 0 WHEN 'common' THEN 1 WHEN 'synonym' THEN 2 ELSE 3 END
             LIMIT 1
             """;
         command.Parameters.AddWithValue("@key", key);
         command.Parameters.AddWithValue("@id", taxonId);
-        return command.ExecuteScalar() as string;
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? (reader.GetString(0), reader.GetString(1), reader.GetString(2)) : null;
     }
 
     /// Taxa matching the text, one row per taxon, best first:
@@ -115,12 +118,18 @@ public sealed partial class SiteQueries {
     /// language, which beats a synonym, which beats a species code, and in group 1 the taxon's English name
     /// (taxon.common_name_en) beats its other English names; species come before infraspecific taxa
     /// and subpopulations; then shorter names first.
+    /// A code given among the English names ("CROW", name type 'code') counts in group 3 whatever it
+    /// matches, after every other name, so it is never an exact match. A code search ("bird code:
+    /// CROW", CodeQuery) finds only codes, each an exact and strong match.
     /// With exactOnly, only group 1 is searched. TotalTaxa is counted only when countAll is set and
     /// the limit was reached; otherwise it is the number of hits returned.
     /// When cancellationToken is cancelled (the visitor closed the page), the running query is
     /// interrupted and OperationCanceledException is thrown.
     public SearchResult Search(string text, int limit, bool exactOnly = false, bool countAll = true,
         CancellationToken cancellationToken = default) {
+        if (CodeQuery.Parse(text) is { } code) {
+            return SearchCodes(code, limit);
+        }
         var key = SiteNameKey.Fold(text);
         if (key.Length == 0) {
             return SearchResult.Empty;
@@ -161,7 +170,8 @@ public sealed partial class SiteQueries {
                 WITH hits AS ({hitsSql}),
                 best AS (
                     SELECT h.taxon_id,
-                           MIN(CASE WHEN h.name_id IN (SELECT name_id FROM name_key WHERE key = @key) THEN 0
+                           MIN(CASE WHEN h.name_type = 'code' THEN 2
+                                    WHEN h.name_id IN (SELECT name_id FROM name_key WHERE key = @key) THEN 0
                                     WHEN h.name LIKE @prefix ESCAPE '\' THEN 1
                                     ELSE 2 END * 100000
                                + CASE WHEN t.in_release = 1 THEN 0 ELSE 1 END * 50000
@@ -224,6 +234,30 @@ public sealed partial class SiteQueries {
     }
 
     private static bool IsKey(string? name, string key) => name is not null && SiteNameKey.Fold(name) == key;
+
+    // The taxa with this code (CodeQuery): taxa in the release first, then by name.
+    private SearchResult SearchCodes(string code, int limit) {
+        var key = SiteNameKey.Fold(code);
+        var hits = new List<SearchHit>();
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT {SummaryColumns}, n.name, n.language
+            FROM name_key k JOIN name n ON n.name_id = k.name_id JOIN taxon t ON t.taxon_id = n.taxon_id
+            {SummaryJoin}
+            WHERE k.key = @key AND n.name_type = 'code'
+            ORDER BY t.in_release DESC, t.scientific_name
+            LIMIT @limit
+            """;
+        command.Parameters.AddWithValue("@key", key);
+        command.Parameters.AddWithValue("@limit", limit);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            hits.Add(new SearchHit(SummaryAt(reader, 0), reader.GetString(SummaryColumnCount), NameTypes.Code,
+                Text(reader, SummaryColumnCount + 1), IsExactMatch: true, IsStrongExactMatch: true));
+        }
+        return new SearchResult(hits, hits.Count);
+    }
 
     // The names that match: FTS hits (when there is a MATCH expression) plus exact folded-key hits.
     private static string BuildHitsSql(bool withFts) {

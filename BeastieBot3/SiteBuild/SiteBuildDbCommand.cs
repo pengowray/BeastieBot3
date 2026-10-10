@@ -292,7 +292,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Common names", s.NamesByType.GetValueOrDefault(SiteNameType.Common));
         Row("Common names in English", s.CommonNamesEnglish);
         Row("Common names left out as junk (wiki markup, author citations, OCR errors)", s.CommonNamesJunk);
-        Row("Species codes kept for search only (\"Species code: Po\")", s.SpeciesCodes);
+        Row("Codes kept for search only (\"Species code: Po\", bird codes such as \"CROW\")", s.SpeciesCodes);
         Row("Common names repaired before storing (wiki markup or extra text removed, OCR errors fixed)", s.CommonNamesRepaired);
         Row("Synonyms (one row per source that gives the name)", s.NamesByType.GetValueOrDefault(SiteNameType.Synonym));
         Row("Catalogue of Life synonyms with an authority from the CoL database", s.ColSynonymAuthorities);

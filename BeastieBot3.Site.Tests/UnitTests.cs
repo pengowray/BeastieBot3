@@ -762,4 +762,17 @@ public sealed class SearchGroupRuleTests {
         var row = new OtherStatusRow("natureserve-global", rank, "G3", null, null, "natureserve", "1", null, null);
         Assert.Equal(expected, SiteText.NatureServeRankTitle(row));
     }
+
+    [Theory]
+    [InlineData("bird code: CROW", "CROW")]
+    [InlineData("Bird code crow", "crow")]
+    [InlineData("code: SBT", "SBT")]
+    [InlineData("species code: Po", "Po")]
+    [InlineData("Species code Sf", "Sf")]
+    [InlineData("crow", null)]
+    [InlineData("code", null)]
+    [InlineData("bird code: CROW owl", null)]
+    [InlineData("Codeia longa", null)]
+    public void CodeQuery_ReadsTheCode(string text, string? code) =>
+        Assert.Equal(code, BeastieBot3.Site.Data.CodeQuery.Parse(text));
 }

@@ -503,8 +503,9 @@ public static class SiteDbSchema {
             name_id      INTEGER PRIMARY KEY,
             taxon_id     INTEGER NOT NULL,
             name         TEXT NOT NULL,
-            name_type    TEXT NOT NULL,                       -- 'scientific' | 'common' | 'synonym' | 'code': a species code IUCN gives among
-                                                              -- the English names ('Species code: Po' is stored as 'Po'), for search only
+            name_type    TEXT NOT NULL,                       -- 'scientific' | 'common' | 'synonym' | 'code': a code given among the English
+                                                              -- names, for search only: IUCN's seagrass species codes ('Species code: Po' is
+                                                              -- stored as 'Po') and the Catalogue of Life's codes in capitals ('CROW')
             language     TEXT,                                -- ISO 639-1 code where one exists ('en', 'fr'), else the ISO 639-3 code ('yue'); IUCN's names
                                                               -- can also have IUCN's ISO 639-2 or 639-5 code ('phi'). NULL when not given (IUCN only)
             source       TEXT NOT NULL,                       -- 'iucn' | 'col' | 'wikidata' | 'wikipedia' (an article title: English Wikipedia's for 'en',
