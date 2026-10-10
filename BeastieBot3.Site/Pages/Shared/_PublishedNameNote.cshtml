@@ -1,6 +1,0 @@
-@model PublishedNameTally
-@* Under an assessment table, when at least one row shows a name (_PublishedName): what each kind of
-   name is, for the kinds the table shows. *@
-@if (Model.Any) {
-    <p class="note published-name-note">@if (Model.AnyPublished) {@SiteText.PublishedAsNote<text> </text>}@if (Model.AnyDoiTitle) {@SiteText.DoiTitleNameNote<text> </text>}@SiteText.CurrentNameNote</p>
-}

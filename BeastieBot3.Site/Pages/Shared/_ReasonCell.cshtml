@@ -22,5 +22,5 @@
             <span class="no-value">@SiteText.ReasonNotFound</span>
             break;
     }
-    if (cell.Footnote is { } number) {<partial name="_FootnoteRef" model="number" />}
+    if (cell.Footnote is { } number) {<partial name="_FootnoteRef" model="@FootnoteRef.History(number)" />}
 }

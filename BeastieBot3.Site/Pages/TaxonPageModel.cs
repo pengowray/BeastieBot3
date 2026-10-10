@@ -81,7 +81,13 @@ public abstract class TaxonPageModel : PageModel {
     /// The parts of a history table that come from IUCN's summary tables, for its rows in the order
     /// shown (own: the row is this page's taxon's).
     public HistoryTableNotes TableNotes(IEnumerable<(AssessmentRow Row, bool Own)> rows) =>
-        HistoryTableNotes.Build(rows.ToList(), ChangeReasons, ListedOnlyInTables, Taxon!.Kind, Table7Of2008);
+        HistoryTableNotes.Build(rows.ToList(), ChangeReasons, ListedOnlyInTables, Taxon!.Kind, Table7Of2008, PublishedNameOf);
+
+    /// The notes of the regional assessments table: the names its assessments were published under,
+    /// with their footnotes (no reasons for change, which Table 7 gives for global assessments only).
+    public HistoryTableNotes RegionalNotes(IEnumerable<AssessmentRow> rows) =>
+        HistoryTableNotes.Build(rows.Select(a => (a, true)).ToList(), new Dictionary<long, CategoryChangeRow>(), _ => null, Taxon!.Kind,
+            null, PublishedNameOf, HistoryTableNotes.RegionalPrefix, reasonColumn: false);
 
     /// The taxon's IUCN Green Status assessment; null when it has none.
     public GreenStatusRow? GreenStatus { get; private set; }
@@ -217,11 +223,14 @@ public abstract class TaxonPageModel : PageModel {
     }
 
     /// The name the assessment was published under, or the name in its DOI's title, when it differs
-    /// from the current name of the taxon the row is under (taxon: another IUCN id in a combined
-    /// history; this page's taxon when null); null otherwise (PublishedName.For). The assessment
-    /// tables show it under the year (or region) of the row.
-    public PublishedName? PublishedNameOf(AssessmentRow assessment, TaxonRow? taxon = null) =>
-        PublishedName.For((taxon ?? Taxon)?.ScientificName, ChangeReasons.GetValueOrDefault(assessment.AssessmentId), PartsOf(assessment));
+    /// from the current name of the taxon it is of (this page's taxon, or another IUCN id of the
+    /// combined history); null otherwise (PublishedName.For). The assessment tables show it under the
+    /// year (or region) of the row.
+    public PublishedName? PublishedNameOf(AssessmentRow assessment) {
+        var taxon = assessment.TaxonId == Taxon?.TaxonId ? Taxon
+            : Combined?.Ids.FirstOrDefault(i => i.TaxonId == assessment.TaxonId)?.Taxon ?? Taxon;
+        return PublishedName.For(taxon?.ScientificName, ChangeReasons.GetValueOrDefault(assessment.AssessmentId), PartsOf(assessment));
+    }
 
     /// A short note for the assessment tables when the assessment is an errata or amended version,
     /// or was replaced by one ("Replaced by the errata version"); null otherwise. An errata version

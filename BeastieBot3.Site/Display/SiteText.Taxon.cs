@@ -155,22 +155,15 @@ public static partial class SiteText {
             + (others == 1 ? "The other author is written as in IUCN's citation." : $"The other {others} authors are written as in IUCN's citation.");
     }
     /// Under the year (or region) of an assessment table row whose name differs from the taxon's
-    /// current name (PublishedName): PublishedAsLabel for the name the assessment was published under
-    /// (Table 7, or a DOI created with the release), DoiTitleNameLabel for the name only a later DOI's
-    /// title has, then the italic name. Under the table, the note line for each label shown, then
-    /// CurrentNameNote.
-    public const string PublishedAsLabel = "Name when published: ";
-    public const string DoiTitleNameLabel = "Name in DOI title: ";
-    public const string PublishedAsNote =
-        "Name when published: the scientific name the assessment was published under. Source: IUCN's summary statistics Table 7 "
-        + "(species changing Red List category) of the year the assessment was published or the year after, or the title registered "
-        + "with Crossref for the assessment's DOI, when the DOI was created in the year the assessment was published or the year after.";
-    public const string DoiTitleNameNote =
-        "Name in DOI title: the scientific name in the title registered with Crossref for the assessment's DOI. This name may differ "
-        + "from the name the assessment was published under: the DOI was created in 2015 or later, more than a year after the "
-        + "assessment was published, and the title has the name IUCN used when the DOI was created.";
-    public const string CurrentNameNote =
-        "The citations on the IUCN Red List website use the taxon's current name for every assessment, including older assessments.";
+    /// current name (PublishedName): PublishedAsBefore + italic name + footnote reference. A name from
+    /// Table 7 refers to that table's footnote; a name from a DOI title to PublishedNameFootnote.
+    public const string PublishedAsBefore = "as ";
+    public static string PublishedNameFootnote(BeastieBot3.Site.Pages.PublishedNameSource source) => source switch {
+        BeastieBot3.Site.Pages.PublishedNameSource.DoiAtPublication =>
+            "From the title registered with Crossref for the assessment's DOI, which IUCN created when it published the assessment.",
+        _ => "From the title registered with Crossref for the assessment's DOI. IUCN created the DOI in 2015 or later, after it published "
+            + "the assessment, so this may be a later name than the one the assessment was published under.",
+    };
 
     /// The citation option for the name in |title=, shown when the assessment's name differs from the
     /// current one: TitlePublishedName or TitleNameFromDoi, then " (" + italic name + ")", and

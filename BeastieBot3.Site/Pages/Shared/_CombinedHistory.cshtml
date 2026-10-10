@@ -41,8 +41,7 @@
     </ul>
     @if (combined.Rows.Count > 0) {
         var historyNotes = Model.TableNotes(combined.Rows.Select(r => (r.Assessment, r.Id.IsThisPage)));
-        var nameTally = new PublishedNameTally();
-        <div class="table-scroll">
+            <div class="table-scroll">
             <table class="combined-table">
                 <thead>
                     <tr>
@@ -71,7 +70,7 @@
                         var isLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId
                             || (!own && row.Id.Taxon.InRelease && a.AssessmentId == row.Id.Taxon.LatestGlobalAssessmentId);
                         var versionNote = Model.VersionNote(a);
-                        var publishedName = nameTally.Add(Model.PublishedNameOf(a, row.Id.Taxon));
+                        var publishedName = historyNotes.NameFor(a.AssessmentId);
                         var rowClass = string.Join(' ', new[] { row.Id.TintClass, isShown ? "shown" : null }.Where(c => c is not null));
                         <tr class="@(rowClass.Length == 0 ? null : rowClass)">
                             <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}@if (publishedName is not null) {<text> </text><partial name="_PublishedName" model="publishedName" />}</th>
@@ -110,7 +109,6 @@
             </table>
         </div>
         <partial name="_HistoryTableNotes" model="historyNotes" />
-        <partial name="_PublishedNameNote" model="nameTally" />
     }
     @if (combined.WithNotes.Count > 0) {
         @* <text> keeps the whitespace of the code lines out of the sentence ("2790 , the"). *@

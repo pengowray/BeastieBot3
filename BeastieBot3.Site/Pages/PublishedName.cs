@@ -4,19 +4,30 @@ using BeastieBot3.Site.Data;
 
 namespace BeastieBot3.Site.Pages;
 
-/// How sure the site is that an assessment was published under a name.
+/// Where the site read the name an assessment was published under.
+public enum PublishedNameSource {
+    /// IUCN's Table 7 of the version's year or the next printed it (category_change.printed_name).
+    SummaryTable,
+    /// The title of the assessment's DOI, which IUCN created within a year of the release
+    /// (IucnCitationParts.RegisteredNameIsFromPublication).
+    DoiAtPublication,
+    /// The title of a DOI that IUCN created later (the DOIs of the releases before 2015 were created
+    /// in 2015 and 2016), so the name may be the one IUCN used then.
+    DoiLater,
+}
+
+/// How sure the site is that an assessment was published under a name: the citations page labels
+/// its option by it.
 public enum PublishedNameKind {
-    /// IUCN's Table 7 of the release prints it, or the assessment's DOI was created within a year of
-    /// its release with it in the title (IucnCitationParts.RegisteredNameIsFromPublication).
     Published,
-    /// Only the title of a DOI created later has it (IUCN created the DOIs of the releases before 2015
-    /// in 2015 and 2016), so it is the name IUCN used then.
     DoiTitle,
 }
 
 /// The name an assessment was published under, or the name in its DOI's title, when it differs from
-/// the taxon's current name (PublishedName.For).
-public sealed record PublishedName(string Name, PublishedNameKind Kind) {
+/// the taxon's current name (PublishedName.For). Change: the Table 7 row it was read from.
+public sealed record PublishedName(string Name, PublishedNameSource Source, CategoryChangeRow? Change = null) {
+    public PublishedNameKind Kind => Source == PublishedNameSource.DoiLater ? PublishedNameKind.DoiTitle : PublishedNameKind.Published;
+
     /// The name for an assessment of a taxon whose current name is currentName: the name Table 7
     /// prints (change.PrintedName), else the name in the DOI's title (parts.RegisteredName); null when
     /// that name is the current one (rank markers, brackets and spacing aside), one of IUCN's internal
@@ -24,10 +35,10 @@ public sealed record PublishedName(string Name, PublishedNameKind Kind) {
     /// title then has a later name and is not shown.
     public static PublishedName? For(string? currentName, CategoryChangeRow? change, IucnCitationParts? parts) {
         if (change?.PrintedName is { } printed) {
-            return Differs(printed, currentName) ? new PublishedName(printed.Trim(), PublishedNameKind.Published) : null;
+            return Differs(printed, currentName) ? new PublishedName(printed.Trim(), PublishedNameSource.SummaryTable, change) : null;
         }
         if (parts?.RegisteredNameDifferentFrom(currentName) is { } registered && Differs(registered, currentName)) {
-            return new PublishedName(registered, parts.RegisteredNameIsFromPublication ? PublishedNameKind.Published : PublishedNameKind.DoiTitle);
+            return new PublishedName(registered, parts.RegisteredNameIsFromPublication ? PublishedNameSource.DoiAtPublication : PublishedNameSource.DoiLater);
         }
         return null;
     }
@@ -37,15 +48,11 @@ public sealed record PublishedName(string Name, PublishedNameKind Kind) {
         && (currentName is null || !RankMarkerKeys.For(currentName).Contains(SiteNameKey.Fold(name)));
 }
 
-/// Which kinds of PublishedName an assessment table shows, for the note under it.
-public sealed class PublishedNameTally {
-    public bool AnyPublished { get; private set; }
-    public bool AnyDoiTitle { get; private set; }
-    public bool Any => AnyPublished || AnyDoiTitle;
+/// What an assessment table row shows under its year: "as" + the name, and the footnote with its source.
+public sealed record PublishedNameCell(PublishedName Name, FootnoteRef Footnote);
 
-    public PublishedName? Add(PublishedName? name) {
-        if (name?.Kind == PublishedNameKind.Published) AnyPublished = true;
-        if (name?.Kind == PublishedNameKind.DoiTitle) AnyDoiTitle = true;
-        return name;
-    }
+/// A numbered reference to a footnote under an assessment table; Id is the footnote's element id.
+public sealed record FootnoteRef(int Number, string Id) {
+    /// A footnote of the history table (HistoryTableNotes.HistoryPrefix).
+    public static FootnoteRef History(int number) => new(number, HistoryTableNotes.HistoryPrefix + number.ToString(System.Globalization.CultureInfo.InvariantCulture));
 }

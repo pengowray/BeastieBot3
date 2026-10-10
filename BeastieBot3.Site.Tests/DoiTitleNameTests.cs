@@ -15,41 +15,39 @@ public sealed class DoiTitleNameTests(SiteFactory factory) : IClassFixture<SiteF
     private readonly HttpClient _client = factory.Client();
 
     private const string Legend = "<legend>Name in the citation title</legend>";
-    private const string DoiTitleNote = "Name in DOI title: the scientific name in the title registered with Crossref for the assessment's DOI.";
-    private const string PublishedNote = "Name when published: the scientific name the assessment was published under.";
-    private const string CurrentNote = "The citations on the IUCN Red List website use the taxon's current name for every assessment, including older assessments.";
+    private const string DoiLaterFootnote = "From the title registered with Crossref for the assessment's DOI. IUCN created the DOI in 2015 or later, "
+        + "after it published the assessment, so this may be a later name than the one the assessment was published under.";
+    private const string DoiAtPublicationFootnote = "From the title registered with Crossref for the assessment's DOI, which IUCN created when it published the assessment.";
 
     private static List<string[]> HistoryRows(string html) => Html.TableRows(Html.Between(html, "id=\"history-heading\"", "</table>"));
 
     [Fact]
-    public async Task HistoryTable_NameInDoiTitle() {
+    public async Task HistoryTable_NameFromALaterDoi_WithItsFootnote() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
-        var rows = HistoryRows(html);
-        Assert.Contains(rows, r => r[0] == "2008 Name in DOI title: Thalarctos maritimus");
-        Assert.Contains(rows, r => r[0] == "2015 Latest");
-        Assert.Contains("<span class=\"published-name\">Name in DOI title: <span class=\"sci-name\"><i>Thalarctos maritimus</i></span></span>", html);
-        var text = Html.Text(html);
-        Assert.Contains(DoiTitleNote, text);
-        Assert.Contains(CurrentNote, text);
-        Assert.DoesNotContain(PublishedNote, text);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "published-name-note"));
+        Assert.Contains(HistoryRows(html), r => r[0] == "2008 as Thalarctos maritimus1");
+        Assert.Contains(HistoryRows(html), r => r[0] == "2015 Latest");
+        Assert.Contains("<span class=\"published-name\">as <span class=\"sci-name\"><i>Thalarctos maritimus</i></span>"
+            + "<sup class=\"fn-ref\"><a href=\"#history-fn-1\" aria-label=\"Footnote 1\">1</a></sup>", html);
+        Assert.Contains($"<li id=\"history-fn-1\" value=\"1\">{DoiLaterFootnote.Replace("'", "&#x27;")}</li>", html);
+        Assert.DoesNotContain(DoiAtPublicationFootnote, Html.Text(html));
     }
 
     [Fact]
-    public async Task HistoryTable_NameWhenPublished_FromADoiCreatedWithTheRelease() {
+    public async Task HistoryTable_NameFromADoiCreatedWithTheRelease() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.Woylie}");
-        // The woylie's page has a combined history; the latest row is the woylie's own.
-        Assert.Contains("<span class=\"published-name\">Name when published: <span class=\"sci-name\"><i>Bettongia ogilbyi</i></span></span>", html);
-        var text = Html.Text(html);
-        Assert.Contains(PublishedNote, text);
-        Assert.DoesNotContain(DoiTitleNote, text);
+        Assert.Contains("as <span class=\"sci-name\"><i>Bettongia ogilbyi</i></span><sup class=\"fn-ref\">", html);
+        Assert.Contains(DoiAtPublicationFootnote, Html.Text(html));
+        Assert.DoesNotContain(DoiLaterFootnote, Html.Text(html));
     }
 
     [Fact]
-    public async Task HistoryTable_NameWhenPublished_FromTable7() {
+    public async Task HistoryTable_NameFromTable7_SharesTheTablesFootnoteWithTheReason() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.Bromus}");
-        Assert.Contains(HistoryRows(html), r => r[0] == "2011 Latest Name when published: Bromus mollis var. interruptus");
-        Assert.Contains(PublishedNote, Html.Text(html));
+        var row = HistoryRows(html).Single(r => r[0].StartsWith("2011", StringComparison.Ordinal));
+        Assert.Equal("2011 Latest as Bromus mollis var. interruptus1", row[0]);
+        Assert.Equal("Genuine status change (G)1", row[2]);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "<li id=\"history-fn-"));
+        Assert.Contains("<li id=\"history-fn-1\" value=\"1\">From <a href=\"https://example.org/2011_RL_Stats_Table_7.pdf\">", html);
     }
 
     [Fact]
@@ -58,8 +56,7 @@ public sealed class DoiTitleNameTests(SiteFactory factory) : IClassFixture<SiteF
         foreach (var id in new[] { FixtureDb.AmurLeopard, FixtureDb.Tiger }) {
             var html = await _client.GetStringAsync($"/species/{id}");
             Assert.DoesNotContain("published-name", html);
-            Assert.DoesNotContain("Name in DOI title", html);
-            Assert.DoesNotContain("Name when published", html);
+            Assert.DoesNotContain("From the title registered with Crossref", html);
         }
     }
 

@@ -19,13 +19,14 @@ public sealed class SummaryTablesPageTests : IClassFixture<SiteFactory> {
         var rows = Html.TableRows(history);
 
         Assert.Equal(new[] { "Year published", "Category", "Reason for change", "Criteria", "Date assessed", "Assessment" }, rows[0]);
-        Assert.Equal("Genuine status change (G)1", rows.Single(r => r[0].StartsWith("2008", StringComparison.Ordinal))[2]);
+        // Footnote 1 is the name under the 2008 row's year (from its DOI title), which comes before its reason.
+        Assert.Equal("Genuine status change (G)2", rows.Single(r => r[0].StartsWith("2008", StringComparison.Ordinal))[2]);
         Assert.Equal("no change", rows.Single(r => r[0].StartsWith("2015", StringComparison.Ordinal))[2]);
         Assert.Equal("\u2014", rows.Single(r => r[0].StartsWith("1996", StringComparison.Ordinal))[2]);
-        Assert.Contains("<sup class=\"fn-ref\"><a href=\"#history-fn-1\" aria-label=\"Footnote 1\">1</a></sup>", history);
+        Assert.Contains("<sup class=\"fn-ref\"><a href=\"#history-fn-2\" aria-label=\"Footnote 2\">2</a></sup>", history);
         Assert.DoesNotContain("title=", history);
 
-        Assert.Contains("<li id=\"history-fn-1\" value=\"1\">From <a href=\"https://nc.iucnredlist.org/redlist/content/attachment_files/2008RL_Stats_Table_7.pdf\">"
+        Assert.Contains("<li id=\"history-fn-2\" value=\"2\">From <a href=\"https://nc.iucnredlist.org/redlist/content/attachment_files/2008RL_Stats_Table_7.pdf\">"
             + "Table 7 (\u201cSpecies changing IUCN Red List Status\u201d) of IUCN Red List version 2008</a> (PDF). The 2008 table lists genuine changes only.</li>", history);
         Assert.Contains("Reason for change reports were not published before 2007.", Html.Text(history));
     }

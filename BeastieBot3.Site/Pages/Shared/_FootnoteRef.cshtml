@@ -1,3 +1,3 @@
-@model int
-@* A numbered reference to a footnote under the history table. *@
-<sup class="fn-ref"><a href="#@HistoryTableNotes.FootnoteId(Model)" aria-label="@SiteText.FootnoteLabel(Model)">@Model</a></sup>
+@model FootnoteRef
+@* A numbered reference to a footnote under an assessment table. *@
+<sup class="fn-ref"><a href="#@Model.Id" aria-label="@SiteText.FootnoteLabel(Model.Number)">@Model.Number</a></sup>

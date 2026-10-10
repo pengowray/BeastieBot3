@@ -1,5 +1,5 @@
-@model PublishedName
-@* Under the year (or region) of an assessment table row: the name the assessment was published
-   under, or the name in its DOI's title, when it differs from the taxon's current name
-   (TaxonPageModel.PublishedNameOf). *@
-<span class="published-name">@(Model.Kind == PublishedNameKind.Published ? SiteText.PublishedAsLabel : SiteText.DoiTitleNameLabel)<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(Model.Name))</span></span>
+@model PublishedNameCell
+@* Under the year (or region) of an assessment table row: "as" + the name the assessment was
+   published under (or the name in its DOI's title), when it differs from the taxon's current name,
+   with the footnote that says where the name is from (HistoryTableNotes.NameFor). *@
+<span class="published-name">@SiteText.PublishedAsBefore<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(Model.Name.Name))</span><partial name="_FootnoteRef" model="Model.Footnote" /></span>

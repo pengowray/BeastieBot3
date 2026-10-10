@@ -1743,14 +1743,18 @@ reads it from two other sources (`Pages/PublishedName.cs`, `PublishedName.For`):
    next. So a DOI title has the name the assessment was published under when the DOI names a release
    of 2015 or later and was created that year or the next (`RegisteredNameIsFromPublication`).
 
-The assessment tables (global history, combined history and regional assessments) show, under the
-year (or region) of a row, "Name when published: X" for a name from Table 7 or from such a DOI, and "Name
-in DOI title: X" for a name only a later DOI's title has, when the name differs from the current
-name of the row's own taxon (`TaxonPageModel.PublishedNameOf`); one note under the table explains
-the labels it shows. Names that differ only in "ssp." and "subsp.", a rank marker, brackets or
-spacing, and IUCN's internal names ("Physella acuta_new"), are not shown. In 2026-1, 9,327
-assessments (of 7,934 taxa) have a DOI title whose name differs from the taxon's current name, most
-of them after a move to another genus; about 6,400 of them were published before 2015.
+The assessment tables (global history, combined history and regional assessments) show "as *X*"
+under the year (or region) of a row when the name differs from the current name of the row's own
+taxon (`TaxonPageModel.PublishedNameOf`), with a footnote that says where the name is from
+(`HistoryTableNotes.NameFor`): a name from Table 7 refers to that table's footnote, the one the
+row's "Reason for change" cites; a name from a DOI created with its release refers to a footnote
+saying so; and a name only a later DOI's title has refers to a footnote saying that IUCN created the
+DOI in 2015 or later, so it may be a later name than the one the assessment was published under.
+The regional table numbers its footnotes apart (ids `regional-fn-N`). Names that differ only in
+"ssp." and "subsp.", a rank marker, brackets or spacing, and IUCN's internal names ("Physella
+acuta_new"), are not shown. In 2026-1, 9,327 assessments (of 7,934 taxa) have a DOI title whose name
+differs from the taxon's current name, most of them after a move to another genus; about 6,400 of
+them were published before 2015.
 In the build of 10 October 2026, Table 7 gives 440 assessments a name that differs from the current one (Notropis moralesi for Graodus moralesi); of the other assessments with a different name in their DOI title, 2,633 show it as the name when published and 6,261 as the name in the DOI title.
 
 The citations page writes the same name in the citation title, with the current name as an option
