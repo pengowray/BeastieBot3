@@ -157,8 +157,9 @@ public sealed partial class SiteQueries {
             .OrderBy(t => t.ScientificName, StringComparer.Ordinal)
             .ToList();
 
-    /// The other taxa in the release named in the taxonomic notes of the taxon's latest global
-    /// assessment (notes_taxon), in the order the notes name them.
+    /// The other taxa in the release named in the taxonomic notes of the taxon's global assessments
+    /// (notes_taxon), one row per assessment that names one: newest assessment first, then in the
+    /// order its notes name them.
     public IReadOnlyList<NotesTaxonRow> GetNotesTaxa(long taxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
@@ -169,7 +170,7 @@ public sealed partial class SiteQueries {
             {SummaryJoin}
             LEFT JOIN assessment na ON na.assessment_id = nt.assessment_id
             WHERE nt.taxon_id = @id
-            ORDER BY nt.position
+            ORDER BY na.year_published DESC, nt.assessment_id DESC, nt.position
             """;
         command.Parameters.AddWithValue("@id", taxonId);
         using var reader = command.ExecuteReader();

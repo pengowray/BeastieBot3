@@ -208,12 +208,25 @@ public static partial class SiteText {
     /// + NotesTaxaIntroAfter, then the taxa, with NameInNotesLabel + italic name under each one the
     /// notes name differently.
     public const string NamesNotesTaxa = "Named in IUCN's taxonomic notes";
-    public const string NotesTaxaIntroBefore = "Found by searching the taxonomic notes of ";
-    public static string NotesTaxaIntroLink(int? year) => year is null ? "the latest global assessment" : $"the {year} global assessment";
+    public const string NotesTaxaIntroBefore = "This site searched the taxonomic notes of every global assessment of ";
+    /// After the italic name of the page's taxon.
     public static string NotesTaxaIntroAfter(string? version) =>
-        (version is null ? " for the scientific names and IUCN synonyms of other taxa on the Red List." : $" for the scientific names and IUCN synonyms of other taxa in Red List version {version}.")
-        + " Read the notes on the IUCN Red List website to see what they say about each taxon.";
+        (version is null ? " for the scientific names and IUCN synonyms of the other taxa on the Red List." : $" for the scientific names and IUCN synonyms of the other taxa in Red List version {version}.")
+        + " The years in the list link to the assessments on the IUCN Red List website, where you can read the notes.";
     public const string NameInNotesLabel = "Name in the notes:";
+    /// Under a taxon: NotesAssessmentsBefore + linked years (TaxonListSeparator between them) + NotesAssessmentsAfter(count).
+    public const string NotesAssessmentsBefore = "In the notes of the ";
+    public static string NotesAssessmentsAfter(int count) => count == 1 ? " global assessment" : " global assessments";
+    public static string NotesAssessmentYear(int? year) => year?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "undated";
+    /// The heading of an assessment's list when the list is grouped by assessment: linked year + NotesAssessmentHeadingAfter.
+    public const string NotesAssessmentHeadingAfter = " global assessment";
+    public const string NotesGroupLegend = "Group by";
+    public const string NotesGroupByTaxon = "Taxon";
+    public const string NotesGroupByAssessment = "Assessment";
+    public const string NotesSortLegend = "Sort by";
+    public const string NotesSortByNotes = "Order in the notes (newest assessment first)";
+    public const string NotesSortByName = "Scientific name";
+    public const string NotesSortByCategory = "IUCN category (Extinct first)";
 
     /// Before item index (from 0) of count in a list of taxa: "", ", " or " and ".
     public static string TaxonListSeparator(int index, int count) => index == 0 ? string.Empty : index == count - 1 ? " and " : ", ";

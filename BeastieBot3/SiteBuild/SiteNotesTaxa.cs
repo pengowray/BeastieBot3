@@ -1,8 +1,9 @@
 using System.Text.RegularExpressions;
 using BeastieBot3.Shared.SiteData;
 
-// The other taxa in the release named in the taxonomic notes of a taxon's latest global assessment
-// (notes_taxon), for "Named in IUCN's taxonomic notes" on its page. TaxonomicNotesNames reads the
+// The other taxa in the release named in the taxonomic notes of a taxon's global assessments, each
+// year's (notes_taxon), for "Named in IUCN's taxonomic notes" on its page. The taxon may be in the
+// release or not: an old id's notes often name the taxa it was split into. TaxonomicNotesNames reads the
 // names; this finds the taxon each one is, in the same kingdom:
 //
 //   1. the taxa in the release with that scientific name, rank markers ignored ("Sarotherodon
@@ -22,10 +23,11 @@ namespace BeastieBot3.SiteBuild;
 internal sealed record SiteNotesTaxon(long TaxonId, long NamedTaxonId, long AssessmentId, string? NameInNotes, int Position);
 
 internal static partial class SiteNotesTaxa {
-    /// notes: the names read from each taxon's latest global assessment, by taxon id. Call it while
-    /// the taxa still have their IUCN synonyms (before the names are written).
+    /// notes: the names read from each global assessment of each taxon, by taxon id. One row per
+    /// taxon named in an assessment's notes. Call it while the taxa still have their IUCN synonyms
+    /// (before the names are written).
     public static List<SiteNotesTaxon> Find(IReadOnlyCollection<SiteTaxon> taxa,
-        IReadOnlyDictionary<long, (long AssessmentId, IReadOnlyList<NotesName> Names)> notes, SiteBuildStats stats) {
+        IReadOnlyDictionary<long, List<(long AssessmentId, IReadOnlyList<NotesName> Names)>> notes, SiteBuildStats stats) {
         var inRelease = taxa.Where(t => t.InRelease && !string.IsNullOrWhiteSpace(t.Kingdom)).ToList();
         var byName = inRelease
             .GroupBy(t => (Kingdom(t), Key(t.ScientificName)))
@@ -39,43 +41,50 @@ internal static partial class SiteNotesTaxa {
                 list.Add(taxon);
             }
         }
-        var byId = inRelease.ToDictionary(t => t.TaxonId);
+        var byId = taxa.Where(t => !string.IsNullOrWhiteSpace(t.Kingdom)).ToDictionary(t => t.TaxonId);
 
         var rows = new List<SiteNotesTaxon>();
-        foreach (var (taxonId, (assessmentId, names)) in notes.OrderBy(n => n.Key)) {
+        var pairs = new HashSet<(long, long)>();
+        foreach (var (taxonId, assessments) in notes.OrderBy(n => n.Key)) {
             if (!byId.TryGetValue(taxonId, out var taxon)) {
                 continue;
             }
             var kingdom = Kingdom(taxon);
             var ownKeys = taxon.IucnSynonyms.Select(s => Key(s.Name)).Append(Key(taxon.ScientificName)).ToHashSet(StringComparer.Ordinal);
-            var named = new HashSet<long>();
-            foreach (var name in names) {
-                var key = Key(name.Full);
-                if (ownKeys.Contains(key)) {
-                    continue;
+            var namedByTaxon = false;
+            foreach (var (assessmentId, names) in assessments.OrderBy(a => a.AssessmentId)) {
+                var named = new HashSet<long>();
+                foreach (var name in names) {
+                    var key = Key(name.Full);
+                    if (ownKeys.Contains(key)) {
+                        continue;
+                    }
+                    var candidates = byName.TryGetValue((kingdom, key), out var withName) ? withName
+                        : bySynonym.TryGetValue((kingdom, key), out var listing) ? listing
+                        : null;
+                    if (candidates is null) {
+                        continue;
+                    }
+                    if (candidates.Count != 1) {
+                        stats.NotesNamesOfSeveralTaxa++;
+                        continue;
+                    }
+                    var other = candidates[0];
+                    if (other.TaxonId == taxon.TaxonId || SameSpecies(other, taxon) || !named.Add(other.TaxonId)) {
+                        continue;
+                    }
+                    var nameInNotes = Key(other.ScientificName) == key ? null : name.Written;
+                    rows.Add(new SiteNotesTaxon(taxonId, other.TaxonId, assessmentId, nameInNotes, named.Count - 1));
+                    pairs.Add((taxonId, other.TaxonId));
                 }
-                var candidates = byName.TryGetValue((kingdom, key), out var withName) ? withName
-                    : bySynonym.TryGetValue((kingdom, key), out var listing) ? listing
-                    : null;
-                if (candidates is null) {
-                    continue;
-                }
-                if (candidates.Count != 1) {
-                    stats.NotesNamesOfSeveralTaxa++;
-                    continue;
-                }
-                var other = candidates[0];
-                if (other.TaxonId == taxon.TaxonId || SameSpecies(other, taxon) || !named.Add(other.TaxonId)) {
-                    continue;
-                }
-                var nameInNotes = Key(other.ScientificName) == key ? null : name.Written;
-                rows.Add(new SiteNotesTaxon(taxonId, other.TaxonId, assessmentId, nameInNotes, named.Count - 1));
+                namedByTaxon |= named.Count > 0;
             }
-            if (named.Count > 0) {
+            if (namedByTaxon) {
                 stats.TaxaWithNotesTaxa++;
             }
         }
-        stats.NotesTaxa = rows.Count;
+        stats.NotesTaxa = pairs.Count;
+        stats.NotesTaxonRows = rows.Count;
         return rows;
     }
 

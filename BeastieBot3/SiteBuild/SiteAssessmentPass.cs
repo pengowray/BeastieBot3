@@ -83,12 +83,12 @@ internal sealed class SiteAssessmentPass {
     private readonly AssessorNamePool _names = new();
     // The countries and areas of each taxon's latest global assessment.
     private readonly SiteAreaCollector _areas = new();
-    // The names in the taxonomic notes of each taxon's latest global assessment (TaxonomicNotesNames).
-    private readonly Dictionary<long, (long AssessmentId, IReadOnlyList<NotesName> Names)> _notesNames = new();
+    // The names in the taxonomic notes of each global assessment (TaxonomicNotesNames), by taxon.
+    private readonly Dictionary<long, List<(long AssessmentId, IReadOnlyList<NotesName> Names)>> _notesNames = new();
 
-    /// The names in the taxonomic notes of each taxon's latest global assessment, by taxon id, for
-    /// SiteNotesTaxa; only taxa whose notes name something.
-    public IReadOnlyDictionary<long, (long AssessmentId, IReadOnlyList<NotesName> Names)> NotesNames => _notesNames;
+    /// The names in the taxonomic notes of each global assessment of each taxon (in the release or
+    /// not), by taxon id, for SiteNotesTaxa; only assessments whose notes name something.
+    public IReadOnlyDictionary<long, List<(long AssessmentId, IReadOnlyList<NotesName> Names)>> NotesNames => _notesNames;
     // credit_name: each distinct credit entry or "full" string, with its id.
     private readonly Dictionary<string, long> _creditNames = new(StringComparer.Ordinal);
     // Rows with a damaged author name, parsed again once _names is complete.
@@ -329,15 +329,21 @@ internal sealed class SiteAssessmentPass {
             assessment.PopulationSize = PopulationSize(root);
             if (_taxa.TryGetValue(assessment.TaxonId, out var taxon) && taxon.LatestGlobalAssessmentId == assessment.AssessmentId) {
                 _areas.Add(assessment.TaxonId, root);
-                var notesNames = TaxonomicNotesNames.Read(TaxonomicNotes(root), taxon.Genus, taxon.SpeciesEpithet);
-                if (notesNames.Count > 0) {
-                    _notesNames[assessment.TaxonId] = (assessment.AssessmentId, notesNames);
-                }
             }
             assessment.CreditsJson = Credits(root);
             assessment.HasTaxonomicNotes = HasTaxonomicNotes(root);
             if (assessment.HasTaxonomicNotes == true) {
                 _stats.PayloadsWithTaxonomicNotes++;
+                if (string.Equals(assessment.Scope.Trim(), "Global", StringComparison.OrdinalIgnoreCase)
+                    && _taxa.TryGetValue(assessment.TaxonId, out var notesTaxon)) {
+                    var notesNames = TaxonomicNotesNames.Read(TaxonomicNotes(root), notesTaxon.Genus, notesTaxon.SpeciesEpithet);
+                    if (notesNames.Count > 0) {
+                        if (!_notesNames.TryGetValue(assessment.TaxonId, out var list)) {
+                            _notesNames[assessment.TaxonId] = list = [];
+                        }
+                        list.Add((assessment.AssessmentId, notesNames));
+                    }
+                }
             }
             if (!AddCitation(assessment, root, downloaded, dois, repairAuthorName: null)) {
                 _waitingForNames.Add((assessment, json, downloaded, dois));
@@ -537,8 +543,8 @@ internal sealed class SiteAssessmentPass {
         return id;
     }
 
-    // documentation.taxonomic_notes: HTML text, or null. Only whether it has text, and the names in the
-    // latest global assessment's (TaxonomicNotesNames), are kept; the notes are narrative text, which
+    // documentation.taxonomic_notes: HTML text, or null. Only whether it has text, and the names in a
+    // global assessment's (TaxonomicNotesNames), are kept; the notes are narrative text, which
     // the site database must not hold.
     private static bool HasTaxonomicNotes(JsonElement root) => SiteBuildRules.HasText(TaxonomicNotes(root));
 

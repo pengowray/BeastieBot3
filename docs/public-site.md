@@ -230,20 +230,22 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   not cached. The notes are narrative text, so the database holds only this flag. In the build of
   3 October 2026, 93,587 of the 366,258 assessments have notes.
 - `notes_taxon` (schema 29) lists the other taxa in the release named in the taxonomic notes of a
-  taxon's latest global assessment (`SiteNotesTaxa`). Only the names are read from the notes:
-  `TaxonomicNotesNames` takes the text in italics (`<i>`, `<em>`) that is a whole name ("Cebuella
-  pygmaea niveiventris", "Callithrix (Cebuella) pygmaea") or a name with the genus, or the genus and
-  species, abbreviated ("C. niveiventris", "C. p. niveiventris"), which it expands from the latest
-  whole name with those initials (before the first one, from the assessed taxon's own name). A name
-  is the taxon in the release, in the same kingdom, with that scientific name (rank markers ignored),
-  else the one taxon whose IUCN synonyms have it. A name is left out when it is the taxon's own name
-  or one of its own IUCN synonyms, when it fits two or more taxa, and when it is the taxon's own
-  species or one of its own subspecies, varieties or subpopulations (the page lists those already).
-  `name_in_notes` keeps the name as the notes write it when it is not the named taxon's own name;
-  `position` keeps the order of first mention. The build summary rows are "Taxa whose latest global
-  assessment's taxonomic notes name another taxon in the release", "Taxa named in another taxon's
-  taxonomic notes (notes_taxon rows)" and "Names in taxonomic notes that fit two or more taxa (left
-  out)". In 2026-1, the notes of 15,742 taxa name 22,366 other taxa (1,540 by another name, such as an old subspecies name); 27 names fit two or more taxa. 22,350 of the links are within one order; the other 16 are taxa of other orders that the notes mention, such as *Pan troglodytes* in the notes of the West Africa subpopulation of *Panthera pardus*.
+  taxon's global assessments, one row per assessment whose notes name the taxon (`SiteNotesTaxa`).
+  The taxon may be in the release or not: an old id's notes often name the taxa it was split into.
+  Only the names are read from the notes: `TaxonomicNotesNames` takes the text in italics (`<i>`,
+  `<em>`) that is a whole name ("Cebuella pygmaea niveiventris", "Callithrix (Cebuella) pygmaea")
+  or a name with the genus, or the genus and species, abbreviated ("C. niveiventris", "C. p.
+  niveiventris"), which it expands from the latest whole name with those initials (before the first
+  one, from the assessed taxon's own name). A name is the taxon in the release, in the same kingdom,
+  with that scientific name (rank markers ignored), else the one taxon whose IUCN synonyms have it.
+  A name is left out when it is the taxon's own name or one of its own IUCN synonyms, when it fits
+  two or more taxa, and when it is the taxon's own species or one of its own subspecies, varieties
+  or subpopulations (the page lists those already). `name_in_notes` keeps the name as that
+  assessment's notes write it when it is not the named taxon's own name; `position` keeps the order
+  of first mention in that assessment's notes. The build summary rows are "Taxa whose global
+  assessments' taxonomic notes name another taxon in the release", "Taxa named in another taxon's
+  taxonomic notes (pairs of taxa)", "Taxa named in an assessment's taxonomic notes (notes_taxon
+  rows)" and "Names in taxonomic notes that fit two or more taxa (left out)". In the build of 10 October 2026, the notes of 17,441 taxa name 25,041 other taxa, in 44,194 rows (1,372 of them from the notes of old ids); 46 names fit two or more taxa.
 - `epbc_listing` has one row per SPRAT profile of a taxon (schema version 3; version 2 had the
   columns `taxon.sprat_taxon_id` and `taxon.epbc_status` instead). `applies_to` is `taxon` for the
   profile of the whole taxon (matched by the taxon's scientific name, or by one of the IUCN names
@@ -1753,10 +1755,16 @@ The citations page writes the same name in the citation title, with the current 
   in the release. Both are page-time lookups (`SiteQueries.GetTaxaNamed`,
   `GetTaxaWithIucnSynonym`), only on pages of taxa in the release; an old id's links are in its
   combined history.
-- "Named in IUCN's taxonomic notes" lists the taxa in `notes_taxon` for the taxon, in the order the
-  notes name them, with "Name in the notes: X" under one that the notes name differently, and a
-  link to the assessment on the IUCN Red List website. The site does not say how the taxa are
-  related: the notes say that, and the site does not show them.
+- "Named in IUCN's taxonomic notes" lists the taxa in `notes_taxon` for the taxon (`Pages/NotesTaxa.cs`,
+  `Pages/Shared/_NotesTaxa.cshtml`), one entry per taxon in the order the notes name them (newest
+  assessment first), with the name the notes use when it is not the taxon's own and the years of
+  the assessments whose notes name it, each linked to the assessment on the IUCN Red List website.
+  It is on the pages of old ids too. When there is more than one taxon or assessment, `site.js`
+  shows choices (hidden without JavaScript): group by taxon or by assessment (the page holds both
+  lists; by assessment, a heading per assessment and its taxa under it) and sort by the order in the
+  notes, scientific name or IUCN category (`NotesTaxa.CategoryRank`: EX, EW, CR(PE), CR(PEW), CR, EN,
+  VU, NT, LC, DD, then none). The site does not say how the taxa are related: the notes say that,
+  and the site does not show them.
 
 ### Comparative classification (`ladder_node`)
 

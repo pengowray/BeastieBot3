@@ -609,6 +609,47 @@
         });
     }
 
+    // "Named in IUCN's taxonomic notes" on a taxon page: the choices are rendered hidden and shown
+    // here. Grouping shows the list by taxon or the lists by assessment (both are in the page);
+    // sorting reorders the items of every list by their data-order (the notes' order), data-name or
+    // data-rank (IUCN category), with the notes' order breaking ties.
+    function setUpNotesTaxa() {
+        document.querySelectorAll("[data-notes-taxa]").forEach(function (section) {
+            var choices = section.querySelector("[data-notes-choices]");
+            if (!choices) {
+                return;
+            }
+            choices.hidden = false;
+            function apply() {
+                var group = choices.querySelector("input[name=\"notes-group\"]:checked");
+                var sort = choices.querySelector("input[name=\"notes-sort\"]:checked");
+                var view = group ? group.value : "taxon";
+                section.querySelectorAll("[data-notes-view]").forEach(function (element) {
+                    element.hidden = element.getAttribute("data-notes-view") !== view;
+                });
+                var key = sort ? sort.value : "order";
+                section.querySelectorAll("[data-notes-list]").forEach(function (list) {
+                    var items = Array.prototype.slice.call(list.children);
+                    items.sort(function (a, b) {
+                        var order = Number(a.getAttribute("data-order")) - Number(b.getAttribute("data-order"));
+                        if (key === "name") {
+                            return a.getAttribute("data-name").localeCompare(b.getAttribute("data-name")) || order;
+                        }
+                        if (key === "rank") {
+                            return Number(a.getAttribute("data-rank")) - Number(b.getAttribute("data-rank")) || order;
+                        }
+                        return order;
+                    });
+                    items.forEach(function (item) {
+                        list.appendChild(item);
+                    });
+                });
+            }
+            choices.addEventListener("change", apply);
+            apply();
+        });
+    }
+
     // The cite tool's choice of Wikipedia or Wikidata can be picked by the address: /cite#wikidata
     // ticks the Wikidata choice (the server cannot see the part after #).
     function setUpHashChoice() {
@@ -627,6 +668,7 @@
     setUpNavMenu();
     setUpInfoTips();
     setUpListType();
+    setUpNotesTaxa();
     setUpLiveOptions();
     setUpSuggestions();
     setUpTextareas();

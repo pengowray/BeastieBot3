@@ -223,13 +223,16 @@ public sealed class SpeciesModel : TaxonPageModel {
             var iucnSynonyms = Names.Synonyms.Where(s => s.FromIucn).Select(s => s.Name).ToList();
             Names = Names.WithSameNameTaxa(_queries.GetTaxaNamed(iucnSynonyms, taxon.Kingdom, taxon.TaxonId)) with {
                 ListedAsSynonymBy = _queries.GetTaxaWithIucnSynonym(taxon.ScientificName, taxon.Kingdom, taxon.TaxonId),
-                TaxonId = taxon.TaxonId,
-                ScientificName = taxon.ScientificName,
-                SubpopulationName = taxon.SubpopulationName,
-                NotesTaxa = _queries.GetNotesTaxa(taxon.TaxonId),
-                Version = Version,
             };
         }
+        // An old id's notes often name the taxa it was split into, so its page lists them too.
+        Names = Names with {
+            TaxonId = taxon.TaxonId,
+            ScientificName = taxon.ScientificName,
+            SubpopulationName = taxon.SubpopulationName,
+            NotesTaxa = NotesTaxa.Build(taxon.TaxonId, _queries.GetNotesTaxa(taxon.TaxonId)),
+            Version = Version,
+        };
         SubspeciesList = SubspeciesRows.Load(_queries, taxon);
         LoadRelatedTaxa();
         LoadArrival(q);

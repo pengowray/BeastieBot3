@@ -712,6 +712,10 @@ public static class FixtureDb {
         // by its old name, and Platanista minor's name it by its own.
         w.NotesTaxon(Gangetica, Minor, GangeticaLatest, "Platanista gangetica minor", 0);
         w.NotesTaxon(Minor, Gangetica, MinorLatest, null, 0);
+        // Made up: the notes of the old id's 2012 and 1996 assessments name Platanista minor, the
+        // 1996 notes by its old name.
+        w.NotesTaxon(GangeticaOld, Minor, GangeticaOld2012, null, 0);
+        w.NotesTaxon(GangeticaOld, Minor, GangeticaOld1996, "Platanista gangetica minor", 0);
 
         // Ids with no global assessments.
         w.Taxon(Clessiniola, "Clessiniola variabilis", "species", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "LITTORINIMORPHA", "HYDROBIIDAE", "Clessiniola",

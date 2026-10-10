@@ -1890,3 +1890,34 @@ th.num {
 .place-ranks {
     margin: 0.2rem 0 1rem;
 }
+
+/* "Named in IUCN's taxonomic notes": the sort and group choices (shown by site.js), and the heading
+   of each assessment's list when the list is grouped by assessment. */
+.notes-taxa-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    margin: 0.5rem 0;
+}
+
+.notes-taxa-choices .option-group {
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
+.notes-taxa-choices legend {
+    font-weight: 600;
+    padding: 0;
+    margin-bottom: 0.2rem;
+}
+
+.notes-taxa-choices label {
+    margin-right: 1rem;
+    white-space: nowrap;
+}
+
+.notes-assessment {
+    margin: 1rem 0 0.25rem;
+    font-size: 1rem;
+}

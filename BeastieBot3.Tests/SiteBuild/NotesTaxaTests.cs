@@ -51,8 +51,8 @@ public class NotesTaxaTests {
         };
     }
 
-    private static IReadOnlyDictionary<long, (long, IReadOnlyList<NotesName>)> Notes(long taxonId, params (string Written, string Full)[] names) =>
-        new Dictionary<long, (long, IReadOnlyList<NotesName>)> { [taxonId] = (taxonId * 10, names.Select(n => new NotesName(n.Written, n.Full)).ToList()) };
+    private static IReadOnlyDictionary<long, List<(long, IReadOnlyList<NotesName>)>> Notes(long taxonId, params (string Written, string Full)[] names) =>
+        new Dictionary<long, List<(long, IReadOnlyList<NotesName>)>> { [taxonId] = [(taxonId * 10, names.Select(n => new NotesName(n.Written, n.Full)).ToList())] };
 
     [Fact]
     public void Find_ByNameThenByOneTaxonsSynonym() {
@@ -70,7 +70,29 @@ public class NotesTaxaTests {
             new SiteNotesTaxon(136926, 136865, 1369260, "Cebuella pygmaea niveiventris", 0),
             new SiteNotesTaxon(136926, 41518, 1369260, null, 1),
         ], rows);
-        Assert.Equal((2, 1), (stats.NotesTaxa, stats.TaxaWithNotesTaxa));
+        Assert.Equal((2, 2, 1), (stats.NotesTaxa, stats.NotesTaxonRows, stats.TaxaWithNotesTaxa));
+    }
+
+    [Fact]
+    public void Find_EveryAssessment_AndTaxaNotInTheRelease() {
+        // An old id whose 2008 and 2016 notes name the taxon it was split into.
+        var old = Taxon(41758, "Platanista gangetica", inRelease: false);
+        var minor = Taxon(41757, "Platanista minor");
+        var notes = new Dictionary<long, List<(long, IReadOnlyList<NotesName>)>> {
+            [41758] = [
+                (2016, [new NotesName("P. minor", "Platanista minor")]),
+                (2008, [new NotesName("Platanista gangetica minor", "Platanista gangetica minor"), new NotesName("Platanista minor", "Platanista minor")]),
+            ],
+        };
+        minor.IucnSynonyms = [new SiteSynonym("Platanista gangetica ssp. minor")];
+        var stats = new SiteBuildStats();
+        var rows = SiteNotesTaxa.Find([old, minor], notes, stats);
+        // In 2008 the first name for it is its old one; one row per assessment.
+        Assert.Equal([
+            new SiteNotesTaxon(41758, 41757, 2008, "Platanista gangetica minor", 0),
+            new SiteNotesTaxon(41758, 41757, 2016, null, 0),
+        ], rows);
+        Assert.Equal((1, 2, 1), (stats.NotesTaxa, stats.NotesTaxonRows, stats.TaxaWithNotesTaxa));
     }
 
     [Fact]

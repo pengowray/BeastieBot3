@@ -436,9 +436,11 @@ internal sealed class SiteBuildStats {
     /// named without it, and a provisional name and the taxon named with its quoted epithet.
     public int WorkingNameLinks;
     public int ProvisionalNameLinks;
-    /// Taxa named in the taxonomic notes of another taxon's latest global assessment (SiteNotesTaxa):
-    /// the rows, the taxa whose notes name at least one, and the names that fit two or more taxa.
+    /// Taxa named in the taxonomic notes of another taxon's global assessments (SiteNotesTaxa): the
+    /// pairs of taxa, the rows (one per assessment), the taxa whose notes name at least one, and the
+    /// names that fit two or more taxa.
     public int NotesTaxa;
+    public int NotesTaxonRows;
     public int TaxaWithNotesTaxa;
     public int NotesNamesOfSeveralTaxa;
     /// Assessments with no scope given a probable scope from rules/iucn-probable-scopes.yml, and

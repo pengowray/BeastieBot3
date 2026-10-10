@@ -1,0 +1,42 @@
+@model NotesTaxa
+@* "Named in IUCN's taxonomic notes": one entry per taxon, with the assessments whose notes name it.
+   site.js shows the choices (hidden without JavaScript), sorts the entries by data-order (the notes'
+   order), data-name or data-rank (category), and can show one list per assessment instead. *@
+<div class="notes-taxa" data-notes-taxa>
+    @if (Model.OffersChoices) {
+        <div class="notes-taxa-choices" data-notes-choices hidden>
+            @if (Model.OffersGrouping) {
+                <fieldset class="option-group">
+                    <legend>@SiteText.NotesGroupLegend</legend>
+                    <label><input type="radio" name="notes-group" value="taxon" checked> @SiteText.NotesGroupByTaxon</label>
+                    <label><input type="radio" name="notes-group" value="assessment"> @SiteText.NotesGroupByAssessment</label>
+                </fieldset>
+            }
+            <fieldset class="option-group">
+                <legend>@SiteText.NotesSortLegend</legend>
+                <label><input type="radio" name="notes-sort" value="order" checked> @SiteText.NotesSortByNotes</label>
+                <label><input type="radio" name="notes-sort" value="name"> @SiteText.NotesSortByName</label>
+                <label><input type="radio" name="notes-sort" value="rank"> @SiteText.NotesSortByCategory</label>
+            </fieldset>
+        </div>
+    }
+    <div data-notes-view="taxon">
+        <ul class="taxon-list" data-notes-list>
+            @foreach (var entry in Model.ByTaxon) {
+                <partial name="_NotesTaxonItem" model="@(new NotesTaxonItem(entry, Model.TaxonId, ShowAssessments: true))" />
+            }
+        </ul>
+    </div>
+    @if (Model.OffersGrouping) {
+        <div data-notes-view="assessment" hidden>
+            @foreach (var group in Model.ByAssessment) {
+                <h4 class="notes-assessment"><a href="@SiteFormat.IucnAssessmentUrl(Model.TaxonId, group.Assessment.AssessmentId)">@SiteText.NotesAssessmentYear(group.Assessment.Year)</a>@SiteText.NotesAssessmentHeadingAfter</h4>
+                <ul class="taxon-list" data-notes-list>
+                    @foreach (var entry in group.Entries) {
+                        <partial name="_NotesTaxonItem" model="@(new NotesTaxonItem(entry, Model.TaxonId, ShowAssessments: false))" />
+                    }
+                </ul>
+            }
+        </div>
+    }
+</div>

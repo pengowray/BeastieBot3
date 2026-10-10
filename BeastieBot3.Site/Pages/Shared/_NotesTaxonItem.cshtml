@@ -1,0 +1,38 @@
+@model NotesTaxonItem
+@* One taxon of "Named in IUCN's taxonomic notes", in the form of _TaxonList's items, with the name the
+   notes use when it is not the taxon's own and, when listed by taxon, the assessments whose notes
+   name it (each year links to the assessment on the IUCN Red List website). *@
+@{
+    var entry = Model.Entry;
+    var taxon = entry.Taxon;
+    var badge = BadgeModel.For(taxon);
+    var kind = SiteText.KindLabel(taxon.Kind);
+}
+<li data-order="@entry.Order" data-name="@taxon.ScientificName" data-rank="@entry.CategoryRank">
+    <div class="taxon-list-status">
+        @if (badge is not null) {
+            <partial name="_Badge" model="badge" />
+        } else {
+            <span class="no-global">@SiteText.NoGlobalShort</span>
+        }
+    </div>
+    <div class="taxon-list-name">
+        <a href="/species/@taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a>
+        @if (taxon.CommonNameEn is not null) {
+            <span class="common-name">@taxon.CommonNameEn</span>
+        }
+        @if (kind is not null) {
+            <span class="kind">@kind</span>
+        }
+        @if (Model.ShowAssessments) {
+            @* <text> keeps the whitespace of the code lines out of the sentence. *@
+            <div class="match-note notes-assessments">@SiteText.NotesAssessmentsBefore@for (var i = 0; i < entry.Assessments.Count; i++) {
+                    var a = entry.Assessments[i];
+                    <text>@SiteText.TaxonListSeparator(i, entry.Assessments.Count)<a href="@SiteFormat.IucnAssessmentUrl(Model.TaxonId, a.AssessmentId)">@SiteText.NotesAssessmentYear(a.Year)</a></text>
+                }@SiteText.NotesAssessmentsAfter(entry.Assessments.Count)</div>
+        }
+        @if (entry.NameInNotes is { } written) {
+            <div class="match-note">@SiteText.NameInNotesLabel @Html.Raw(TaxonNames.NotesNameHtml(written))</div>
+        }
+    </div>
+</li>

@@ -113,10 +113,9 @@
         </div>
     }
 
-    @if (Model.NotesTaxa.Count > 0) {
-        var notes = Model.NotesTaxa[0];
+    @if (Model.NotesTaxa is { IsEmpty: false } notesTaxa) {
         <h3 id="notes-taxa">@SiteText.NamesNotesTaxa</h3>
-        <p class="names-intro">@SiteText.NotesTaxaIntroBefore<a href="@SiteFormat.IucnAssessmentUrl(Model.TaxonId, notes.AssessmentId)">@SiteText.NotesTaxaIntroLink(notes.AssessmentYear)</a>@SiteText.NotesTaxaIntroAfter(Model.Version)</p>
-        <partial name="_TaxonList" model="Model.NotesTaxaItems" />
+        <p class="names-intro">@SiteText.NotesTaxaIntroBefore<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(Model.ScientificName, Model.SubpopulationName))</span>@SiteText.NotesTaxaIntroAfter(Model.Version)</p>
+        <partial name="_NotesTaxa" model="notesTaxa" />
     }
 </section>

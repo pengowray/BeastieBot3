@@ -49,22 +49,14 @@ public sealed record TaxonNames(
     public string ScientificName { get; init; } = string.Empty;
     public string? SubpopulationName { get; init; }
 
-    /// The other taxa in the release named in the taxonomic notes of this taxon's latest global
-    /// assessment, in the order the notes name them, and the Red List version (for the intro).
-    public IReadOnlyList<NotesTaxonRow> NotesTaxa { get; init; } = [];
+    /// The other taxa in the release named in the taxonomic notes of this taxon's global assessments,
+    /// and the Red List version (for the intro).
+    public NotesTaxa? NotesTaxa { get; init; }
     public string? Version { get; init; }
 
-    /// NotesTaxa as taxon list items, with the name as the notes write it under each one that the
-    /// notes name differently.
-    public IReadOnlyList<TaxonListItem> NotesTaxaItems => NotesTaxa
-        .Select(n => n.NameInNotes is { } written
-            ? new TaxonListItem(n.Taxon, SiteText.NameInNotesLabel, NotesNameHtml(written))
-            : new TaxonListItem(n.Taxon))
-        .ToList();
-
-    // A name as the notes write it, in italics: whole, unless it has a rank marker
-    // ("C. p. niveiventris", "Cebuella pygmaea ssp. niveiventris").
-    private static string NotesNameHtml(string written) =>
+    /// A name as the notes write it, in italics: whole, unless it has a rank marker
+    /// ("C. p. niveiventris", "Cebuella pygmaea ssp. niveiventris").
+    public static string NotesNameHtml(string written) =>
         written.Contains(" ssp. ", StringComparison.Ordinal) || written.Contains(" subsp. ", StringComparison.Ordinal) || written.Contains(" var. ", StringComparison.Ordinal)
             ? ScientificNameMarkup.ToSynonymHtml(written)
             : "<i>" + SiteHtml.Encode(written) + "</i>";

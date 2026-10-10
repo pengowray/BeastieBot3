@@ -1,3 +1,6 @@
+using BeastieBot3.Site.Data;
+using BeastieBot3.Site.Pages;
+
 namespace BeastieBot3.Site.Tests;
 
 /// The name an assessment was published under, or the name in its DOI's title, when it differs from
@@ -171,28 +174,52 @@ public sealed class RankMarkerKeysTests {
     }
 }
 
-/// "Named in IUCN's taxonomic notes" (notes_taxon). In the fixture, Platanista gangetica's notes name
-/// Platanista minor as "Platanista gangetica minor", and Platanista minor's name Platanista gangetica.
+/// "Named in IUCN's taxonomic notes" (notes_taxon). In the fixture (made up): Platanista gangetica's
+/// notes name Platanista minor as "Platanista gangetica minor", Platanista minor's name Platanista
+/// gangetica, and the old id 41758's 2012 and 1996 notes name Platanista minor (1996 by its old name).
 public sealed class NotesTaxaPageTests(SiteFactory factory) : IClassFixture<SiteFactory> {
     private readonly HttpClient _client = factory.Client();
 
+    private static string Section(string html) => Html.Between(html, "<h3 id=\"notes-taxa\">", "</section>");
+
     [Fact]
-    public async Task ListsTheNamedTaxa_WithTheNameTheNotesUse() {
+    public async Task ListsTheNamedTaxa_WithTheYearsAndTheNameTheNotesUse() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.Gangetica}");
-        var section = Html.Between(html, "<h3 id=\"notes-taxa\">", "</section>");
+        var section = Section(html);
         Assert.Contains("Named in IUCN's taxonomic notes", Html.Text(html));
-        Assert.Contains($"Found by searching the taxonomic notes of <a href=\"https://www.iucnredlist.org/species/{FixtureDb.Gangetica}/{FixtureDb.GangeticaLatest}\">the 2022 global assessment</a>"
-            + " for the scientific names and IUCN synonyms of other taxa in Red List version 2026-1.", section);
+        Assert.Contains("This site searched the taxonomic notes of every global assessment of <span class=\"sci-name\"><i>Platanista gangetica</i></span>"
+            + " for the scientific names and IUCN synonyms of the other taxa in Red List version 2026-1. The years in the list link to the assessments"
+            + " on the IUCN Red List website, where you can read the notes.", section);
         Assert.Contains($"<a href=\"/species/{FixtureDb.Minor}\"><i>Platanista minor</i></a>", section);
+        Assert.Contains($"<div class=\"match-note notes-assessments\">In the notes of the <a href=\"https://www.iucnredlist.org/species/{FixtureDb.Gangetica}/{FixtureDb.GangeticaLatest}\">2022</a> global assessment</div>", section);
         Assert.Contains("<div class=\"match-note\">Name in the notes: <i>Platanista gangetica minor</i></div>", section);
+        // One taxon from one assessment: nothing to sort or group.
+        Assert.DoesNotContain("data-notes-choices", section);
     }
 
     [Fact]
     public async Task NoNameNote_WhenTheNotesUseTheTaxonsOwnName() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Minor}");
-        var section = Html.Between(html, "<h3 id=\"notes-taxa\">", "</section>");
+        var section = Section(await _client.GetStringAsync($"/species/{FixtureDb.Minor}"));
         Assert.Contains($"<a href=\"/species/{FixtureDb.Gangetica}\"><i>Platanista gangetica</i></a>", section);
         Assert.DoesNotContain("Name in the notes", section);
+    }
+
+    [Fact]
+    public async Task OldId_EveryAssessment_WithTheChoices() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.GangeticaOld}");
+        var section = Section(html);
+        // One entry, with both years, newest first, and the name the notes used.
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(Html.Between(section, "data-notes-view=\"taxon\"", "</ul>"), "<li "));
+        Assert.Contains($"In the notes of the <a href=\"https://www.iucnredlist.org/species/{FixtureDb.GangeticaOld}/{FixtureDb.GangeticaOld2012}\">2012</a>"
+            + $" and <a href=\"https://www.iucnredlist.org/species/{FixtureDb.GangeticaOld}/{FixtureDb.GangeticaOld1996}\">1996</a> global assessments", section);
+        Assert.Contains("Name in the notes: <i>Platanista gangetica minor</i>", section);
+        // The choices, hidden until site.js shows them, and the lists by assessment, hidden.
+        Assert.Contains("<div class=\"notes-taxa-choices\" data-notes-choices hidden>", section);
+        Assert.Contains("<legend>Group by</legend>", section);
+        Assert.Contains("> IUCN category (Extinct first)</label>", section);
+        Assert.Contains("<div data-notes-view=\"assessment\" hidden>", section);
+        Assert.Contains($"<h4 class=\"notes-assessment\"><a href=\"https://www.iucnredlist.org/species/{FixtureDb.GangeticaOld}/{FixtureDb.GangeticaOld2012}\">2012</a> global assessment</h4>", section);
+        Assert.True(Html.IndexOf(section, ">2012</a> global assessment</h4>") < Html.IndexOf(section, ">1996</a> global assessment</h4>"));
     }
 
     [Fact]
@@ -201,4 +228,36 @@ public sealed class NotesTaxaPageTests(SiteFactory factory) : IClassFixture<Site
         Assert.DoesNotContain("notes-taxa", html);
         Assert.DoesNotContain("Named in IUCN's taxonomic notes", html);
     }
+}
+
+public sealed class NotesTaxaModelTests {
+    private static TaxonSummary T(long id, string name, string? category = "LC", bool pe = false) => new(id, name, null, "species", null, category, pe, false);
+
+    [Fact]
+    public void Build_OneEntryPerTaxon_NewestFirst_AndSameYearAssessmentsMerged() {
+        var a = T(1, "Alpha alpha");
+        var b = T(2, "Beta beta");
+        var notes = NotesTaxa.Build(9, [
+            new(b, null, 30, 2021), new(a, null, 30, 2021),   // the amended 2021 assessment
+            new(a, "A. alpha", 29, 2021),                       // the one it replaced
+            new(a, "Alpha alfa", 10, 2008),
+        ]);
+        Assert.Equal([2L, 1L], notes.ByTaxon.Select(e => e.Taxon.TaxonId));
+        var alpha = notes.ByTaxon[1];
+        Assert.Equal([(30L, (int?)2021), (10L, 2008)], alpha.Assessments.Select(x => (x.AssessmentId, x.Year)));
+        Assert.Equal("A. alpha", alpha.NameInNotes);
+        Assert.Equal([2021, 2008], notes.ByAssessment.Select(g => g.Assessment.Year ?? 0));
+        Assert.Equal([2L, 1L], notes.ByAssessment[0].Entries.Select(e => e.Taxon.TaxonId));
+        Assert.True(notes.OffersGrouping);
+    }
+
+    [Theory]
+    [InlineData("EX", false, 0)]
+    [InlineData("CR", true, 6)]
+    [InlineData("CR", false, 8)]
+    [InlineData("LR/nt", false, 15)]
+    [InlineData("LR/lc", false, 18)]
+    [InlineData("NE", false, 24)]
+    [InlineData(null, false, 24)]
+    public void CategoryRank(string? category, bool pe, int rank) => Assert.Equal(rank, NotesTaxa.CategoryRank(category, pe, false));
 }
