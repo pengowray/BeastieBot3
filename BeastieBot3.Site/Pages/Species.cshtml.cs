@@ -213,7 +213,8 @@ public sealed class SpeciesModel : TaxonPageModel {
             StatusParts = PartsOf(status);
             StatusCredits = CreditsView.Build(_queries.GetCredits(status.AssessmentId));
         }
-        Names = TaxonNames.Build(_queries.GetNames(taxon.TaxonId), taxon.CommonNameEn) with { PossibleSynonyms = PossibleSynonyms() };
+        Names = TaxonNames.Build(_queries.GetNames(taxon.TaxonId), taxon.CommonNameEn);
+        Names = Names with { PossibleSynonyms = PossibleSynonyms(Names.Synonyms) };
         SubspeciesList = SubspeciesRows.Load(_queries, taxon);
         LoadRelatedTaxa();
         LoadArrival(q);
@@ -222,14 +223,16 @@ public sealed class SpeciesModel : TaxonPageModel {
     }
 
     // The other IUCN taxa linked by a provisional name, then the species from the Catalogue of Life
-    // and Wikidata named with this taxon's quoted epithet.
-    private List<PossibleSynonym> PossibleSynonyms() {
+    // and Wikidata named with this taxon's quoted epithet; not a name that a source lists as a
+    // synonym (Heptapleurum nanocephalum is in its taxobox's synonyms).
+    private List<PossibleSynonym> PossibleSynonyms(IReadOnlyList<SynonymRow> synonyms) {
+        var listed = synonyms.Select(s => SiteNameKey.Fold(s.Name)).ToHashSet(StringComparer.Ordinal);
         var list = LinkedTaxa.Where(l => l.IsProvisionalName)
             .Select(l => new PossibleSynonym(l.Taxon.ScientificName, $"/species/{l.Taxon.TaxonId}", IsProvisional: !l.IsFrom, l.Taxon.TaxonId))
             .ToList();
         list.AddRange(ExtraPairs.Where(p => p.Reason == ExtraOverlapReasons.ProvisionalName && p.Extra is not null)
             .Select(p => new PossibleSynonym(p.Extra!.ScientificName, SiteUrls.Extra(p.Extra), IsProvisional: false, null, p.Extra.InCol, p.Extra.InWikidata)));
-        return list;
+        return list.Where(p => !listed.Contains(SiteNameKey.Fold(p.Name))).ToList();
     }
 
     private void LoadRelatedTaxa() {

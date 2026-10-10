@@ -190,14 +190,14 @@ public static partial class SiteText {
     public const string NoScopeLabel = "No scope given";
     public const string NoScopeHelpLabel = "Help for No scope given";
     /// The help beside NoScopeLabel. noScope, total: assessments on the site with no scope, and all of
-    /// them (meta); the sentence with the counts is left out when they are unknown.
+    /// them (meta). Two paragraphs, split by a blank line (the tip keeps line breaks).
     public static string NoScopeHelp(long? noScope, long? total) =>
         "This assessment is not counted as a global assessment on this site, because IUCN published it with no geographic scope. "
         + "Other assessments have the scope Global, or a region such as Europe, the Mediterranean or Pan-Africa. "
         + "The scope of this assessment is empty in both IUCN's API and IUCN's CSV download, so filtering IUCN's data to the Global scope leaves it out."
         + (noScope is { } n && total is { } t && t > 0
-            ? $" {SiteFormat.Number(n)} of the {SiteFormat.Number(t)} assessments on this site ({Percent(n, t)}) have no scope."
-            : "")
+            ? $"\n\n{SiteFormat.Number(n)} of the {SiteFormat.Number(t)} assessments on this site ({Percent(n, t)}) have no scope."
+            : "\n\nAssessments with no scope are rare.")
         + " Their citations and range descriptions suggest that most of them are national Red List assessments: from the UAE National Red List "
         + "Workshops (2018 and 2019), Greece (2023 to 2025) and South Africa (2013 and 2016). IUCN has not described them as national assessments.";
     private static string Percent(long n, long total) {

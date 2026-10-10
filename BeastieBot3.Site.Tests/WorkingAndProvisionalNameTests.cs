@@ -102,4 +102,16 @@ public sealed class WorkingAndProvisionalNameTests(SiteFactory factory) : IClass
         var all = await _client.GetStringAsync("/search?q=Po&all=1");
         Assert.Contains(BeastieBot3.Site.Display.SiteText.MatchCodeLabel, Html.Text(all));
     }
+
+    // A name that a source lists as a synonym is not repeated as a possible synonym, and the pair
+    // is not listed with the possible duplicates either.
+    [Fact]
+    public async Task AFormalNameThatIsListedAsASynonymIsNotRepeated() {
+        var html = await Page(FixtureDb.HeptapleurumProvisional);
+        var names = Section(html, "names");
+        Assert.Contains("Heptapleurum nanocephalum", names);
+        Assert.DoesNotContain("Possible synonyms", names);
+        Assert.DoesNotContain("id=\"duplicates\"", html);
+        Assert.Contains("its published name may be in the Synonyms table.", Html.Text(html));
+    }
 }

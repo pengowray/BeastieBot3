@@ -80,6 +80,8 @@ public static class FixtureDb {
     public const long NotogomphusGorillaLatest = 84382271;
     public const long NotogomphusLateralisProvisional = 184241;
     public const long NotogomphusLateralisProvisionalPanAfrica = 8255800;
+    public const long HeptapleurumProvisional = 36304;
+    public const long HeptapleurumProvisionalLatest = 36304001;
     // A seagrass with an IUCN species code ("Species code: Po" is stored as the code "Po").
     public const long Posidonia = 153534;
     public const long PosidoniaLatest = 153534001;
@@ -742,6 +744,12 @@ public static class FixtureDb {
         w.Taxon(NotogomphusLateralisProvisional, "Notogomphus sp. nov. 'lateralis'", "species", "ANIMALIA", "ARTHROPODA", "INSECTA", "ODONATA", "GOMPHIDAE", "Notogomphus");
         w.Assessment(NotogomphusLateralisProvisionalPanAfrica, NotogomphusLateralisProvisional, "Pan-Africa", true, "DD", criteriaVersion: "3.1", year: 2010, date: "2009-05-01");
         w.Name(NotogomphusLateralisProvisional, "Notogomphus sp. nov. 'lateralis'", "scientific", null, "iucn");
+        // A provisional name whose formal name its taxobox lists as a synonym (extra species 6).
+        w.Taxon(HeptapleurumProvisional, "Heptapleurum sp. nov. 'nanocephalum'", "species", "PLANTAE", "TRACHEOPHYTA", "MAGNOLIOPSIDA", "APIALES", "ARALIACEAE", "Heptapleurum",
+            latest: HeptapleurumProvisionalLatest);
+        w.Assessment(HeptapleurumProvisionalLatest, HeptapleurumProvisional, "Global", true, "EN", criteriaVersion: "3.1", year: 2018, date: "2017-06-01");
+        w.Name(HeptapleurumProvisional, "Heptapleurum sp. nov. 'nanocephalum'", "scientific", null, "iucn");
+        w.Name(HeptapleurumProvisional, "Heptapleurum nanocephalum", "synonym", null, "wikipedia-taxobox");
 
         w.Taxon(Posidonia, "Posidonia oceanica", "species", "PLANTAE", "TRACHEOPHYTA", "LILIOPSIDA", "ALISMATALES", "POSIDONIACEAE", "Posidonia",
             authority: "(L.) Delile", commonEn: "Neptune grass", latest: PosidoniaLatest);
@@ -799,6 +807,8 @@ public static class FixtureDb {
         w.ExtraOverlap(4, AquilegiaNew, null, "working-name", likely: false);
         w.ExtraSpecies(5, 2, "Notogomphus lateralis", null, 10337705, null, null, 12, 30);
         w.ExtraOverlap(5, NotogomphusLateralisProvisional, null, "provisional-name", likely: false);
+        w.ExtraSpecies(6, 1, "Heptapleurum nanocephalum", "B8QY9", null, null, null, 10, 3, authority: "de Kok");
+        w.ExtraOverlap(6, HeptapleurumProvisional, null, "provisional-name", likely: false);
         foreach (var id in Enumerable.Range(1, 7)) {
             w.ExtraCounts(id, 7, col: 1, wikidata: 1, both: 1);
             w.ExtraSplit(id, sources: 1, underFamily: false, iucnLikely: false, 1);
@@ -843,7 +853,7 @@ public static class FixtureDb {
         w.Meta(SiteDbSchema.MetaKeys.NoScopeAssessmentCount, w.NoScopeAssessmentCount.ToString(CultureInfo.InvariantCulture));
     }
 
-    public static int GlobalTaxonCount => 23 + FillerCount;
+    public static int GlobalTaxonCount => 24 + FillerCount;
 
     public const string GbifCitation =
         "IUCN (2026). The IUCN Red List of Threatened Species. Version 2026-1. https://www.iucnredlist.org. Downloaded on 2026-07-28. https://doi.org/10.15468/0qnb58";

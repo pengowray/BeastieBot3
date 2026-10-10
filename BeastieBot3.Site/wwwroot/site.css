@@ -1734,6 +1734,7 @@ th.num {
 }
 
 .info-tip {
+    white-space: pre-line;
     font-size: 0.9rem;
     font-weight: 400;
     line-height: 1.45;
