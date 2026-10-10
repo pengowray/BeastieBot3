@@ -1524,6 +1524,12 @@ th.num {
     align-items: center;
     gap: 0.4rem;
 }
+.update-example-arrow {
+    width: 1.25em;
+    height: 0.75em;
+    flex: none;
+    color: var(--muted);
+}
 .update-example-code {
     color: var(--muted);
     font-size: 0.85em;

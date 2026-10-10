@@ -21,7 +21,7 @@
                 <p class="update-example-look">
                     <span class="update-example-text">@text</span>
                     <partial name="_Badge" model="@BadgeModel.ForStatusCode(before)" />
-                    <span class="update-example-arrow" aria-label="@UpdateText.ExampleBecomes">→</span>
+                    <svg class="update-example-arrow" role="img" aria-label="@UpdateText.ExampleBecomes" viewBox="0 0 20 12"><path d="M1 6h16M12 1.5 17.5 6 12 10.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <partial name="_Badge" model="@BadgeModel.ForStatusCode(after)" />
                 </p>
                 <p class="update-example-code"><code>@beforeCode</code><br><code>@afterCode</code></p>
