@@ -102,7 +102,7 @@
                         var isDefault = a.AssessmentId == Model.StatusAssessment?.AssessmentId;
                         var versionNote = Model.VersionNote(a);
                         <tr class="@(isShown ? "shown" : null)">
-                            <th scope="row"><partial name="_ScopeLabel" model="@(new ScopeLabelModel(a.Scope, a.AssessmentId, "regional", Model.NoScopeHelp))" /></th>
+                            <th scope="row"><partial name="_ScopeLabel" model="@Model.ScopeLabel(a, "regional")" /></th>
                             <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
                             <td>@a.Criteria</td>
                             <td>@a.YearPublished@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</td>
@@ -124,7 +124,7 @@
                         var versionNote = Model.VersionNote(a);
                         <tr class="published-under-row">
                             <th scope="row">
-                                <partial name="_ScopeLabel" model="@(new ScopeLabelModel(a.Scope, a.AssessmentId, "regional", Model.NoScopeHelp))" />
+                                <partial name="_ScopeLabel" model="@Model.ScopeLabel(a, "regional")" />
                                 <div class="published-under">@SiteText.PublishedUnderBefore<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(other.ScientificName, other.SubpopulationName))</span>@SiteText.PublishedUnderMiddle<a href="/species/@other.TaxonId">@SiteText.IucnIdLink(other.TaxonId)</a>@SiteText.PublishedUnderAfter</div>
                             </th>
                             <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>

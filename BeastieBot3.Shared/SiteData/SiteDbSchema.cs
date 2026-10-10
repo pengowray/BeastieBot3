@@ -230,6 +230,15 @@ public static class SiteDbSchema {
         -- (`iucn api green-status`); the latest one when the cache has two. IUCN's justification text
         -- is left out. Scores are whole percentages as IUCN gives them (they can be negative); NULL
         -- when not given.
+        -- The scope this site thinks an assessment with no geographic scope (assessment.scope = '') has,
+        -- from rules/iucn-probable-scopes.yml, checked by hand. A guess, not IUCN's.
+        CREATE TABLE probable_scope (
+            assessment_id INTEGER PRIMARY KEY,
+            scope         TEXT NOT NULL,                  -- 'Greece', 'Persian Gulf', 'South Africa, Lesotho and Eswatini'
+            kind          TEXT NOT NULL,                  -- 'national' (one country) | 'regional'
+            evidence      TEXT NOT NULL                   -- why, in this site's own words (never IUCN's narrative text)
+        ) WITHOUT ROWID;
+
         CREATE TABLE green_status (
             taxon_id               INTEGER PRIMARY KEY,
             red_list_assessment_id INTEGER,            -- the Red List assessment of the page that shows it

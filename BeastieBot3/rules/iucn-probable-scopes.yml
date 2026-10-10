@@ -1,0 +1,109 @@
+# Probable scopes of the assessments IUCN published with no geographic scope.
+#
+# Every other IUCN assessment has a scope: Global, or a region such as Europe or the Persian Gulf.
+# These have none (an empty scopes array in the API, an empty scopes column in the CSV export). Their
+# citations, assessors and locations show where they were made, so this file gives each one the
+# scope it most likely has. They are this site's guesses, checked by hand; IUCN has not said so.
+#
+# site build-db copies them into the site database (table probable_scope), and the taxon page shows
+# the guess under "No scope given". The audit site's "Assessments with no geographic scope" page
+# lists them too. The build warns about an assessment with no scope that is not in this file (new
+# ones appear with each release) and about an entry whose assessment now has a scope.
+#
+# Each group: the probable scope; kind national (one country) or regional (several countries, or a
+# region IUCN uses as a scope); the evidence, shown on the site, in this site's own words (never
+# IUCN's narrative text); and the assessments, by IUCN assessment id. The name after each id is for
+# the reader of this file; the build warns when it is not the taxon's name.
+#
+# Checked against release 2026-1 (10 October 2026): 52 assessments with no scope in the IUCN API
+# cache, 33 of them on the site. The other 19 have no year published (unpublished drafts, which the
+# site leaves out); they are listed for the audit site and marked "unpublished".
+#
+# Not guessed: 205907654 Haplochromis niloticus (unpublished, category N/A, assessor Kaufman, L.,
+# Uganda the only location).
+
+scopes:
+  - scope: United Arab Emirates
+    kind: national
+    evidence: The citation credits the UAE National Red List Workshop.
+    assessments:
+      280430982: Balaenoptera edeni_new
+      281493308: Alhagi graecorum
+      281495145: Astragalus arpilobus subsp. hauarensis
+      281395992: Capparis spinosa_new
+      268018770: Rhynchobatus laevis
+      281500222: Trigonella glabra subsp. glabra
+      # Unpublished.
+      282024753: Astragalus arpilobus subsp. hauarensis
+      282024133: Trigonella glabra subsp. glabra
+      279266135: Charadrius atrifrons
+      279263278: Acrocephalus stentoreus
+      279225086: Alaudala heinei
+      279130996: Rhynchobatus laevis
+      279125433: Brevitrygon manjajiae
+      279116146: Plesiastrea versipora
+      279115823: Leptastrea purpurea
+      279096183: Pristurus minimus
+      279089673: Hemidactylus persicus
+      279083895: Phrynocephalus longicaudatus
+      279062402: Felis lybica
+
+  - scope: Greece
+    kind: national
+    evidence: Greece is the only country in the assessment's locations.
+    assessments:
+      295354092: Beta vulgaris
+      293422850: Ampullaceana relicta
+      293023108: Stagnicola fuscus
+      292736053: Epipactis helleborine
+      292279457: Bombus monticola
+      292271795: Nathrius brevipennis
+      292266763: Perforatella incarnata
+      292146397: Xerotricha conspurcata
+      291157090: Orchis spitzelii
+      290703253: Tilia platyphyllos
+      290129061: Platanthera chlorantha
+      289734988: Cochlostoma elegans
+      289618696: Dictamnus albus
+      281138601: Ophrys holosericea
+      281066909: Platanthera holmboei
+      280794021: Physella acuta
+      277364420: Aphanius almiriensis
+      227883295: Oedalechilus labeo
+      292206062: Theodoxus meridionalis
+      266840983: Apodemus witherbyi
+      225831295: Prionotropis willemsorum
+
+  - scope: Greece
+    kind: national
+    evidence: >-
+      The assessment's rationale is about the species in Greece, although its locations include
+      other countries.
+    assessments:
+      297328394: Aquilegia ottonis_new
+      292343570: Valencia letourneuxi
+      292290912: Austropotamobius torrentium
+      277310698: Oxynoemacheilus theophilii
+      # Unpublished.
+      292342857: Valencia letourneuxi
+
+  - scope: South Africa, Lesotho and Eswatini
+    kind: regional
+    evidence: >-
+      The assessors and reviewers include editors of the red lists of South Africa, Lesotho and
+      Eswatini: the reptile atlas of 2014 and the mammal red list of 2016.
+    assessments:
+      293779159: Ptenopus garrulus_new
+      299807856: Grammomys cometes
+
+  - scope: Persian Gulf
+    kind: regional
+    evidence: >-
+      The assessment's locations are the seven countries around the Persian Gulf, a region IUCN
+      uses as a scope.
+    assessments:
+      # Unpublished.
+      280334411: Trachinocephalus trachinus
+      280318076: Dussumieria acuta
+      280283142: Epinephelus multinotatus
+      280279533: Lethrinus nebulosus

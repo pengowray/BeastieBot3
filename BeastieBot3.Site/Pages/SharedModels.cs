@@ -43,8 +43,9 @@ public sealed record ReasonCellModel(ReasonCell? Cell);
 public sealed record InfoTipModel(string Id, string Label, string Text);
 
 /// The region of an assessment for _ScopeLabel. Place: where on the page ("status", "regional"), for
-/// the help tip's id. Help: the text of the tip shown beside "No scope given".
-public sealed record ScopeLabelModel(string Scope, long AssessmentId, string Place, string Help) {
+/// the help tip's id. Help: the text of the tip shown beside "No scope given". Probable: this site's
+/// guess at the scope, or null.
+public sealed record ScopeLabelModel(string Scope, long AssessmentId, string Place, string Help, ProbableScopeRow? Probable = null) {
     public bool HasNoScope => string.IsNullOrWhiteSpace(Scope);
 }
 

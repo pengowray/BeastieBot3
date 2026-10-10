@@ -204,6 +204,12 @@ public static partial class SiteText {
         var percent = 100.0 * n / total;
         return percent < 0.01 && n > 0 ? "less than 0.01%" : $"{percent.ToString(percent < 1 ? "0.##" : "0.#", CultureInfo.InvariantCulture)}%";
     }
+    /// Under "No scope given": this site's guess at the scope. kind: "national" or "regional".
+    public static string ProbableScope(string scope, string kind) =>
+        $"Probable scope: {scope} ({(kind == "national" ? "national" : "regional")} assessment)";
+    /// The last paragraph of the help beside "No scope given" when there is a probable scope.
+    public static string ProbableScopeHelp(string evidence) =>
+        $"The probable scope is this site's guess, checked by hand. Evidence: {evidence}";
     /// Under the region of a row of the regional table that IUCN published under a "_new" record of
     /// the taxon: PublishedUnderBefore + italic name + PublishedUnderMiddle + link("IUCN id {id}") + PublishedUnderAfter.
     public const string PublishedUnderBefore = "Published under ";

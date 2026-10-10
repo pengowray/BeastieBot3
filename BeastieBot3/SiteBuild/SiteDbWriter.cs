@@ -343,6 +343,20 @@ internal sealed class SiteDbWriter : IDisposable {
         }
     }
 
+    /// The rows of a query on the database being written, read with map.
+    public List<T> Query<T>(string sql, Func<SqliteDataReader, T> map) {
+        using var command = _connection.CreateCommand();
+        command.Transaction = _transaction;
+        command.CommandText = sql;
+        command.CommandTimeout = 0;
+        using var reader = command.ExecuteReader();
+        var rows = new List<T>();
+        while (reader.Read()) {
+            rows.Add(map(reader));
+        }
+        return rows;
+    }
+
     public string? Scalar(string sql) {
         using var command = _connection.CreateCommand();
         command.Transaction = _transaction;

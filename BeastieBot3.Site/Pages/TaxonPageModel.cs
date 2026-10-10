@@ -97,8 +97,17 @@ public abstract class TaxonPageModel : PageModel {
     public string? TaxoboxWikitextUrl { get; private set; }
     public string? TaxoboxWikitextLabel { get; private set; }
 
-    /// The text of the help beside "No scope given", with how many of the site's assessments have no scope.
-    public string NoScopeHelp => SiteText.NoScopeHelp(_db.Snapshot?.NoScopeAssessmentCount, _db.Snapshot?.AssessmentCount);
+    /// The probable scopes of the page's assessments with no scope, by assessment id.
+    private IReadOnlyDictionary<long, ProbableScopeRow> ProbableScopes { get; set; } = new Dictionary<long, ProbableScopeRow>();
+
+    /// What _ScopeLabel shows for an assessment's scope: "No scope given" with its help and probable
+    /// scope, or the region. place: where on the page ("status", "regional"), for the help's id.
+    public ScopeLabelModel ScopeLabel(AssessmentRow assessment, string place) {
+        var probable = ProbableScopes.GetValueOrDefault(assessment.AssessmentId);
+        var help = SiteText.NoScopeHelp(_db.Snapshot?.NoScopeAssessmentCount, _db.Snapshot?.AssessmentCount)
+            + (probable is null ? "" : "\n\n" + SiteText.ProbableScopeHelp(probable.Evidence));
+        return new ScopeLabelModel(assessment.Scope, assessment.AssessmentId, place, help, probable);
+    }
 
     public IReadOnlyList<AssessmentRow> GlobalHistory { get; private set; } = [];
     /// The rows of the Regional assessments table. For a taxon in the release, the latest assessment
@@ -135,6 +144,8 @@ public abstract class TaxonPageModel : PageModel {
             .SelectMany(l => LatestPerScope(_queries.GetAssessments(l.Taxon.TaxonId).Where(a => !a.IsGlobal))
                 .Select(a => new LinkedAssessment(a, l.Taxon)))
             .ToList();
+        ProbableScopes = _queries.GetProbableScopes(Assessments.Concat(WorkingNameRows.Select(r => r.Assessment))
+            .Where(a => a.HasNoScope).Select(a => a.AssessmentId).ToList());
         TaxoboxCheck = LatestGlobal is { } latest && Taxon.EnwikiTitle is not null && _queries.GetEnwikiTaxoboxStatus(Taxon.TaxonId) is { } taxobox
             ? TaxoboxStatusCheck.For(taxobox, latest, GlobalHistory)
             : null;

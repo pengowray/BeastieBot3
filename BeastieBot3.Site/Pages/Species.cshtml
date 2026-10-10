@@ -134,7 +134,7 @@
         <dl class="facts">
             @if (!status.IsGlobal) {
                 <dt>@SiteText.LabelRegion</dt>
-                <dd><partial name="_ScopeLabel" model="@(new ScopeLabelModel(status.Scope, status.AssessmentId, "status", Model.NoScopeHelp))" /></dd>
+                <dd><partial name="_ScopeLabel" model="@Model.ScopeLabel(status, "status")" /></dd>
             }
             <dt>@SiteText.LabelCategory</dt>
             <dd><partial name="_Badge" model="@BadgeModel.For(status, large: true)" /></dd>

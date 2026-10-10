@@ -140,6 +140,17 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   published to the global Red List: the UAE National Red List Workshops of 2018 and 2019 (6), Greek
   assessors in 2023 to 2025 (25) and South African assessors in 2013 and 2016 (2). Meta
   `no_scope_assessment_count` (schema 28) has their number, for the help beside "No scope given".
+  The other 19 no-scope assessments in the API cache have no year published: unpublished drafts,
+  which the build leaves out.
+- `rules/iucn-probable-scopes.yml` gives each assessment with no scope the scope this site thinks
+  it has (groups of assessment ids with a scope, `national` or `regional`, and the evidence in the
+  site's own words, never IUCN's narrative text): 51 of the 52, the 19 drafts included for the audit
+  site. `IucnProbableScopes` reads it; `site build-db` writes table `probable_scope` (schema 28) for
+  the assessments it has (`SiteProbableScopes.Match`) and warns about an assessment with no scope
+  that the file does not cover, an entry whose assessment now has a scope, and an entry whose name
+  is not the taxon's. The taxon page shows "Probable scope: Greece (national assessment)" under "No
+  scope given" and the evidence in its help; the audit site's empty-scope page has a "Probable
+  scope" column. Add the new no-scope assessments of each release to the file.
 - Four of those national assessments are on taxon records that IUCN named with "_new" after the
   species' name (Balaenoptera edeni_new, Capparis spinosa_new, Ptenopus garrulus_new, Aquilegia
   ottonis_new). Schema 28 links three of them to the taxon of the name without "_new" (`taxon_link`
@@ -153,9 +164,14 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   (`extra_overlap` reason `provisional-name`, not likely; 10 in 2026-1). No link when IUCN's
   synonyms of the provisional taxon name a described species that is not the built name.
 - IUCN lists species codes among the English names of 67 seagrasses ("Species code: Po" for
-  Posidonia oceanica; one is written "Species code Sf"). They are `name` rows of type `code` with
-  the bare code ("Po"), so search finds them; they are not shown among the names, not in
-  `name_word`, and never a strong match for going straight to a group.
+  Posidonia oceanica; one is written "Species code Sf"), and the Catalogue of Life has about 1,570
+  codes in capitals labelled English: 4-letter bird codes ("CROW" for Lophostrix cristata, some
+  shared by two or more species), a few abbreviations ("SBT") and USDA plant symbols ("FICVER").
+  They are `name` rows of type `code` with the bare code, not shown among the names and not in
+  `name_word`. Search ranks a code after every name and never counts it as an exact match, so
+  "crow" lists the crows first and never opens Lophostrix cristata; a search written as a code
+  search (`CodeQuery`: "bird code: CROW", "code: SBT", "species code: Po") finds codes only, each
+  an exact and strong match, and the taxon page says which source lists the code.
 - `assessment.api_not_found` is 1 for an assessment that the IUCN API answered 404 for, although
   the taxon's record lists it (`failed_requests` in the API cache, endpoint `assessment`): 3 rows,
   the audit site's "Historical assessments missing from the API". The rows keep the citation from

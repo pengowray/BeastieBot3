@@ -386,6 +386,7 @@ internal sealed class SiteDbBuild {
             + $"rows from IUCN {subspecies.IucnRows:N0}, the Catalogue of Life {subspecies.ColRows:N0}, Wikidata {subspecies.WikidataRows:N0}, "
             + $"the Mammal Diversity Database {subspecies.Mdd.Rows:N0}, the Reptile Database {subspecies.ReptileDb.Rows:N0}";
         _console.MarkupLineInterpolated($"  Subspecies and varieties: {subspeciesSummary}");
+        WriteProbableScopes(writer);
         WriteMeta(writer, taxonList.Count);
 
         // 9. Indexes and compaction.
@@ -601,6 +602,25 @@ internal sealed class SiteDbBuild {
         SiteNameSource.Col => 4,
         _ => 5,
     };
+
+    // ------------------------------------------------------------ probable scopes
+
+    private void WriteProbableScopes(SiteDbWriter writer) {
+        var noScope = writer.Query("""
+            SELECT a.assessment_id, t.scientific_name FROM assessment a JOIN taxon t ON t.taxon_id = a.taxon_id WHERE a.scope = ''
+            """, r => (r.GetInt64(0), r.GetString(1)));
+        var ids = string.Join(",", _inputs.ProbableScopes.All.Select(p => p.AssessmentId.ToString(CultureInfo.InvariantCulture)));
+        var listed = ids.Length == 0 ? [] : writer.Query($"""
+            SELECT a.assessment_id, a.scope, t.scientific_name FROM assessment a JOIN taxon t ON t.taxon_id = a.taxon_id
+            WHERE a.assessment_id IN ({ids})
+            """, r => (r.GetInt64(0), r.GetString(1), r.GetString(2)));
+        var (rows, warnings) = SiteProbableScopes.Match(_inputs.ProbableScopes, noScope, listed);
+        writer.InsertRows("INSERT INTO probable_scope (assessment_id, scope, kind, evidence) VALUES (@a, @s, @k, @e)",
+            ["@a", "@s", "@k", "@e"], rows.Select(p => new object?[] { p.AssessmentId, p.Scope, p.Kind, p.Evidence }));
+        _stats.ProbableScopes = rows.Count;
+        _stats.NoScopeWithoutProbableScope = noScope.Count - rows.Count;
+        _stats.Warnings.AddRange(warnings);
+    }
 
     // ------------------------------------------------------------ meta
 

@@ -733,6 +733,7 @@ public static class FixtureDb {
         w.Name(BrydesNew, "Balaenoptera edeni_new", "scientific", null, "iucn");
         w.Name(BrydesNew, "Balaenoptera edeni", "synonym", null, "iucn");
         w.TaxonLink(BrydesNew, Brydes, "working-name");
+        w.ProbableScope(BrydesNewUae, "United Arab Emirates", "national", "The citation credits the UAE National Red List Workshop.");
         w.Taxon(AquilegiaNew, "Aquilegia ottonis_new", "species", "PLANTAE", "TRACHEOPHYTA", "MAGNOLIOPSIDA", "RANUNCULALES", "RANUNCULACEAE", "Aquilegia",
             authority: "Orph. ex Boiss.");
         w.Assessment(AquilegiaNewGreece, AquilegiaNew, "", true, "DD", criteriaVersion: "3.1", year: 2023, date: "2023-06-12");
@@ -1090,6 +1091,9 @@ public static class FixtureDb {
         public void InfraspecificName(long speciesId, string source, string sourceId, string rank, string name, string? authority = null) =>
             Run("INSERT INTO infraspecific_name(taxon_id, source, source_id, rank, name, authority) VALUES (@a, @b, @c, @d, @e, @f)",
                 speciesId, source, sourceId, rank, name, authority);
+
+        public void ProbableScope(long assessmentId, string scope, string kind, string evidence) =>
+            Run("INSERT INTO probable_scope(assessment_id, scope, kind, evidence) VALUES (@a, @b, @c, @d)", assessmentId, scope, kind, evidence);
 
         public void TaxonLink(long taxonId, long currentTaxonId, string kind) =>
             Run("INSERT INTO taxon_link(taxon_id, current_taxon_id, link_kind) VALUES (@a, @b, @c)", taxonId, currentTaxonId, kind);

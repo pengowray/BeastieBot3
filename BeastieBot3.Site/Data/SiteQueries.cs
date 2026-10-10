@@ -372,6 +372,29 @@ public sealed partial class SiteQueries {
     }
 
     /// Every assessment of the taxon, newest first.
+    /// The probable scopes of these assessments (those with no scope that rules/iucn-probable-scopes.yml
+    /// covers), by assessment id.
+    public IReadOnlyDictionary<long, ProbableScopeRow> GetProbableScopes(IReadOnlyCollection<long> assessmentIds) {
+        var rows = new Dictionary<long, ProbableScopeRow>();
+        if (assessmentIds.Count == 0) {
+            return rows;
+        }
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        var names = new List<string>();
+        foreach (var id in assessmentIds.Distinct()) {
+            var name = "@a" + names.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            names.Add(name);
+            command.Parameters.AddWithValue(name, id);
+        }
+        command.CommandText = $"SELECT assessment_id, scope, kind, evidence FROM probable_scope WHERE assessment_id IN ({string.Join(", ", names)})";
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            rows[reader.GetInt64(0)] = new ProbableScopeRow(reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3));
+        }
+        return rows;
+    }
+
     public IReadOnlyList<AssessmentRow> GetAssessments(long taxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();

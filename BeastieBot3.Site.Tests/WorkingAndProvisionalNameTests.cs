@@ -38,6 +38,26 @@ public sealed class WorkingAndProvisionalNameTests(SiteFactory factory) : IClass
         Assert.Contains($"href=\"/species/{FixtureDb.BrydesNew}/wikitext?assessment={FixtureDb.BrydesNewUae}", regional);
     }
 
+    // The guess from rules/iucn-probable-scopes.yml is under "No scope given", with its evidence in
+    // the help, in the status summary and in the table; an assessment the file does not cover has none.
+    [Fact]
+    public async Task AnAssessmentWithNoScopeShowsItsProbableScope() {
+        var html = await Page(FixtureDb.BrydesNew);
+        Assert.Equal(2, CountOf(html, "<div class=\"probable-scope\">Probable scope: United Arab Emirates (national assessment)</div>"));
+        Assert.Contains("The probable scope is this site's guess, checked by hand. Evidence: The citation credits the UAE National Red List Workshop.", Html.Text(html));
+        // On the taxon's page too, in the row of the "_new" record.
+        Assert.Contains("Probable scope: United Arab Emirates", Section(await Page(FixtureDb.Brydes), "regional"));
+        Assert.DoesNotContain("probable-scope", await Page(FixtureDb.NoScopeOnly));
+    }
+
+    private static int CountOf(string text, string part) {
+        var count = 0;
+        for (var at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + part.Length, StringComparison.Ordinal)) {
+            count++;
+        }
+        return count;
+    }
+
     [Fact]
     public async Task TheNewRecordSaysWhichTaxonItIsARecordOf() {
         var html = await Page(FixtureDb.BrydesNew);

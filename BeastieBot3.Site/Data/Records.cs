@@ -112,6 +112,10 @@ public sealed record TaxonLinkRow(TaxonRow Taxon, string Kind, bool IsFrom = fal
     public bool IsProvisionalName => Kind == TaxonLinkKinds.ProvisionalName;
 }
 
+/// The scope this site thinks an assessment with no scope has (probable_scope): a guess, checked by
+/// hand. Kind: "national" or "regional". Evidence: why, in this site's words.
+public sealed record ProbableScopeRow(long AssessmentId, string Scope, string Kind, string Evidence);
+
 /// An assessment of another taxon shown in a taxon page's table: Taxon is the IUCN record it was
 /// published under.
 public sealed record LinkedAssessment(AssessmentRow Assessment, TaxonRow Taxon);

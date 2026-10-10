@@ -135,6 +135,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 WikidataRanks = Full(Path.Combine(Path.GetDirectoryName(rulesList)!, "wikidata-taxon-ranks.csv")),
                 Checklists = Full(paths.GetChecklistsPath()),
                 NotAssignedRules = Iucn.IucnNotAssignedRules.LoadForPaths(paths),
+                ProbableScopes = Iucn.IucnProbableScopes.LoadForPaths(paths),
                 WikidataItemModel = wikidataConfig.ToItemModel(),
                 WikidataItemModelSource = wikidataConfigPath,
                 Output = Path.GetFullPath(output),
@@ -223,6 +224,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Not in the release, with a name that two or more taxa in the release list as a synonym (not linked)", s.NotInReleaseSynonymOfSeveral);
         Row("Taxa named with \"_new\" linked to the taxon named without it", s.WorkingNameLinks);
         Row("Taxa with a provisional name (sp. nov.) linked to the taxon named with its quoted epithet", s.ProvisionalNameLinks);
+        Row("Assessments with no scope given a probable scope (rules/iucn-probable-scopes.yml)", s.ProbableScopes);
+        Row("Assessments with no scope and no probable scope", s.NoScopeWithoutProbableScope);
         Row("API taxon records not in the release with no scientific name (left out)", s.NotInReleaseRecordsUnusable);
 
         Section("Assessments");

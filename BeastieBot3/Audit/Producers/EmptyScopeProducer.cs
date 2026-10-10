@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using BeastieBot3.Audit.Model;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Iucn;
 
 // Assessments published with no geographic scope. Every other assessment carries at least one
 // ("Global", "Europe", "Mediterranean", ...); these carry an empty scopes array in the API and an
@@ -54,8 +55,9 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
             ? LoadTaxonScopes(csv!, rows.Values.Select(r => r.SisId).OfType<long>())
             : new Dictionary<long, List<string>>();
 
+        var probableScopes = LoadProbableScopes(ctx);
         var findings = rows.Values
-            .Select(r => Build(r, csvBlank.ContainsKey(r.AssessmentId), taxonScopes, haveCsv))
+            .Select(r => Build(r, csvBlank.ContainsKey(r.AssessmentId), taxonScopes, haveCsv, probableScopes))
             .OrderByDescending(f => f.SeverityTier)
             .ThenBy(TaxonGroups.SortKey, StringComparer.Ordinal)
             .ThenBy(f => f.ScientificName, StringComparer.OrdinalIgnoreCase)
@@ -95,6 +97,8 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
                 "Four taxa have a scientific name ending in \"_new\": Balaenoptera edeni_new, Capparis spinosa_new, Ptenopus garrulus_new and Aquilegia ottonis_new. " +
                 "Each of these taxon records was made for one of the national assessments. " +
                 "Three of the four names without \"_new\" are taxa already on the Red List, so each of those three species now has two taxon records.\n\n" +
+                "The Probable scope column gives this site's guess at each assessment's scope, from its citation, assessors and locations. " +
+                "Assessments with no year published are unpublished drafts that the API still serves.\n\n" +
                 "### Why it matters\n\n" +
                 "Any data consumer that filters assessments by scope silently drops these records, and filtering to \"Global\" is the standard first step, including for anyone reproducing the Red List's own summary statistics. " +
                 "For some taxa the blank-scope record is the only assessment, or the only current one, so the taxon has no usable scope anywhere.\n\n" +
@@ -116,6 +120,8 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
                 AuditColumns.Year(),
                 AuditColumns.Custom("inCsvExport", "In CSV export", AuditColumnType.Text,
                     "Whether the downloadable CSV export also includes this assessment with a blank scope. Historical assessments are not in the export at all."),
+                AuditColumns.Custom("probableScope", "Probable scope", AuditColumnType.Text,
+                    "This site's guess at the scope, checked by hand, from the assessment's citation, assessors and locations (rules/iucn-probable-scopes.yml). The Detail column gives the evidence."),
                 AuditColumns.Custom("otherScopes", "Other scopes for this taxon", AuditColumnType.Text,
                     "Scopes on the taxon's other assessments in the CSV export. Blank means the taxon has no scoped assessment anywhere."),
                 AuditColumns.TaxonId(),
@@ -281,7 +287,17 @@ WHERE a.scopes IS NULL OR TRIM(a.scopes) = ''";
         return scopes;
     }
 
-    private static AuditFinding Build(ScopelessRow r, bool inCsv, IReadOnlyDictionary<long, List<string>> taxonScopes, bool haveCsv) {
+    // rules/iucn-probable-scopes.yml, which the site uses too; none when it cannot be read.
+    private static IucnProbableScopes LoadProbableScopes(AuditContext ctx) {
+        try {
+            return IucnProbableScopes.LoadForPaths(ctx.Paths);
+        } catch (InvalidOperationException) {
+            return IucnProbableScopes.None;
+        }
+    }
+
+    private static AuditFinding Build(ScopelessRow r, bool inCsv, IReadOnlyDictionary<long, List<string>> taxonScopes, bool haveCsv,
+        IucnProbableScopes probableScopes) {
         var others = r.SisId is { } sis && taxonScopes.TryGetValue(sis, out var list) ? list : new List<string>();
         var isolated = haveCsv && others.Count == 0;
         var current = r.Latest == true;
@@ -318,6 +334,10 @@ WHERE a.scopes IS NULL OR TRIM(a.scopes) = ''";
         finding.Extra["authority"] = r.Authority;
         finding.Extra["inCsvExport"] = haveCsv ? (inCsv ? "yes" : "no") : null;
         finding.Extra["otherScopes"] = haveCsv ? string.Join(", ", others) : null;
+        if (probableScopes.For(r.AssessmentId) is { } probable) {
+            finding.Extra["probableScope"] = $"{probable.Scope} ({probable.Kind})";
+            finding.Notes.Add($"Probable scope {probable.Scope}: {probable.Evidence}");
+        }
         if (isolated) {
             finding.Notes.Add("The taxon has no other assessment with a scope.");
         }

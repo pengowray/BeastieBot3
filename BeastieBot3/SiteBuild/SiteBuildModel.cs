@@ -31,6 +31,8 @@ internal sealed record SiteBuildInputs {
     /// rules/iucn-not-assigned.yml: orders and families for taxa that IUCN gives as "NOT ASSIGNED",
     /// for the tree of groups, as in the Wikipedia lists.
     public Iucn.IucnNotAssignedRules NotAssignedRules { get; init; } = Iucn.IucnNotAssignedRules.None;
+    /// rules/iucn-probable-scopes.yml: the probable scope of each assessment with no scope.
+    public Iucn.IucnProbableScopes ProbableScopes { get; init; } = Iucn.IucnProbableScopes.None;
     /// taxon-rules.yml, whose common names for groups the list headings use.
     public string? TaxonRules { get; init; }
     /// rules-list.txt, whose "Scientific name = common name" lines override the best English name,
@@ -434,6 +436,10 @@ internal sealed class SiteBuildStats {
     /// named without it, and a provisional name and the taxon named with its quoted epithet.
     public int WorkingNameLinks;
     public int ProvisionalNameLinks;
+    /// Assessments with no scope given a probable scope from rules/iucn-probable-scopes.yml, and
+    /// those the file does not cover.
+    public int ProbableScopes;
+    public int NoScopeWithoutProbableScope;
 
     /// `iucn resolve-dois`'s cache: assessments it checked, of those with a DOI, and its newest check.
     public int DoiChecksRead;

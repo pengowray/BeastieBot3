@@ -591,6 +591,13 @@ button:hover {
     line-height: 1;
 }
 
+/* Under "No scope given": this site's guess at the scope. */
+.probable-scope {
+    margin-top: 0.15rem;
+    font-size: 0.9rem;
+    font-weight: 400;
+}
+
 /* Under the region of a regional table row published under another IUCN record ("_new"). */
 .published-under {
     margin-top: 0.15rem;
