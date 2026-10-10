@@ -88,6 +88,32 @@ public sealed record IucnCitationParts {
     /// ids and `iucn resolve-dois` stored Crossref's title for it; null otherwise.
     public string? RegisteredName { get; init; }
 
+    /// The day Doi was registered with Crossref ("2015-09-10", Crossref's created date), set with
+    /// RegisteredName; null when not known. Depositing a record again keeps its title, so
+    /// RegisteredName is the name current on this day.
+    public string? DoiCreated { get; init; }
+
+    /// True when RegisteredName is the name the assessment was published under: Doi names a Red List
+    /// release of 2015 or later and was created in that year or the next. IUCN registered the DOIs of
+    /// the releases before 2015 in 2015 and 2016, with the names current then; from 2015 it
+    /// registered them when it published each release (in October 2026, all but about 1,000 of the
+    /// 175,000 DOIs of releases from 2015 on were created in the release's year or the next).
+    [JsonIgnore]
+    public bool RegisteredNameIsFromPublication =>
+        RegisteredName is not null && DoiReleaseYear(Doi) is { } release && release >= 2015
+        && DoiCreated is { Length: >= 4 } created && int.TryParse(created[..4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var year)
+        && year - release is >= 0 and <= 1;
+
+    /// The year of the Red List release a DOI names: 2019 for "10.2305/IUCN.UK.2019-3.RLTS.T...",
+    /// 2008 for "10.2305/IUCN.UK.2008.RLTS.T..."; null for any other text.
+    public static int? DoiReleaseYear(string? doi) {
+        var match = doi is null ? null : DoiRelease.Match(doi);
+        return match is { Success: true } && int.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var year) ? year : null;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex DoiRelease =
+        new(@"IUCN\.UK\.(\d{4})(?:-\d+)?\.RLTS\.", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     /// RegisteredName when it names the taxon differently from currentName (more than "ssp." for
     /// "subsp.", brackets or spacing: WikidataCitation.SameName) and is not one of IUCN's internal
     /// names ("Physella acuta_new"); null otherwise. The history tables compare it with the row's
@@ -98,14 +124,16 @@ public sealed record IucnCitationParts {
             || WikidataCitation.SameName(registered, currentName) ? null : registered;
     }
 
-    /// These parts with the name in the DOI's registered title (RegisteredNameDifferentFrom) as
-    /// ScientificName, for a citation whose |title= takes that name; the parts unchanged when it
-    /// names the taxon as ScientificName does. SubpopulationName is cleared, since the registered
-    /// name is written whole ("Sousa chinensis (Eastern Taiwan Strait subpopulation)").
-    public IucnCitationParts WithRegisteredNameInTitle() =>
-        RegisteredNameDifferentFrom(ScientificName) is { } registered
-            ? this with { ScientificName = registered, SubpopulationName = null }
-            : this;
+    /// These parts with name as ScientificName, for a citation whose |title= gives another name than
+    /// IUCN's citation (CiteIucnOptions.TitleName); the parts unchanged when name is null, blank or
+    /// names the taxon as ScientificName does (WikidataCitation.SameName). SubpopulationName is
+    /// cleared, since the name is written whole ("Sousa chinensis (Eastern Taiwan Strait subpopulation)").
+    public IucnCitationParts WithTitleName(string? name) {
+        var text = WikidataCitation.NameText(name);
+        return text.Length == 0 || WikidataCitation.SameName(text, ScientificName)
+            ? this
+            : this with { ScientificName = text, SubpopulationName = null };
+    }
 
     /// IUCN's citation text from the payload with its "Accessed on ..." sentence removed.
     public string? IucnCitationText { get; init; }

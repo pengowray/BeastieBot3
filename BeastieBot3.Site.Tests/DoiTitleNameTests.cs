@@ -1,32 +1,63 @@
 namespace BeastieBot3.Site.Tests;
 
-/// The name in the title registered for an assessment's DOI (IucnCitationParts.RegisteredName) when
-/// it differs from the taxon's current name: under the row in the assessment tables, and in the
-/// citation title on the citations page, with the current name as an option. In the fixture, the
-/// polar bear's 2008 assessment has the DOI title name "Thalarctos maritimus".
+/// The name an assessment was published under, or the name in its DOI's title, when it differs from
+/// the taxon's current name (PublishedName): under the row in the assessment tables, and in the
+/// citation title on the citations page, with the current name as an option. In the fixture (all
+/// made up but the polar bear's): the polar bear's 2008 DOI title has "Thalarctos maritimus" and no
+/// creation date (a name in the DOI title only); the woylie's 2015 DOI was created in 2015 with
+/// "Bettongia ogilbyi" (the name when published); Table 7 of 2011 prints "Bromus mollis var.
+/// interruptus" for Bromus interruptus's change to EW (the name when published), and Table 7 of 2008
+/// prints the Amur leopard's name without its rank marker (the same name, so nothing is shown).
 public sealed class DoiTitleNameTests(SiteFactory factory) : IClassFixture<SiteFactory> {
     private readonly HttpClient _client = factory.Client();
 
     private const string Legend = "<legend>Name in the citation title</legend>";
-    private const string Note = "Name in DOI title: the scientific name in the title registered with Crossref for the assessment's DOI.";
+    private const string DoiTitleNote = "Name in DOI title: the scientific name in the title registered with Crossref for the assessment's DOI.";
+    private const string PublishedNote = "Name when published: the scientific name the assessment was published under.";
+    private const string CurrentNote = "The citations on the IUCN Red List website use the taxon's current name for every assessment, including older assessments.";
+
+    private static List<string[]> HistoryRows(string html) => Html.TableRows(Html.Between(html, "id=\"history-heading\"", "</table>"));
 
     [Fact]
-    public async Task HistoryTable_ShowsTheNameUnderTheRowWhoseDoiTitleDiffers() {
+    public async Task HistoryTable_NameInDoiTitle() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
-        var rows = Html.TableRows(Html.Between(html, "id=\"history-heading\"", "</table>"));
+        var rows = HistoryRows(html);
         Assert.Contains(rows, r => r[0] == "2008 Name in DOI title: Thalarctos maritimus");
         Assert.Contains(rows, r => r[0] == "2015 Latest");
-        Assert.Contains("<span class=\"doi-title-name\">Name in DOI title: <span class=\"sci-name\"><i>Thalarctos maritimus</i></span></span>", html);
-        Assert.Contains(Note, Html.Text(html));
-        // One note under the table.
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "doi-title-name-note"));
+        Assert.Contains("<span class=\"published-name\">Name in DOI title: <span class=\"sci-name\"><i>Thalarctos maritimus</i></span></span>", html);
+        var text = Html.Text(html);
+        Assert.Contains(DoiTitleNote, text);
+        Assert.Contains(CurrentNote, text);
+        Assert.DoesNotContain(PublishedNote, text);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "published-name-note"));
     }
 
     [Fact]
-    public async Task HistoryTable_NoNoteWhenNoDoiTitleDiffers() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}");
-        Assert.DoesNotContain("doi-title-name", html);
-        Assert.DoesNotContain("Name in DOI title", html);
+    public async Task HistoryTable_NameWhenPublished_FromADoiCreatedWithTheRelease() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Woylie}");
+        // The woylie's page has a combined history; the latest row is the woylie's own.
+        Assert.Contains("<span class=\"published-name\">Name when published: <span class=\"sci-name\"><i>Bettongia ogilbyi</i></span></span>", html);
+        var text = Html.Text(html);
+        Assert.Contains(PublishedNote, text);
+        Assert.DoesNotContain(DoiTitleNote, text);
+    }
+
+    [Fact]
+    public async Task HistoryTable_NameWhenPublished_FromTable7() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Bromus}");
+        Assert.Contains(HistoryRows(html), r => r[0] == "2011 Latest Name when published: Bromus mollis var. interruptus");
+        Assert.Contains(PublishedNote, Html.Text(html));
+    }
+
+    [Fact]
+    public async Task HistoryTable_NothingForTheSameNameOrNoName() {
+        // Table 7 prints the Amur leopard's name without "ssp.": the same name.
+        foreach (var id in new[] { FixtureDb.AmurLeopard, FixtureDb.Tiger }) {
+            var html = await _client.GetStringAsync($"/species/{id}");
+            Assert.DoesNotContain("published-name", html);
+            Assert.DoesNotContain("Name in DOI title", html);
+            Assert.DoesNotContain("Name when published", html);
+        }
     }
 
     [Fact]
@@ -36,11 +67,25 @@ public sealed class DoiTitleNameTests(SiteFactory factory) : IClassFixture<SiteF
         Assert.Contains(Legend, html);
         Assert.Contains("<input type=\"radio\" name=\"titlename\" value=\"doi\" checked=\"checked\" aria-describedby=\"titlename-help\"> Name in DOI title (<span class=\"sci-name\"><i>Thalarctos maritimus</i></span>)</label>", html);
         Assert.Contains("<input type=\"radio\" name=\"titlename\" value=\"current\" aria-describedby=\"titlename-help\"> Current name (<span class=\"sci-name\"><i>Ursus maritimus</i></span>)</label>", html);
-        Assert.Contains("Current name: the name IUCN's own citations now use for every assessment, including older assessments.", Html.Text(html));
+        // The fixture's DOI has no creation date, so the help gives no years.
+        Assert.Contains("The DOI was created more than a year after the assessment was published, and the title has the name IUCN used when the DOI was created. "
+            + "That name may differ from the name this assessment was published under. "
+            + "Current name: the name IUCN's own citations now use for every assessment, including older assessments.", Html.Text(html));
 
         var current = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}&titlename=current");
         Assert.Contains("|title=''Ursus maritimus'' |volume=2008", Html.Textarea(current, "wikitext-cite"));
         Assert.Contains("<input type=\"radio\" name=\"titlename\" value=\"current\" checked=\"checked\"", current);
+    }
+
+    [Fact]
+    public async Task Citation_UsesTheNameWhenPublished() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Bromus}/wikitext");
+        Assert.Contains("|title=''Bromus mollis'' var. ''interruptus'' |volume=2011", Html.Textarea(html, "wikitext-cite"));
+        Assert.Contains("> Name when published (<span class=\"sci-name\"><i>Bromus mollis</i> var. <i>interruptus</i></span>)</label>", html);
+        Assert.Contains("Name when published: the scientific name this assessment was published under, from IUCN's summary statistics Table 7 "
+            + "or the title registered with Crossref for this assessment's DOI.", Html.Text(html));
+        var current = await _client.GetStringAsync($"/species/{FixtureDb.Bromus}/wikitext?titlename=current");
+        Assert.Contains("|title=''Bromus interruptus'' |volume=2011", Html.Textarea(current, "wikitext-cite"));
     }
 
     [Fact]
@@ -64,7 +109,7 @@ public sealed class DoiTitleNameTests(SiteFactory factory) : IClassFixture<SiteF
     }
 
     [Fact]
-    public async Task OtherWikipedias_UseTheDoiTitleNameToo() {
+    public async Task OtherWikipedias_UseTheNameToo() {
         var zh = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext?assessment={FixtureDb.PolarBear2008}&wiki=zh");
         Assert.Contains("|title=''Thalarctos maritimus''", Html.Textarea(zh, "wikitext-cite"));
         Assert.Contains(Legend, zh);

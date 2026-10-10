@@ -62,13 +62,15 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
 
     public const string WikiKey = "wiki";
 
-    /// |title= gives the taxon's current name, as IUCN's citation does, instead of the name in the title
-    /// registered for the assessment's DOI (titlename=current; CiteIucnOptions.RegisteredNameInTitle).
+    /// |title= gives the taxon's current name, as IUCN's citation does, instead of the name the
+    /// assessment was published under or the name in its DOI's title (titlename=current; the page
+    /// sets CiteIucnOptions.TitleName from PublishedName otherwise).
     public bool CurrentNameInTitle { get; init; }
 
     public const string TitleNameKey = "titlename";
     public const string TitleNameCurrent = "current";
-    /// The value of the default choice, the name in the DOI's title; any value but "current" reads as it.
+    /// The value of the default choice, the published name or the name in the DOI's title; any value
+    /// but "current" reads as it.
     public const string TitleNameDoi = "doi";
 
     public static bool ReadCurrentNameInTitle(string? value) =>
@@ -122,7 +124,6 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
         RefName = RefName,
         NameListStyleAmp = Amp,
         FullGivenNames = FullGivenNames,
-        RegisteredNameInTitle = !CurrentNameInTitle,
     };
 
     /// {{cite Q}} takes the same ref options as {{cite iucn}}, and the access date when the item has a

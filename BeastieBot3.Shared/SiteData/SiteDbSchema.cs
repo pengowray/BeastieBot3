@@ -313,7 +313,10 @@ public static class SiteDbSchema {
             new_category           TEXT,
             red_list_version       TEXT,              -- the version the table says the new category was published in ('2019-3'),
                                                       -- or the table's release when the table does not say ('2008')
-            summary_table_id       INTEGER NOT NULL
+            summary_table_id       INTEGER NOT NULL,
+            printed_name           TEXT               -- the species' name as a table of the version's year or the year after prints it
+                                                      -- (the earliest such table's): the name the assessment was published under;
+                                                      -- NULL when only later tables list the change
         ) WITHOUT ROWID;
         CREATE INDEX category_change_taxon ON category_change(taxon_id);
 

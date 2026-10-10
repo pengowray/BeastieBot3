@@ -63,7 +63,7 @@ internal sealed class SiteDoiSources {
     public Dictionary<long, string> Resolved { get; } = new();
     /// Titles Crossref registered for IUCN DOIs, by DOI (any case), with the assessment id the DOI
     /// names; from `iucn resolve-dois`'s crossref_works.
-    public Dictionary<string, (long AssessmentId, string Title)> CrossrefTitles { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, (long AssessmentId, string Title, string? Created)> CrossrefTitles { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class SiteAssessmentPass {
@@ -394,7 +394,7 @@ internal sealed class SiteAssessmentPass {
         if (parts.Doi is { } doi && dois.CrossrefTitles.TryGetValue(doi.Trim(), out var registered)
             && registered.AssessmentId == assessment.AssessmentId
             && WikidataCitation.NameFromTitle(registered.Title) is { } registeredName) {
-            parts = parts with { RegisteredName = registeredName };
+            parts = parts with { RegisteredName = registeredName, DoiCreated = registered.Created };
             _stats.RegisteredNames++;
             if (!WikidataCitation.SameName(registeredName, parts.ScientificName)) {
                 _stats.RegisteredNamesDiffer++;

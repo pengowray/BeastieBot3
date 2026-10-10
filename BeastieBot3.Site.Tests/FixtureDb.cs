@@ -133,6 +133,10 @@ public static class FixtureDb {
     public const long Woylie = 2790;
     public const long WoylieLatest = 2790001;
     public const string WoylieDoi = "10.2305/IUCN.UK.2015-4.RLTS.T2790A2790001.en";
+    /// Made up: the name in the title registered for the woylie's 2015 DOI, created that year.
+    public const string WoylieRegisteredName = "Bettongia ogilbyi";
+    /// Made up: the name IUCN's Table 7 of 2011 prints for Bromus interruptus's change to EW.
+    public const string BromusPrintedName = "Bromus mollis var. interruptus";
     public const long WoylieOld = 2785;
     public const long WoylieOld2008 = 6143;
 
@@ -351,12 +355,23 @@ public static class FixtureDb {
         w.Run("""
             INSERT INTO summary_table (summary_table_id, table_no, release, url, last_updated) VALUES
                 (1, 7, '2008', 'https://nc.iucnredlist.org/redlist/content/attachment_files/2008RL_Stats_Table_7.pdf', NULL),
+                (3, 7, '2011', 'https://example.org/2011_RL_Stats_Table_7.pdf', NULL),
                 (2, 9, '2014-1', 'https://cmsdocs.s3.amazonaws.com/summarystats/2014_1_Summary_Stats_Page_Documents/2014_1_RL_Stats_Table9.pdf', '12 June 2014')
             """);
         w.Run("""
             INSERT INTO category_change (assessment_id, taxon_id, reason, previous_assessment_id, old_category, new_category, red_list_version, summary_table_id)
             VALUES (@a, @b, 'G', @c, 'LR/cd', 'VU', '2008', 1)
             """, PolarBear2008, PolarBear, PolarBear1996);
+        // Made up: Table 7 of 2011 lists Bromus interruptus's change to EW under an older name, and the
+        // Amur leopard's 2008 change under its name without the rank marker.
+        w.Run("""
+            INSERT INTO category_change (assessment_id, taxon_id, reason, previous_assessment_id, old_category, new_category, red_list_version, summary_table_id, printed_name)
+            VALUES (@a, @b, 'G', @c, 'EX', 'EW', '2011', 3, @d)
+            """, BromusLatest, Bromus, Bromus1998Ex, BromusPrintedName);
+        w.Run("""
+            INSERT INTO category_change (assessment_id, taxon_id, reason, previous_assessment_id, old_category, new_category, red_list_version, summary_table_id, printed_name)
+            VALUES (@a, @b, 'N', @c, 'EN', 'CR', '2008', 1, 'Panthera pardus orientalis')
+            """, AmurLeopard2008, AmurLeopard, AmurLeopard1996);
         w.Run("""
             INSERT INTO possibly_extinct_listing (assessment_id, tag, taxon_id, first_release, last_release, tables, summary_table_id) VALUES
                 (@a, 'PE', @c, '2014-1', '2016-3', '9', 2),
@@ -638,7 +653,9 @@ public static class FixtureDb {
                 new WikidataStatusStatement(WoylieP141Endangered, "Q96377276", "normal", [], [], 1, false)));
         w.Assessment(WoylieLatest, Woylie, "Global", true, "CR", criteria: "A3e", criteriaVersion: "3.1", year: 2015, date: "2014-01-01",
             citation: Citation(Woylie, WoylieLatest, 2015, "Bettongia penicillata", [Person("Woinarski", "J.")],
-                doi: WoylieDoi, doiSource: DoiSource.Resolved, text: null), taxonomicNotes: true);
+                doi: WoylieDoi, doiSource: DoiSource.Resolved, text: null,
+                // Made up: the DOI was created in the release's year, with another name in its title.
+                registeredName: WoylieRegisteredName, doiCreated: "2015-11-19"), taxonomicNotes: true);
         w.Name(Woylie, "Bettongia penicillata", "scientific", null, "iucn");
         w.Name(Woylie, "Woylie", "common", "en", "iucn", preferred: true);
 
@@ -901,7 +918,7 @@ public static class FixtureDb {
 
     private static string Citation(long taxonId, long assessmentId, int year, string name, IReadOnlyList<Author> authors,
         string? doi, DoiSource doiSource, string? text, bool etAl = false, string? region = null, bool narrative = false,
-        int? errataYear = null, int? amendsYear = null, string? registeredName = null) {
+        int? errataYear = null, int? amendsYear = null, string? registeredName = null, string? doiCreated = null) {
         var parts = new IucnCitationParts {
             TaxonId = taxonId,
             AssessmentId = assessmentId,
@@ -915,6 +932,7 @@ public static class FixtureDb {
             Doi = doi,
             DoiSource = doiSource,
             RegisteredName = registeredName,
+            DoiCreated = doiCreated,
             IucnCitationText = text,
             DownloadedAtUtc = new DateTime(2026, 8, 18, 10, 30, 0, DateTimeKind.Utc),
         };

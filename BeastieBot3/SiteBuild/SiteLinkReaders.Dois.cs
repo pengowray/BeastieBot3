@@ -59,12 +59,20 @@ internal static partial class SiteLinkReaders {
                 return;
             }
         }
+        // The day each DOI was created tells whether its title has the name the assessment was
+        // published under (IucnCitationParts.RegisteredNameIsFromPublication).
+        var hasCreated = Iucn.Doi.IucnDoiCacheStore.HasCrossrefCreated(connection);
+        if (!hasCreated) {
+            stats.Warnings.Add($"The DOI cache {path} has no creation dates from Crossref, so no name in a DOI title is shown as the name an assessment was published under. To add them, run iucn resolve-dois --refresh-crossref --doi-org never.");
+        }
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT doi, assessment_id, title FROM crossref_works WHERE title IS NOT NULL";
+        command.CommandText = hasCreated
+            ? "SELECT doi, assessment_id, title, created FROM crossref_works WHERE title IS NOT NULL"
+            : "SELECT doi, assessment_id, title, NULL FROM crossref_works WHERE title IS NOT NULL";
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             cancellationToken.ThrowIfCancellationRequested();
-            dois.CrossrefTitles[reader.GetString(0)] = (reader.GetInt64(1), reader.GetString(2));
+            dois.CrossrefTitles[reader.GetString(0)] = (reader.GetInt64(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3));
         }
     }
 }

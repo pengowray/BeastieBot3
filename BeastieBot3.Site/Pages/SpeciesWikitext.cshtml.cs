@@ -54,10 +54,14 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
     /// For the full given names option, which is shown only when this is not null.
     public GivenNamesCoverage? GivenNames { get; private set; }
 
-    /// The name in the title registered for the selected assessment's DOI, when it names the taxon
-    /// differently from IUCN's citation (IucnCitationParts.RegisteredNameDifferentFrom); the option
-    /// for the name in |title= is shown only then.
-    public string? RegisteredTitleName { get; private set; }
+    /// The name the selected assessment was published under, or the name in its DOI's title, when it
+    /// differs from the taxon's current name (PublishedName.For); |title= gives it unless the reader
+    /// chose the current name, and the option for the name in |title= is shown only then.
+    public PublishedName? TitleName { get; private set; }
+
+    /// The year the selected assessment's DOI was created (IucnCitationParts.DoiCreated); null when not known.
+    public int? DoiCreatedYear => Parts?.DoiCreated is { Length: >= 4 } created
+        && int.TryParse(created[..4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var year) ? year : null;
 
     /// The selected assessment's Wikidata item and its {{cite Q}}, shown when the reader chose {{cite Q}}
     /// (Options.Template); null when no assessment is selected.
@@ -154,9 +158,9 @@ public sealed class SpeciesWikitextModel : AssessmentToolModel {
 
         if (Parts is not null) {
             DownloadDateText = downloaded is { } d ? SiteFormat.Date(d) : null;
-            citeOptions = Options.ToCiteIucnOptions(today, downloaded);
+            TitleName = PublishedNameOf(Selected);
+            citeOptions = Options.ToCiteIucnOptions(today, downloaded) with { TitleName = Options.CurrentNameInTitle ? null : TitleName?.Name };
             GivenNames = GivenNamesCoverage.Of(Parts);
-            RegisteredTitleName = Parts.RegisteredNameDifferentFrom(Parts.ScientificName);
             var cite = Edition.IsEnglish ? CiteIucnRenderer.Render(Parts, citeOptions) : OtherWikipedias.Citation(Edition, Parts, Facts(), citeOptions);
             var citeTemplate = Edition.CitationTemplate;
             boxes.Add(new WikitextBox("wikitext-cite", Edition.IsEnglish ? SiteText.LabelCite : SiteText.LabelCiteTemplate(citeTemplate), citeTemplate, cite, Rows: 5));

@@ -11,7 +11,7 @@
     <partial name="_CombinedHistory" model="Model" />
 } else if (Model.GlobalHistory.Count > 0) {
     var historyNotes = Model.TableNotes(Model.GlobalHistory.Select(a => (a, true)));
-    var anyDoiTitleName = false;
+    var nameTally = new PublishedNameTally();
     <section class="history" aria-labelledby="history-heading">
         <h2 id="history-heading">@SiteText.HeadingHistory</h2>
         <div class="table-scroll">
@@ -36,10 +36,9 @@
                         var isShown = tool?.Selected?.AssessmentId == a.AssessmentId;
                         var isLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId;
                         var versionNote = Model.VersionNote(a);
-                        var doiTitleName = Model.DoiTitleName(a);
-                        anyDoiTitleName |= doiTitleName is not null;
+                        var publishedName = nameTally.Add(Model.PublishedNameOf(a));
                         <tr class="@(isShown ? "shown" : null)">
-                            <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}@if (doiTitleName is not null) {<partial name="_DoiTitleName" model="doiTitleName" />}</th>
+                            <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}@if (publishedName is not null) {<text> </text><partial name="_PublishedName" model="publishedName" />}</th>
                             <td><partial name="_Badge" model="@historyNotes.BadgeFor(a)" /></td>
                             @if (historyNotes.ShowReasonColumn) {
                                 <td><partial name="_ReasonCell" model="@(new ReasonCellModel(historyNotes.CellFor(a.AssessmentId)))" /></td>
@@ -62,7 +61,7 @@
             </table>
         </div>
         <partial name="_HistoryTableNotes" model="historyNotes" />
-        <partial name="_DoiTitleNameNote" model="anyDoiTitleName" />
+        <partial name="_PublishedNameNote" model="nameTally" />
         <partial name="_EarlierIds" model="Model" />
     </section>
 } else if (Model.InRelease && Model.EarlierIds.Count > 0) {
@@ -84,7 +83,7 @@
 
 @if (Model.RegionalRows.Count > 0 || Model.WorkingNameRows.Count > 0) {
     var allNoScope = Model.RegionalRows.All(r => r.HasNoScope) && Model.WorkingNameRows.All(r => r.Assessment.HasNoScope);
-    var anyRegionalDoiTitleName = false;
+    var regionalNameTally = new PublishedNameTally();
     <section class="regional" id="regional" aria-labelledby="regional-heading">
         <h2 id="regional-heading">@(allNoScope ? SiteText.HeadingNoScope : SiteText.HeadingRegional)</h2>
         <div class="table-scroll">
@@ -106,10 +105,9 @@
                         var isShown = tool?.Selected?.AssessmentId == a.AssessmentId;
                         var isDefault = a.AssessmentId == Model.StatusAssessment?.AssessmentId;
                         var versionNote = Model.VersionNote(a);
-                        var doiTitleName = Model.DoiTitleName(a);
-                        anyRegionalDoiTitleName |= doiTitleName is not null;
+                        var publishedName = regionalNameTally.Add(Model.PublishedNameOf(a));
                         <tr class="@(isShown ? "shown" : null)">
-                            <th scope="row"><partial name="_ScopeLabel" model="@Model.ScopeLabel(a, "regional")" />@if (doiTitleName is not null) {<partial name="_DoiTitleName" model="doiTitleName" />}</th>
+                            <th scope="row"><partial name="_ScopeLabel" model="@Model.ScopeLabel(a, "regional")" />@if (publishedName is not null) {<text> </text><partial name="_PublishedName" model="publishedName" />}</th>
                             <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
                             <td>@a.Criteria</td>
                             <td>@a.YearPublished@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</td>
@@ -148,6 +146,6 @@
                 </tbody>
             </table>
         </div>
-        <partial name="_DoiTitleNameNote" model="anyRegionalDoiTitleName" />
+        <partial name="_PublishedNameNote" model="regionalNameTally" />
     </section>
 }

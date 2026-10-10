@@ -7,16 +7,19 @@ using GbifDoi = BeastieBot3.Iucn.Gbif.IucnDoi;
 // Crossref (doi.org/ra/<doi> answers "Crossref"), and Crossref's REST API lists a prefix's works
 // 1,000 at a time with a cursor:
 //
-//   https://api.crossref.org/prefixes/10.2305/works?rows=1000&select=DOI,resource,title&cursor=*
+//   https://api.crossref.org/prefixes/10.2305/works?rows=1000&select=DOI,resource,title,created&cursor=*
 //
 // In October 2026 the prefix had 256,151 works: 255,060 Red List assessments (type "dataset") and
 // about 1,100 books, reports and journal articles. Each item gives the DOI (in lower case),
 // resource.primary.URL, the page it points to (https://www.iucnredlist.org/species/<taxon>/<assessment>),
 // and title, a list with one entry: the title IUCN registered for the assessment, "Name: author
 // list" ("Canis mesomelas: Hoffmann, M." for a 2014 assessment of the taxon IUCN now calls
-// Lupulella mesomelas), with HTML entities such as "&amp;". The name is the one current when the
-// record was last deposited, which is not always the name the assessment first appeared under:
-// the records for some 2008 and 2010 DOIs were made in 2015 with the names current then.
+// Lupulella mesomelas), with HTML entities such as "&amp;"; and created, the day the DOI was
+// registered. The name in the title is the one current on that day: depositing the record again
+// keeps the title (the 2008 assessment of Cebuella pygmaea, DOI created 2015-09-10 and deposited
+// again 2025-02-28, still has "Cebuella pygmaea ssp. pygmaea"). IUCN created the DOIs of the
+// assessments published before 2015 in 2015 and 2016, so their titles have the names current then,
+// which are not always the names the assessments were published under.
 // The list took 258 requests and about 3 minutes on 2026-10-03. Crossref's public pool allows 5 requests a second
 // and one at a time (x-rate-limit-limit, x-concurrency-limit); this sends one request at a time.
 //
@@ -36,7 +39,7 @@ internal static class CrossrefIucnWorks {
     public const string DefaultBaseUrl = "https://api.crossref.org/";
 
     public static string PageUrl(string cursor, string baseUrl = DefaultBaseUrl) =>
-        $"{(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/")}prefixes/{Prefix}/works?rows={PageSize.ToString(CultureInfo.InvariantCulture)}&select=DOI,resource,title&cursor={Uri.EscapeDataString(cursor)}";
+        $"{(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/")}prefixes/{Prefix}/works?rows={PageSize.ToString(CultureInfo.InvariantCulture)}&select=DOI,resource,title,created&cursor={Uri.EscapeDataString(cursor)}";
 
     /// Reads one page of Crossref's answer. Items that are not Red List assessment DOIs are counted
     /// in ItemCount but left out of Works. Pure.
@@ -87,7 +90,23 @@ internal static class CrossrefIucnWorks {
         }
         var page = GbifDoi.ParseAssessmentUrl(url);
         return new CrossrefIucnWork(doi.ToString(), doi.TaxonId, doi.AssessmentId, doi.Release, doi.Language, url,
-            page?.TaxonId, page?.AssessmentId, title);
+            page?.TaxonId, page?.AssessmentId, title, CreatedDay(item));
+    }
+
+    // "created": {"date-parts": [[2015, 9, 10]], "date-time": "2015-09-10T16:52:53Z", ...} as
+    // "2015-09-10"; null when missing or unreadable.
+    private static string? CreatedDay(JsonElement item) {
+        if (!item.TryGetProperty("created", out var created) || created.ValueKind != JsonValueKind.Object
+            || !created.TryGetProperty("date-parts", out var parts) || parts.ValueKind != JsonValueKind.Array
+            || parts.GetArrayLength() == 0 || parts[0] is not { ValueKind: JsonValueKind.Array } day || day.GetArrayLength() < 3
+            || !day[0].TryGetInt32(out var y) || !day[1].TryGetInt32(out var m) || !day[2].TryGetInt32(out var d)) {
+            return null;
+        }
+        try {
+            return new DateOnly(y, m, d).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        } catch (ArgumentOutOfRangeException) {
+            return null;
+        }
     }
 
     /// Downloads the whole list into the store, one page per request, and marks the listing complete

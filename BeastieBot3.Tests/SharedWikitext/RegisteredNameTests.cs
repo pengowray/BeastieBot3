@@ -3,7 +3,8 @@ using BeastieBot3.Shared.Wikitext;
 namespace BeastieBot3.Tests.SharedWikitext;
 
 // The name in the title registered with Crossref for an assessment's DOI (RegisteredName): when it
-// counts as naming the taxon differently, and the citation option that writes it in |title=. The
+// counts as naming the taxon differently and as the name the assessment was published under, and
+// the citation option that writes another name in |title= (TitleName). The
 // 2008 assessment of Cebuella pygmaea (IUCN id 136926) has the DOI title "Cebuella pygmaea ssp.
 // pygmaea: Rylands, A.B. & de la Torre, S."; IUCN's citation now gives "Cebuella pygmaea".
 public class RegisteredNameTests {
@@ -46,39 +47,53 @@ public class RegisteredNameTests {
     }
 
     [Fact]
-    public void Render_RegisteredNameInTitle() {
-        var cite = CiteIucnRenderer.Render(Cebuella2008, new CiteIucnOptions { RegisteredNameInTitle = true });
+    public void Render_TitleName() {
+        var cite = CiteIucnRenderer.Render(Cebuella2008, new CiteIucnOptions { TitleName = "Cebuella pygmaea ssp. pygmaea" });
         Assert.Contains("|title=''Cebuella pygmaea'' ssp. ''pygmaea'' |volume=2008", cite);
         // Everything else is as before.
         Assert.Contains("|article-number=e.T136926A4350391 |doi=10.2305/IUCN.UK.2008.RLTS.T136926A4350391.en", cite);
     }
 
     [Fact]
-    public void Render_RegisteredNameInTitle_SameNameChangesNothing() {
-        var same = Cebuella2008 with { RegisteredName = "Cebuella  pygmaea" };
-        Assert.Equal(CiteIucnRenderer.Render(same), CiteIucnRenderer.Render(same, new CiteIucnOptions { RegisteredNameInTitle = true }));
+    public void Render_TitleName_SameNameChangesNothing() {
+        Assert.Equal(CiteIucnRenderer.Render(Cebuella2008), CiteIucnRenderer.Render(Cebuella2008, new CiteIucnOptions { TitleName = "Cebuella  pygmaea" }));
+        Assert.Equal(CiteIucnRenderer.Render(Cebuella2008), CiteIucnRenderer.Render(Cebuella2008, new CiteIucnOptions { TitleName = " " }));
     }
 
     [Fact]
-    public void WithRegisteredNameInTitle_ClearsTheSubpopulationName() {
+    public void WithTitleName_ClearsTheSubpopulationName() {
         var sousa = Cebuella2008 with {
             ScientificName = "Sousa chinensis Eastern Taiwan Strait subpopulation",
             SubpopulationName = "Eastern Taiwan Strait subpopulation",
-            RegisteredName = "Sousa chinensis ssp. taiwanensis",
         };
-        var swapped = sousa.WithRegisteredNameInTitle();
+        var swapped = sousa.WithTitleName("Sousa chinensis ssp. taiwanensis");
         Assert.Equal("Sousa chinensis ssp. taiwanensis", swapped.ScientificName);
         Assert.Null(swapped.SubpopulationName);
-        var none = Cebuella2008 with { RegisteredName = null };
-        Assert.Same(none, none.WithRegisteredNameInTitle());
+        Assert.Same(Cebuella2008, Cebuella2008.WithTitleName(null));
+    }
+
+    [Theory]
+    // A release from 2015 on, DOI created that year or the next: the name it was published under.
+    [InlineData("10.2305/IUCN.UK.2019-3.RLTS.T1A2.en", "2019-12-10", true)]
+    [InlineData("10.2305/IUCN.UK.2019-3.RLTS.T1A2.en", "2020-01-15", true)]
+    [InlineData("10.2305/IUCN.UK.2016-1.RLTS.T1A2.en", "2018-03-01", false)]
+    // A release before 2015: its DOIs were created in 2015 and 2016.
+    [InlineData("10.2305/IUCN.UK.2008.RLTS.T136926A4350391.en", "2015-09-10", false)]
+    [InlineData("10.2305/IUCN.UK.2014-3.RLTS.T1A2.en", "2015-09-10", false)]
+    [InlineData("10.2305/IUCN.UK.2019-3.RLTS.T1A2.en", null, false)]
+    [InlineData(null, "2019-12-10", false)]
+    public void RegisteredNameIsFromPublication(string? doi, string? created, bool expected) {
+        var parts = Cebuella2008 with { Doi = doi, DoiCreated = created };
+        Assert.Equal(expected, parts.RegisteredNameIsFromPublication);
+        Assert.False((parts with { RegisteredName = null }).RegisteredNameIsFromPublication);
     }
 
     [Fact]
-    public void OtherWikipedias_French_LeavesOutTheAuthorityWithTheRegisteredName() {
+    public void OtherWikipedias_French_LeavesOutTheAuthorityWithAnotherName() {
         var facts = new AssessmentFacts("LC", false, false, "3.1", null, 2008, "(Spix, 1823)", "species");
         var french = OtherWikipedias.Find("fr")!;
         Assert.Contains("|''Cebuella pygmaea'' (Spix, 1823)", OtherWikipedias.Citation(french, Cebuella2008, facts, new CiteIucnOptions()));
-        var registered = OtherWikipedias.Citation(french, Cebuella2008, facts, new CiteIucnOptions { RegisteredNameInTitle = true });
+        var registered = OtherWikipedias.Citation(french, Cebuella2008, facts, new CiteIucnOptions { TitleName = "Cebuella pygmaea ssp. pygmaea" });
         Assert.Contains("|''Cebuella pygmaea'' ssp. ''pygmaea''", registered);
         Assert.DoesNotContain("Spix", registered);
     }

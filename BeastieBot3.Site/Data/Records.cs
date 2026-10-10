@@ -67,8 +67,9 @@ public sealed record AssessmentRow(
 /// The reason IUCN's Table 7 gives for the change of category that this assessment brought
 /// (category_change): G, N or E. OldCategory and NewCategory are as the table prints them ("CR(PE)").
 /// TableRelease and TableUrl are those of the table the reason was taken from.
+/// PrintedName: the species' name as a table of the version's year or the year after prints it.
 public sealed record CategoryChangeRow(long AssessmentId, string Reason, string? OldCategory, string? NewCategory,
-    string? RedListVersion, string TableRelease, string TableUrl);
+    string? RedListVersion, string TableRelease, string TableUrl, string? PrintedName = null);
 
 /// An assessment IUCN's summary tables list as Possibly Extinct (Tag "PE") or Possibly Extinct in the
 /// Wild ("PEW"), with the first and last table releases that list it and which tables do ("7", "9",

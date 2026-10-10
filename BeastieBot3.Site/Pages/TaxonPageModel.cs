@@ -216,12 +216,12 @@ public abstract class TaxonPageModel : PageModel {
         return parts;
     }
 
-    /// The name in the title registered with Crossref for the assessment's DOI, when it names the
-    /// taxon differently from the taxon's current name; null otherwise. taxon: the taxon the row is
-    /// under (another IUCN id in a combined history); this page's taxon when null. The assessment
+    /// The name the assessment was published under, or the name in its DOI's title, when it differs
+    /// from the current name of the taxon the row is under (taxon: another IUCN id in a combined
+    /// history; this page's taxon when null); null otherwise (PublishedName.For). The assessment
     /// tables show it under the year (or region) of the row.
-    public string? DoiTitleName(AssessmentRow assessment, TaxonRow? taxon = null) =>
-        PartsOf(assessment)?.RegisteredNameDifferentFrom((taxon ?? Taxon)?.ScientificName);
+    public PublishedName? PublishedNameOf(AssessmentRow assessment, TaxonRow? taxon = null) =>
+        PublishedName.For((taxon ?? Taxon)?.ScientificName, ChangeReasons.GetValueOrDefault(assessment.AssessmentId), PartsOf(assessment));
 
     /// A short note for the assessment tables when the assessment is an errata or amended version,
     /// or was replaced by one ("Replaced by the errata version"); null otherwise. An errata version

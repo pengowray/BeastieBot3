@@ -1,4 +1,0 @@
-@model string
-@* Under the year (or region) of an assessment table row: the name in the title registered for the
-   assessment's DOI, when it differs from the taxon's current name (TaxonPageModel.DoiTitleName). *@
-<span class="doi-title-name">@SiteText.DoiTitleNameLabel<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(Model))</span></span>

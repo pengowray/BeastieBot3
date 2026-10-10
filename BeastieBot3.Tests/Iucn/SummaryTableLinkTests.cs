@@ -146,4 +146,39 @@ public sealed class SummaryTableLinkTests {
             listing.LastRelease, listing.Tables));
         Assert.Equal(1, result.ListedWithoutTag);
     }
+
+    [Fact]
+    public void Linking_keeps_the_name_printed_by_the_earliest_table_of_the_versions_year_or_the_next() {
+        // Made up: a species renamed after 2017; Table 7 of 2016-1 and of 2017-1 print the old name,
+        // and a 2020 table, listing the same change again, prints the new one.
+        var t2016 = Source(1, 7, "2016-1", 1);
+        var t2017 = Source(2, 7, "2017-1", 2);
+        var t2020 = Source(3, 7, "2020-1", 3);
+        CategoryChangeRow Row(string name) => new(1, 1, "MAMMALS", null, name, null, "VU", "EN", "G", "2016-1", null);
+        var changes = new[] {
+            new StoredCategoryChange(t2020, Row("Nova species")),
+            new StoredCategoryChange(t2017, Row("Vetus speciosus")),
+            new StoredCategoryChange(t2016, Row("Vetus species")),
+        };
+        var history = new Dictionary<long, List<SiteHistoryEntry>> { [10] = new() { A(100, "VU", 2008), A(101, "EN", 2016) } };
+        var taxon = Taxon(10, "Nova species");
+        taxon.IucnSynonyms = [new SiteSynonym("Vetus species"), new SiteSynonym("Vetus speciosus")];
+
+        var result = SiteSummaryTables.Link(new[] { t2016, t2017, t2020 }, changes, [], new StatusListNameIndex(new[] { taxon }), history);
+
+        var change = Assert.Single(result.Changes);
+        // The 2020 table's reason row wins, but its name is not from the version's year or the next.
+        Assert.Equal((101L, 3L, "Vetus species"), (change.AssessmentId, change.SummaryTableId, change.PrintedName));
+    }
+
+    [Fact]
+    public void Linking_prints_no_name_when_only_later_tables_list_the_change() {
+        var t2020 = Source(1, 7, "2020-1", 1);
+        var changes = new[] { new StoredCategoryChange(t2020, new CategoryChangeRow(1, 1, "MAMMALS", null, "Bos sauveli", null, "EN", "CR", "G", "2016-1", null)) };
+        var history = new Dictionary<long, List<SiteHistoryEntry>> { [10] = new() { A(100, "EN", 2008), A(101, "CR", 2016) } };
+
+        var result = SiteSummaryTables.Link(new[] { t2020 }, changes, [], new StatusListNameIndex(new[] { Taxon(10, "Bos sauveli") }), history);
+
+        Assert.Null(Assert.Single(result.Changes).PrintedName);
+    }
 }

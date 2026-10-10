@@ -1702,34 +1702,44 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
 - Run locally with `dotnet run --project BeastieBot3.Site`. `appsettings.Development.json` points to
   `~/datasets/beastiebot/site.sqlite`; set `Site__DatabasePath` to use another file.
 
-### Names in DOI titles
+### Published names and names in DOI titles
 
 IUCN cites every assessment, old ones included, under the taxon's current name: the 2008 assessment
 of IUCN id 136926 is "Cebuella pygmaea" in IUCN's citation, although IUCN assessed the taxon then as
-the subspecies *Cebuella pygmaea* ssp. *pygmaea*. The title registered with Crossref for its DOI
-keeps the older name: "Cebuella pygmaea ssp. pygmaea: Rylands, A.B. & de la Torre, S."
-(`IucnCitationParts.RegisteredName`, from `iucn resolve-dois`). In 2026-1, 9,327 assessments (of
-7,934 taxa) have a DOI title whose name differs from the taxon's current name, most of them after a
-move to another genus; 3,148 of them are latest assessments.
+the subspecies *Cebuella pygmaea* ssp. *pygmaea*. IUCN's own website has the name each assessment
+was published under ("2008 — Least Concern (LC) as *Cebuella pygmaea* ssp. *pygmaea*", from
+`previousAssessments[].synonyms` of its website's own API), but IUCN's public API does not. The site
+reads it from two other sources (`Pages/PublishedName.cs`, `PublishedName.For`):
 
-The name in a DOI title is the name current when the DOI was created, which is not always the name
-the assessment was published under. IUCN created the DOIs of the assessments published before 2015
-in 2015 and 2016 (Crossref's `created` dates: 83,255 of IUCN's DOIs were created in 2015, and about
-92,000 DOIs of assessments published in 2014 or earlier were created in 2015 or later); later
-assessments got their DOI when they were published. Depositing a record again keeps its title: the
-2008 Cebuella DOI was created on 10 September 2015 and deposited again on 28 February 2025 with the
-same title. IUCN's own website has the name each assessment was published under ("2008 — Least
-Concern (LC) as *Cebuella pygmaea* ssp. *pygmaea*", from `previousAssessments[].synonyms` of its
-website's own API), but IUCN's public API does not.
+1. IUCN's Table 7 (species changing category, `iucn summary-tables`) prints each species' name as
+   it was in that release. `SiteSummaryTables` keeps the name a table of the version's year or the
+   year after prints (the earliest such table's) as `category_change.printed_name`, on the
+   assessment that brought the change. When it is the current name, the assessment was published
+   under the current name, whatever the DOI's title says.
+2. The title registered with Crossref for the assessment's DOI keeps the name current when the DOI
+   was created: "Cebuella pygmaea ssp. pygmaea: Rylands, A.B. & de la Torre, S."
+   (`IucnCitationParts.RegisteredName`, from `iucn resolve-dois`). Depositing a record again keeps
+   its title: the 2008 Cebuella DOI was created on 10 September 2015 and deposited again on 28
+   February 2025 with the same title. Crossref's `created` date (`crossref_works.created`, stored by
+   `iucn resolve-dois --refresh-crossref` since October 2026; `IucnCitationParts.DoiCreated`) says
+   when. IUCN created the DOIs of every release before 2015 in 2015 and 2016 (83,255 of its DOIs
+   were created in 2015), and from 2015 it created them with each release: of the about 175,000
+   DOIs of releases from 2015 on, all but about 1,000 were created in the release's year or the
+   next. So a DOI title has the name the assessment was published under when the DOI names a release
+   of 2015 or later and was created that year or the next (`RegisteredNameIsFromPublication`).
 
-- The assessment tables (global history, combined history and regional assessments) show "Name in
-  DOI title: X" under the year (or region) of a row whose DOI title names the taxon differently from
-  the current name of the row's own taxon (`TaxonPageModel.DoiTitleName`,
-  `IucnCitationParts.RegisteredNameDifferentFrom`), and one note under the table that says where
-  the name comes from. Names that differ only in "ssp." and "subsp.", brackets or spacing
-  (`WikidataCitation.SameName`) and IUCN's internal names ("Physella acuta_new") are not shown.
-- The citations page writes that name in the citation title, with the current name as an option
-  (see [Citation options](#citation-options)).
+The assessment tables (global history, combined history and regional assessments) show, under the
+year (or region) of a row, "Name when published: X" for a name from Table 7 or from such a DOI, and "Name
+in DOI title: X" for a name only a later DOI's title has, when the name differs from the current
+name of the row's own taxon (`TaxonPageModel.PublishedNameOf`); one note under the table explains
+the labels it shows. Names that differ only in "ssp." and "subsp.", a rank marker, brackets or
+spacing, and IUCN's internal names ("Physella acuta_new"), are not shown. In 2026-1, 9,327
+assessments (of 7,934 taxa) have a DOI title whose name differs from the taxon's current name, most
+of them after a move to another genus; about 6,400 of them were published before 2015.
+In the build of 10 October 2026, Table 7 gives 440 assessments a name that differs from the current one (Notropis moralesi for Graodus moralesi); of the other assessments with a different name in their DOI title, 2,633 show it as the name when published and 6,261 as the name in the DOI title.
+
+The citations page writes the same name in the citation title, with the current name as an option
+(see [Citation options](#citation-options)).
 
 ### Synonyms that are another taxon's name, and taxa named in the notes
 
@@ -2005,12 +2015,13 @@ links to other assessments of the taxon keep the options.
   date option applies to it only when the item has a URL: `WikidataCite.Build` sets
   `CiteQOptions.ItemHasUrl` when the item's `wikidata_item_properties` include P953.
 - "Name in the citation title" (`titlename=current`): by default the `|title=` of `{{cite iucn}}`
-  (and of the other Wikipedias' citations) has the name in the title registered with Crossref for
-  the assessment's DOI (`CiteIucnOptions.RegisteredNameInTitle`, see [Names in DOI titles](#names-in-doi-titles)),
+  (and of the other Wikipedias' citations) has the name the assessment was published under, or the
+  name in the title registered with Crossref for its DOI (`CiteIucnOptions.TitleName`, see
+  [Published names and names in DOI titles](#published-names-and-names-in-doi-titles)),
   and `titlename=current` gives the taxon's current name, as IUCN's own citation does. The option is
   shown only when the two names differ; a `titlename=current` already chosen is kept in a hidden
-  field for the next assessment. The French citation leaves out the authority with the name from
-  the DOI title, because the authority is the current name's. The status update page, the group
+  field for the next assessment. The French citation leaves out the authority with another name,
+  because the authority is the current name's. The status update page, the group
   page's lists and species tables use the current name.
 - "Citation in taxobox status_ref" (`cite=q`, off by default): the taxobox lines' `status_ref` holds
   `{{cite Q}}` instead of `{{cite iucn}}` when the assessment has a Wikidata item. The `{{cite iucn}}`

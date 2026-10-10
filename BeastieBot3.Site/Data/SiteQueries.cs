@@ -331,7 +331,7 @@ public sealed partial class SiteQueries {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT c.assessment_id, c.reason, c.old_category, c.new_category, c.red_list_version, t.release, t.url
+            SELECT c.assessment_id, c.reason, c.old_category, c.new_category, c.red_list_version, t.release, t.url, c.printed_name
             FROM category_change c JOIN summary_table t ON t.summary_table_id = c.summary_table_id
             WHERE c.taxon_id IN (SELECT value FROM json_each(@ids))
             """;
@@ -339,7 +339,7 @@ public sealed partial class SiteQueries {
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             changes[reader.GetInt64(0)] = new CategoryChangeRow(reader.GetInt64(0), reader.GetString(1), Text(reader, 2), Text(reader, 3),
-                Text(reader, 4), reader.GetString(5), reader.GetString(6));
+                Text(reader, 4), reader.GetString(5), reader.GetString(6), Text(reader, 7));
         }
         return changes;
     }

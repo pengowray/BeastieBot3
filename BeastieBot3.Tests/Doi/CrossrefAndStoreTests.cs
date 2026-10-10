@@ -15,7 +15,7 @@ public class CrossrefAndStoreTests {
     private const string Page1 = """
         {"status":"ok","message-type":"work-list","message":{"total-results":4,"next-cursor":"abc+/=","items":[
           {"DOI":"10.2305\/iucn.ch.2005.3.en","resource":{"primary":{"URL":"http:\/\/www.iucn.org\/bookstore\/cover.html"}}},
-          {"DOI":"10.2305\/iucn.uk.2015-4.rlts.t22823a14871490.en","resource":{"primary":{"URL":"https:\/\/www.iucnredlist.org\/species\/22823\/14871490"}},"title":["Ursus maritimus: Wiig, \u00d8., Amstrup, S. &amp; Atwood, T."]},
+          {"DOI":"10.2305\/iucn.uk.2015-4.rlts.t22823a14871490.en","resource":{"primary":{"URL":"https:\/\/www.iucnredlist.org\/species\/22823\/14871490"}},"title":["Ursus maritimus: Wiig, \u00d8., Amstrup, S. &amp; Atwood, T."],"created":{"date-parts":[[2015,11,19]],"date-time":"2015-11-19T10:00:00Z","timestamp":1447927200000}},
           {"DOI":"10.2305\/iucn.uk.2016-2.rlts.t712a45033386.en","resource":{"primary":{"URL":"https:\/\/www.iucnredlist.org\/species\/712\/121745669"}}}
         ]}}
         """;
@@ -39,11 +39,12 @@ public class CrossrefAndStoreTests {
         var bear = page.Works[0];
         Assert.Equal(new CrossrefIucnWork("10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en", 22823, 14871490, "2015-4", "en",
             "https://www.iucnredlist.org/species/22823/14871490", 22823, 14871490,
-            "Ursus maritimus: Wiig, \u00d8., Amstrup, S. &amp; Atwood, T."), bear);
+            "Ursus maritimus: Wiig, \u00d8., Amstrup, S. &amp; Atwood, T.", "2015-11-19"), bear);
         var panda = page.Works[1];
         Assert.Equal(45033386, panda.AssessmentId);
         Assert.Equal(121745669, panda.UrlAssessmentId);
         Assert.Null(panda.Title);
+        Assert.Null(panda.Created);
         Assert.Empty(page.UnreadRlts);
     }
 
@@ -69,9 +70,13 @@ public class CrossrefAndStoreTests {
         var listingId = await CrossrefIucnWorks.DownloadAsync(new PoliteHttpGetter(http, TimeSpan.Zero), store, pages.Add, CancellationToken.None);
 
         Assert.Equal(3, handler.Urls.Count);
-        Assert.Equal("https://api.crossref.org/prefixes/10.2305/works?rows=1000&select=DOI,resource,title&cursor=%2A", handler.Urls[0]);
+        Assert.Equal("https://api.crossref.org/prefixes/10.2305/works?rows=1000&select=DOI,resource,title,created&cursor=%2A", handler.Urls[0]);
         Assert.EndsWith("cursor=abc%2B%2F%3D", handler.Urls[1]);
         Assert.Equal(2, store.CountCrossrefWorks());
+        using (var created = connection.CreateCommand()) {
+            created.CommandText = "SELECT created FROM crossref_works WHERE assessment_id = 14871490";
+            Assert.Equal("2015-11-19", created.ExecuteScalar());
+        }
         var listing = Assert.IsType<CrossrefListing>(store.LastCompletedListing());
         Assert.Equal(listingId, listing.Id);
         Assert.Equal(4, listing.TotalResults);

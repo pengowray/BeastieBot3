@@ -34,12 +34,12 @@ public sealed record CiteIucnOptions {
     /// the initials IUCN's citation prints. Authors without GivenNames keep their initials.
     public bool FullGivenNames { get; init; }
 
-    /// Write the name in the title registered with Crossref for the assessment's DOI
-    /// (IucnCitationParts.RegisteredName) in |title= when it names the taxon differently from IUCN's
-    /// citation, which always gives the current name. Off by default: the site's citation page turns
-    /// it on (and offers the current name as an option); the status update page, the lists and the
-    /// species tables write the current name.
-    public bool RegisteredNameInTitle { get; init; }
+    /// The name to write in |title= instead of IUCN's citation name, which is always the taxon's
+    /// current name: the name the assessment was published under, or the name in the title
+    /// registered for its DOI (IucnCitationParts.WithTitleName). Null by default: the site's citation
+    /// page sets it (and offers the current name as an option); the status update page, the lists
+    /// and the species tables write the current name.
+    public string? TitleName { get; init; }
 
     /// The wiki's copy of {{cite iucn}} to write for (CiteIucnDialect); English Wikipedia's by default.
     public CiteIucnDialect Dialect { get; init; } = CiteIucnDialect.English;

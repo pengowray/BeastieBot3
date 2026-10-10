@@ -41,7 +41,7 @@
     </ul>
     @if (combined.Rows.Count > 0) {
         var historyNotes = Model.TableNotes(combined.Rows.Select(r => (r.Assessment, r.Id.IsThisPage)));
-        var anyDoiTitleName = false;
+        var nameTally = new PublishedNameTally();
         <div class="table-scroll">
             <table class="combined-table">
                 <thead>
@@ -71,11 +71,10 @@
                         var isLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId
                             || (!own && row.Id.Taxon.InRelease && a.AssessmentId == row.Id.Taxon.LatestGlobalAssessmentId);
                         var versionNote = Model.VersionNote(a);
-                        var doiTitleName = Model.DoiTitleName(a, row.Id.Taxon);
-                        anyDoiTitleName |= doiTitleName is not null;
+                        var publishedName = nameTally.Add(Model.PublishedNameOf(a, row.Id.Taxon));
                         var rowClass = string.Join(' ', new[] { row.Id.TintClass, isShown ? "shown" : null }.Where(c => c is not null));
                         <tr class="@(rowClass.Length == 0 ? null : rowClass)">
-                            <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}@if (doiTitleName is not null) {<partial name="_DoiTitleName" model="doiTitleName" />}</th>
+                            <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}@if (publishedName is not null) {<text> </text><partial name="_PublishedName" model="publishedName" />}</th>
                             <td class="iucn-id">
                                 @if (own) {
                                     @a.TaxonId<span class="tag">@SiteText.ThisPageTag</span>
@@ -111,7 +110,7 @@
             </table>
         </div>
         <partial name="_HistoryTableNotes" model="historyNotes" />
-        <partial name="_DoiTitleNameNote" model="anyDoiTitleName" />
+        <partial name="_PublishedNameNote" model="nameTally" />
     }
     @if (combined.WithNotes.Count > 0) {
         @* <text> keeps the whitespace of the code lines out of the sentence ("2790 , the"). *@

@@ -660,7 +660,7 @@ button:hover {
 /* "Errata version, published 2016" and similar, under the year in the assessment tables; and the
    name in the title registered for the assessment's DOI, when it differs from the current name. */
 .version-note,
-.doi-title-name {
+.published-name {
     display: block;
     font-size: 0.85rem;
     color: var(--muted);

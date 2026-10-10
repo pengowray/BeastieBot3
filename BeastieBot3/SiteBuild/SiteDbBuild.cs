@@ -695,11 +695,11 @@ internal sealed class SiteDbBuild {
             ["@id", "@t", "@r", "@u", "@d"],
             result.Tables.Select(t => new object?[] { t.Id, t.Table, t.Release, t.Url, t.LastUpdated }));
         writer.InsertRows(
-            "INSERT INTO category_change (assessment_id, taxon_id, reason, previous_assessment_id, old_category, new_category, red_list_version, summary_table_id) "
-            + "VALUES (@a, @t, @r, @p, @o, @n, @v, @s)",
-            ["@a", "@t", "@r", "@p", "@o", "@n", "@v", "@s"],
+            "INSERT INTO category_change (assessment_id, taxon_id, reason, previous_assessment_id, old_category, new_category, red_list_version, summary_table_id, printed_name) "
+            + "VALUES (@a, @t, @r, @p, @o, @n, @v, @s, @pn)",
+            ["@a", "@t", "@r", "@p", "@o", "@n", "@v", "@s", "@pn"],
             result.Changes.Select(c => new object?[] { c.AssessmentId, c.TaxonId, c.Reason, c.PreviousAssessmentId, c.OldCategory,
-                c.NewCategory, c.RedListVersion, c.SummaryTableId }));
+                c.NewCategory, c.RedListVersion, c.SummaryTableId, c.PrintedName }));
         writer.InsertRows(
             "INSERT INTO possibly_extinct_listing (assessment_id, tag, taxon_id, first_release, last_release, tables, summary_table_id) "
             + "VALUES (@a, @g, @t, @f, @l, @b, @s)",

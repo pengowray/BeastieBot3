@@ -154,25 +154,42 @@ public static partial class SiteText {
         return $"IUCN gives full given names for {withNames} of the {people} authors, such as {example}. "
             + (others == 1 ? "The other author is written as in IUCN's citation." : $"The other {others} authors are written as in IUCN's citation.");
     }
-    /// The name in the title registered with Crossref for an assessment's DOI, when it differs from the
-    /// taxon's current name: under the year (or region) of the row in an assessment table, with the
-    /// italic name after DoiTitleNameLabel, and DoiTitleNameNote once under the table. The name is the
-    /// one current when the DOI record was made or last updated, so the text never says the assessment
-    /// was published under it.
+    /// Under the year (or region) of an assessment table row whose name differs from the taxon's
+    /// current name (PublishedName): PublishedAsLabel for the name the assessment was published under
+    /// (Table 7, or a DOI created with the release), DoiTitleNameLabel for the name only a later DOI's
+    /// title has, then the italic name. Under the table, the note line for each label shown, then
+    /// CurrentNameNote.
+    public const string PublishedAsLabel = "Name when published: ";
     public const string DoiTitleNameLabel = "Name in DOI title: ";
+    public const string PublishedAsNote =
+        "Name when published: the scientific name the assessment was published under. Source: IUCN's summary statistics Table 7 "
+        + "(species changing Red List category) of the year the assessment was published or the year after, or the title registered "
+        + "with Crossref for the assessment's DOI, when the DOI was created in the year the assessment was published or the year after.";
     public const string DoiTitleNameNote =
-        "Name in DOI title: the scientific name in the title registered with Crossref for the assessment's DOI. "
-        + "It is usually the name the assessment was published under, but some DOI records were made years after the assessment "
-        + "and have the name IUCN used when the record was made. IUCN's own citations give every assessment under the taxon's current name.";
+        "Name in DOI title: the scientific name in the title registered with Crossref for the assessment's DOI. This name may differ "
+        + "from the name the assessment was published under: the DOI was created in 2015 or later, more than a year after the "
+        + "assessment was published, and the title has the name IUCN used when the DOI was created.";
+    public const string CurrentNameNote =
+        "The citations on the IUCN Red List website use the taxon's current name for every assessment, including older assessments.";
 
-    /// The citation option for the name in |title=, shown when the DOI's title names the taxon
-    /// differently: TitleNameFromDoi or TitleNameCurrentName, then " (" + italic name + ")".
+    /// The citation option for the name in |title=, shown when the assessment's name differs from the
+    /// current one: TitlePublishedName or TitleNameFromDoi, then " (" + italic name + ")", and
+    /// TitleNameCurrentName; the help line for the kind of name.
     public const string TitleNameLegend = "Name in the citation title";
+    public const string TitleNamePublished = "Name when published";
     public const string TitleNameFromDoi = "Name in DOI title";
     public const string TitleNameCurrentName = "Current name";
-    public const string TitleNameHelp =
+    private const string CurrentNameHelp = "Current name: the name IUCN's own citations now use for every assessment, including older assessments.";
+    public const string TitleNamePublishedHelp =
+        "Name when published: the scientific name this assessment was published under, from IUCN's summary statistics Table 7 or the "
+        + "title registered with Crossref for this assessment's DOI. " + CurrentNameHelp;
+    /// created: the year the DOI was created; published: the year the assessment was published.
+    public static string TitleNameHelp(int? created, int? published) =>
         "Name in DOI title: the scientific name in the title registered with Crossref for this assessment's DOI. "
-        + "Current name: the name IUCN's own citations now use for every assessment, including older assessments.";
+        + (created is { } c && published is { } p
+            ? $"The DOI was created in {c}, after the assessment was published in {p}, so the title has the name IUCN used in {c}. "
+            : "The DOI was created more than a year after the assessment was published, and the title has the name IUCN used when the DOI was created. ")
+        + "That name may differ from the name this assessment was published under. " + CurrentNameHelp;
 
     /// Under an IUCN synonym in the Synonyms table that is the scientific name of another taxon in the
     /// release: SynonymIsTaxonBefore + link("IUCN id {id}") [+ TaxonListSeparator + link ...].

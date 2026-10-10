@@ -35,7 +35,9 @@ internal static class DoiFoundBy {
 internal sealed record DoiCheckRow(long AssessmentId, long TaxonId, string? Doi, DateTime CheckedAtUtc, int CandidatesTried);
 
 /// One work from Crossref's list, already parsed. Title: the registered title as Crossref gives it,
-/// HTML entities included; null when Crossref gives none.
+/// HTML entities included; null when Crossref gives none. Created: the day the DOI was registered
+/// with Crossref (Crossref's "created" date, "2015-09-10"); depositing the record again changes its
+/// "deposited" date and keeps its title, so the title has the names current on this day.
 internal sealed record CrossrefIucnWork(
     string Doi,
     long TaxonId,
@@ -45,7 +47,8 @@ internal sealed record CrossrefIucnWork(
     string? Url,
     long? UrlTaxonId,
     long? UrlAssessmentId,
-    string? Title = null);
+    string? Title = null,
+    string? Created = null);
 
 /// A Crossref list download.
 internal sealed record CrossrefListing(long Id, DateTime StartedAtUtc, DateTime? CompletedAtUtc, long? TotalResults, long WorksSeen, int Requests);
@@ -117,7 +120,8 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
                 url_taxon_id INTEGER,
                 url_assessment_id INTEGER,
                 listing_id INTEGER NOT NULL,
-                title TEXT
+                title TEXT,
+                created TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_crossref_works_assessment ON crossref_works(assessment_id);
             CREATE INDEX IF NOT EXISTS idx_crossref_works_url_assessment ON crossref_works(url_assessment_id);
@@ -130,6 +134,19 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
             alter.CommandText = "ALTER TABLE crossref_works ADD COLUMN title TEXT";
             alter.ExecuteNonQuery();
         }
+        // Likewise the day each DOI was created (October 2026).
+        if (!HasCrossrefCreated(_connection)) {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE crossref_works ADD COLUMN created TEXT";
+            alter.ExecuteNonQuery();
+        }
+    }
+
+    /// True when crossref_works has the created column (the day each DOI was created).
+    public static bool HasCrossrefCreated(SqliteConnection connection) {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM pragma_table_info('crossref_works') WHERE name = 'created'";
+        return command.ExecuteScalar() is not null;
     }
 
     /// True when crossref_works has the title column. A cache made before it existed and opened
@@ -303,8 +320,8 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
         using (var command = _connection.CreateCommand()) {
             command.Transaction = transaction;
             command.CommandText = """
-                INSERT INTO crossref_works (doi, taxon_id, assessment_id, release, language, url, url_taxon_id, url_assessment_id, listing_id, title)
-                VALUES (@doi, @tid, @aid, @release, @lang, @url, @utid, @uaid, @listing, @title)
+                INSERT INTO crossref_works (doi, taxon_id, assessment_id, release, language, url, url_taxon_id, url_assessment_id, listing_id, title, created)
+                VALUES (@doi, @tid, @aid, @release, @lang, @url, @utid, @uaid, @listing, @title, @created)
                 ON CONFLICT(doi) DO UPDATE SET
                     taxon_id = excluded.taxon_id,
                     assessment_id = excluded.assessment_id,
@@ -314,7 +331,8 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
                     url_taxon_id = excluded.url_taxon_id,
                     url_assessment_id = excluded.url_assessment_id,
                     listing_id = excluded.listing_id,
-                    title = excluded.title
+                    title = excluded.title,
+                    created = excluded.created
                 """;
             var doi = command.Parameters.Add("@doi", SqliteType.Text);
             var tid = command.Parameters.Add("@tid", SqliteType.Integer);
@@ -325,6 +343,7 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
             var urlTaxon = command.Parameters.Add("@utid", SqliteType.Integer);
             var urlAssessment = command.Parameters.Add("@uaid", SqliteType.Integer);
             var title = command.Parameters.Add("@title", SqliteType.Text);
+            var created = command.Parameters.Add("@created", SqliteType.Text);
             command.Parameters.AddWithValue("@listing", listingId);
             foreach (var work in works) {
                 doi.Value = work.Doi;
@@ -336,6 +355,7 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
                 urlTaxon.Value = (object?)work.UrlTaxonId ?? DBNull.Value;
                 urlAssessment.Value = (object?)work.UrlAssessmentId ?? DBNull.Value;
                 title.Value = (object?)work.Title ?? DBNull.Value;
+                created.Value = (object?)work.Created ?? DBNull.Value;
                 command.ExecuteNonQuery();
             }
         }

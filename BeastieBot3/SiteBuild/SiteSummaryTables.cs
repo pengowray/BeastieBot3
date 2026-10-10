@@ -9,7 +9,9 @@ using BeastieBot3.Iucn.SummaryTables;
 //   category and was published in the version's year (else the year after, for an assessment IUCN
 //   amended and published again); of several, the first whose previous global assessment has another
 //   category. Its reason (G, N or E) goes on that assessment. When several tables list the change,
-//   the table latest in rules/iucn-summary-tables.yml wins.
+//   the table latest in rules/iucn-summary-tables.yml wins. The name the row prints is kept as the
+//   name the assessment was published under (PrintedName) when the table is of the version's year or
+//   the year after; of several such tables, the earliest release's.
 //
 //   Possibly Extinct: a Table 9 row says the species was CR(PE) or CR(PEW) on the Red List of the
 //   table's release, and gives the year of its first such assessment. Both the global assessment
@@ -28,9 +30,12 @@ internal sealed record SiteHistoryEntry(long AssessmentId, string Category, bool
 /// A row of the site's summary_table.
 internal sealed record SiteSummaryTable(long Id, int Table, string Release, string Url, string? LastUpdated);
 
-/// A row of the site's category_change.
+/// A row of the site's category_change. PrintedName: the species' name as a table of the version's
+/// year or the year after prints it; null when only later tables list the change.
 internal sealed record SiteCategoryChange(long AssessmentId, long TaxonId, string Reason, long? PreviousAssessmentId,
-    string? OldCategory, string? NewCategory, string? RedListVersion, long SummaryTableId);
+    string? OldCategory, string? NewCategory, string? RedListVersion, long SummaryTableId) {
+    public string? PrintedName { get; init; }
+}
 
 /// A row of the site's possibly_extinct_listing.
 internal sealed record SitePossiblyExtinctListing(long AssessmentId, string Tag, long TaxonId, string FirstRelease,
@@ -73,6 +78,8 @@ internal static class SiteSummaryTables {
 
         var evidence = new Dictionary<(long AssessmentId, string Tag), ListingEvidence>();
         var chosen = new Dictionary<long, (SiteCategoryChange Change, int Priority)>();
+        // The name printed by the earliest table of the version's year or the year after.
+        var printed = new Dictionary<long, (string Name, (int, int) Release)>();
         foreach (var stored in changes) {
             result.ChangeRows++;
             var row = stored.Row;
@@ -108,6 +115,13 @@ internal static class SiteSummaryTables {
             if (row.Old.Tag is { } oldTag && previous is not null && Family(previous.Category) == "CR") {
                 AddEvidence(evidence, previous, oldTag, taxonId.Value, stored.Source, "7");
             }
+            if (SummaryTableValues.VersionYear(stored.Source.Release) is { } tableYear && tableYear - year.Value is >= 0 and <= 1
+                && !string.IsNullOrWhiteSpace(row.ScientificName)) {
+                var release = ReleaseKey(stored.Source.Release);
+                if (!printed.TryGetValue(assessment.AssessmentId, out var earlier) || release.CompareTo(earlier.Release) < 0) {
+                    printed[assessment.AssessmentId] = (row.ScientificName.Trim(), release);
+                }
+            }
             var change = new SiteCategoryChange(assessment.AssessmentId, taxonId.Value, reason, previous?.AssessmentId,
                 Compact(row.OldCategoryText), Compact(row.NewCategoryText), version, stored.Source.Id);
             if (chosen.TryGetValue(assessment.AssessmentId, out var existing)) {
@@ -116,7 +130,9 @@ internal static class SiteSummaryTables {
             }
             chosen[assessment.AssessmentId] = (change, stored.Source.Priority);
         }
-        result.Changes.AddRange(chosen.Values.Select(c => c.Change).OrderBy(c => c.AssessmentId));
+        result.Changes.AddRange(chosen.Values
+            .Select(c => printed.TryGetValue(c.Change.AssessmentId, out var p) ? c.Change with { PrintedName = p.Name } : c.Change)
+            .OrderBy(c => c.AssessmentId));
 
         foreach (var stored in listings) {
             result.ListingRows++;
