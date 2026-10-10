@@ -430,16 +430,26 @@ internal sealed class SiteExtraSpeciesBuild {
         var iucnByGenus = _iucnSpecies.Values.Where(t => t.Genus is not null && t.SpeciesEpithet is not null)
             .ToLookup(t => (t.Kingdom!.ToUpperInvariant(), t.Genus!));
         var entriesByGenus = Entries.ToLookup(e => (e.Kingdom, e.Genus));
+        // How many genera of the IUCN species and extra entries use each epithet; an epithet used in
+        // one genus only is rare, which makes a one-letter difference more likely a misspelling.
+        var generaUsing = Entries.Select(e => (e.Epithet, e.Genus))
+            .Concat(_iucnSpecies.Values.Where(t => t.Genus is not null && t.SpeciesEpithet is not null).Select(t => (Epithet: t.SpeciesEpithet!, Genus: t.Genus!)))
+            .Distinct()
+            .GroupBy(p => p.Epithet, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        string? Reason(string a, string? authorityA, string b, string? authorityB) => NameReason(a, b,
+            rare: Math.Min(generaUsing.GetValueOrDefault(a), generaUsing.GetValueOrDefault(b)) <= 1,
+            sameAuthor: ExtraSpeciesNameRules.SameAuthority(authorityA, authorityB));
         foreach (var entry in Entries) {
             foreach (var taxon in iucnByGenus[(entry.Kingdom, entry.Genus)]) {
-                if (NameReason(entry.Epithet, taxon.SpeciesEpithet!) is { } reason) {
+                if (Reason(entry.Epithet, entry.Authority, taxon.SpeciesEpithet!, taxon.Authority) is { } reason) {
                     AddOverlap(entry, taxon.TaxonId, null, reason);
                 }
             }
             // Entries from the other source only: CoL-only against Wikidata-only.
             if (entry.ColId is not null && entry.Qid is null) {
                 foreach (var other in entriesByGenus[(entry.Kingdom, entry.Genus)]) {
-                    if (other.ColId is null && NameReason(entry.Epithet, other.Epithet) is { } reason) {
+                    if (other.ColId is null && Reason(entry.Epithet, entry.Authority, other.Epithet, other.Authority) is { } reason) {
                         AddOverlap(entry, null, other, reason);
                     }
                 }
@@ -484,9 +494,9 @@ internal sealed class SiteExtraSpeciesBuild {
         }
     }
 
-    private static string? NameReason(string a, string b) =>
+    private static string? NameReason(string a, string b, bool rare, bool sameAuthor) =>
         ExtraSpeciesNameRules.IsGenderVariant(a, b) ? OverlapReason.GenderEnding
-        : ExtraSpeciesNameRules.IsSpellingVariant(a, b) ? OverlapReason.Spelling
+        : ExtraSpeciesNameRules.SpellingMatch(a, b, rare, sameAuthor) is not null ? OverlapReason.Spelling
         : null;
 
     // ------------------------------------------------------------ CoL names of IUCN taxa

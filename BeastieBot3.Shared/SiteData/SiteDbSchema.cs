@@ -417,8 +417,8 @@ public static class SiteDbSchema {
             reason           TEXT NOT NULL,               -- 'iucn-synonym': its name is an IUCN synonym of the taxon; 'col-synonym': its name
                                                           -- (or its CoL ID on Wikidata) is a CoL synonym of the other; 'wikidata-synonym': a
                                                           -- Wikidata synonym (P1420) of the taxon; 'gender-ending': same genus, epithets that
-                                                          -- differ by a Latin gender ending; 'spelling': same genus, epithets one or two letters
-                                                          -- apart; 'other-genus': same epithet in another genus of the same family, with the same
+                                                          -- differ by a Latin gender ending; 'spelling': same genus, epithets that look like one
+                                                          -- name spelled two ways (ExtraSpeciesNameRules.SpellingMatch); 'other-genus': same epithet in another genus of the same family, with the same
                                                           -- author and year (or, for a Wikidata species, an epithet no other species there has);
                                                           -- 'provisional-name': the IUCN taxon has a provisional name ('Notogomphus sp. nov.
                                                           -- 'lateralis'') and its name is the one built from the quoted epithet; 'working-name':

@@ -86,7 +86,7 @@ public static class GroupSourceText {
         "col-synonym" => "Catalogue of Life lists one name as a synonym of the other.",
         "wikidata-synonym" => "Wikidata lists one name as a taxon synonym of the other.",
         "gender-ending" => "Same genus, and the epithets differ only in the Latin gender ending.",
-        "spelling" => "Same genus, and the epithets differ by one or two letters.",
+        "spelling" => "Same genus, and the epithets look like one name spelled two ways.",
         "other-genus" => "Same epithet in another genus of the same family. The species may have been moved to another genus.",
         ExtraOverlapReasons.ProvisionalName => ReasonProvisionalName,
         ExtraOverlapReasons.WorkingName => ReasonWorkingName,

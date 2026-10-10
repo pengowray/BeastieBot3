@@ -839,10 +839,25 @@ as "Download the Wikidata taxon list" (`--refresh-days 30`), with a light from t
   synonym of another entry, of a subspecies of it, or of an IUCN species; a Wikidata-only entry's
   item is named as taxon synonym (P1420) by an IUCN species' item or another entry's item; an IUCN
   species' name is a CoL synonym of a CoL entry; same genus and epithets that differ by a Latin
-  gender ending (likely); same genus and epithets one or two letters apart (possible); the same
+  gender ending (likely); same genus and epithets that look like one name spelled two ways
+  (possible; `ExtraSpeciesNameRules.SpellingMatch`, below); the same
   epithet in another genus of the same family with the same author and year, or for a Wikidata
   species an epithet no other species in the family has (possible). Entries from one source are not
   compared with each other.
+- The spelling test (October 2026) replaced "one letter apart, or two from 7 letters", which
+  matched 17,869 pairs in 2026-1; a judged sample of 280 put about 35% of them as one name spelled
+  two ways. Most pairs that differ in the first letters or by a consonant are different words
+  (pubescens and rubescens, striata and stricta, microcarpa and macrocarpa), and so are most pairs 3
+  or 4 letters apart near the end (densiflora and densifolia, thomsonii and thomsoniana: 1.5 of 40
+  judged the same). `SpellingMatch` matches: the same name after normalising (case, diacritics,
+  ligatures, hyphens, the hybrid marker); the same after Latin spelling equivalents (ae/e/a, oe/e/o,
+  ph/f, y/i, k/c, connecting vowels, a doubled vowel); one stem with two of the endings i, ii, ae,
+  iae; one edit (a swap counts as one) after the first 3 letters when one epithet is used in no
+  other genus, the authorities are the same, or the edit is soft (vowel for vowel; a vowel, h or
+  doubled letter added or removed); one edit in the first 3 letters only when one epithet is rare
+  or the authorities are the same (never micro/macro); two edits in long epithets with the same
+  authorities. It keeps about 5,400 of the old pairs (about 95% judged the same name) and adds about
+  50; the tests in `ExtraSpeciesNameRulesTests` are pairs from the release.
 - `higher_taxon_extra` counts the extra species under each group by source, with the group's last
   descendant node id (node ids are depth-first), so the page checks the line cap with one lookup
   and reads a group's extra species by a node-id range. `sort_pos` puts an entry after the IUCN

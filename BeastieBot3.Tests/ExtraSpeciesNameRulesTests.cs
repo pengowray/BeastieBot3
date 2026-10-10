@@ -26,16 +26,36 @@ public sealed class ExtraSpeciesNameRulesTests {
     public void NotGenderVariants(string a, string b) =>
         Assert.False(ExtraSpeciesNameRules.IsGenderVariant(a, b));
 
+    // Pairs from the extra species of release 2026-1 (and the made-up last two), with whether one
+    // epithet is used in no other genus (rare) and whether the authorities are the same; the branch
+    // of SpellingMatch that matches, or null.
     [Theory]
-    [InlineData("smithi", "smithii", true)]
-    [InlineData("wallacei", "wallacii", true)]
-    [InlineData("lybica", "libyca", false)]     // two letters apart; six letters allow one
-    [InlineData("hemprichii", "hemprichi", true)]
-    [InlineData("leo", "lea", false)]           // too short
-    [InlineData("albus", "alba", false)]        // a gender variant, not a spelling variant
-    [InlineData("pardus", "pardalis", false)]
-    public void SpellingVariants(string a, string b, bool expected) =>
-        Assert.Equal(expected, ExtraSpeciesNameRules.IsSpellingVariant(a, b));
+    [InlineData("horhammeri", "hoerhammeri", false, false, "B")]   // Lophoterges
+    [InlineData("coeruleum", "caeruleum", false, false, "B")]      // Zygocarpum
+    [InlineData("hakeaeformis", "hakeiformis", true, false, "B")]  // Persoonia
+    [InlineData("canescens", "x canescens", true, false, "A")]     // Crataegus
+    [InlineData("joponensis", "yoponensis", true, false, "B")]     // Ficus
+    [InlineData("kusumba", "kasumba", true, false, "E")]           // Harpactes
+    [InlineData("lowei", "lowii", false, false, "D")]              // Sundasciurus
+    [InlineData("richardsii", "richardsiae", false, false, "C")]   // Premna
+    [InlineData("tnaculatus", "maculatus", true, true, "F")]       // Dasyurus
+    [InlineData("unica", "uncia", false, true, "E")]               // Panthera
+    [InlineData("smithi", "smithii", false, false, "B")]            // ii as i
+    [InlineData("le-testui", "letestui", false, false, "A")]
+    [InlineData("microcarpa", "macrocarpa", false, false, null)]   // Elegia
+    [InlineData("pubescens", "rubescens", false, false, null)]     // Trichilia
+    [InlineData("striata", "stricta", false, false, null)]         // Carex
+    [InlineData("rugulosus", "rugosus", false, false, null)]       // Elaeocarpus
+    [InlineData("angolensis", "ngomensis", false, true, null)]     // Zelotes, same author and year
+    [InlineData("roosi", "rossii", true, false, null)]             // Erebia
+    [InlineData("thomsonii", "thomsoniana", false, false, null)]   // Quercus
+    [InlineData("densiflora", "densifolia", false, false, null)]   // Caraipa
+    [InlineData("albus", "alba", true, true, null)]                // a gender variant, counted apart
+    [InlineData("leo", "lea", true, true, null)]                   // too short
+    public void SpellingMatches(string a, string b, bool rare, bool sameAuthor, string? branch) {
+        Assert.Equal(branch, ExtraSpeciesNameRules.SpellingMatch(a, b, rare, sameAuthor));
+        Assert.Equal(branch, ExtraSpeciesNameRules.SpellingMatch(b, a, rare, sameAuthor));
+    }
 
     [Fact]
     public void SameAuthorityIgnoresBracketsAndPunctuation() {
