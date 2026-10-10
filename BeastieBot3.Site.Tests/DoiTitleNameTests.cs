@@ -261,3 +261,43 @@ public sealed class NotesTaxaModelTests {
     [InlineData(null, false, 24)]
     public void CategoryRank(string? category, bool pe, int rank) => Assert.Equal(rank, NotesTaxa.CategoryRank(category, pe, false));
 }
+
+/// The latest assessment's generation length and the taxon's Red List Authority, in the facts of the
+/// taxon page. In the fixture, the polar bear's latest assessment has a generation length of 11.5
+/// years and its Red List Authority is the IUCN SSC Polar Bear Specialist Group.
+public sealed class AssessmentFactsTests(SiteFactory factory) : IClassFixture<SiteFactory> {
+    private readonly HttpClient _client = factory.Client();
+
+    [Fact]
+    public async Task TaxonPage_ShowsGenerationLengthAndRedListAuthority() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
+        var facts = Html.Between(html, "<dl class=\"facts\">", "</dl>");
+        Assert.Contains("<dt>Generation length</dt>", facts);
+        Assert.Contains("<dd>11.5 years</dd>", facts);
+        Assert.Contains("<dt>Red List Authority</dt>", facts);
+        Assert.Contains("<a href=\"http://pbsg.npolar.no/\">IUCN SSC Polar Bear Specialist Group</a>", facts);
+        // Generation length comes after the population trend.
+        Assert.True(Html.IndexOf(facts, "Population trend") < Html.IndexOf(facts, "Generation length"));
+    }
+
+    [Fact]
+    public async Task TaxonPage_NeitherWhenNotGiven() {
+        var facts = Html.Between(await _client.GetStringAsync($"/species/{FixtureDb.Tiger}"), "<dl class=\"facts\">", "</dl>");
+        Assert.DoesNotContain("Generation length", facts);
+        Assert.DoesNotContain("Red List Authorit", facts);
+    }
+
+    [Theory]
+    [InlineData("6.5", "6.5 years")]
+    [InlineData("1", "1 year")]
+    [InlineData("10-15", "10\u201315 years")]
+    [InlineData("10 - 15", "10\u201315 years")]
+    [InlineData("10-200,60", "10\u2013200 years (best estimate 60)")]
+    [InlineData("28-54,40-41", "28\u201354 years (best estimate 40\u201341)")]
+    [InlineData("<10years", "<10years")]
+    [InlineData("10 years", "10 years")]
+    [InlineData("Unknown", null)]
+    [InlineData(" ", null)]
+    [InlineData(null, null)]
+    public void GenerationLength_Display(string? value, string? shown) => Assert.Equal(shown, Display.GenerationLength.Display(value));
+}

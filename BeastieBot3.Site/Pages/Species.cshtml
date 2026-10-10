@@ -144,6 +144,10 @@
                 <dt>@SiteText.LabelTrend</dt>
                 <dd>@status.PopulationTrend</dd>
             }
+            @if (GenerationLength.Display(status.GenerationLength) is { } generationLength) {
+                <dt>@SiteText.LabelGenerationLength</dt>
+                <dd>@generationLength</dd>
+            }
             @if (!string.IsNullOrWhiteSpace(status.AssessmentDate)) {
                 <dt>@SiteText.LabelAssessed</dt>
                 <dd>@SiteFormat.Date(status.AssessmentDate)</dd>
@@ -151,6 +155,14 @@
             @if (status.YearPublished is { } published) {
                 <dt>@SiteText.LabelPublished</dt>
                 <dd>@published</dd>
+            }
+            @if (Model.RedListAuthorities.Count > 0) {
+                <dt>@SiteText.LabelRedListAuthority(Model.RedListAuthorities.Count)</dt>
+                <dd>@for (var i = 0; i < Model.RedListAuthorities.Count; i++) {
+                        var (name, url) = Model.RedListAuthorities[i];
+                        if (i > 0) {<br>}
+                        if (url is not null) {<a href="@url">@name</a>} else {@name}
+                    }</dd>
             }
             @if (Model.Version is not null) {
                 <dt>@SiteText.LabelVersion</dt>

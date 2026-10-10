@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 29;
+    public const int Version = 30;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -152,6 +152,17 @@ public static class SiteDbSchema {
             PRIMARY KEY (taxon_id, current_taxon_id)
         ) WITHOUT ROWID;
         CREATE INDEX taxon_link_current ON taxon_link(current_taxon_id);
+
+        -- The taxon's Red List Authority: the IUCN SSC groups its API record names (taxon.ssc_groups), in
+        -- the record's order. Only the name and the website; the groups' descriptions (chairs, email
+        -- addresses) are left out.
+        CREATE TABLE red_list_authority (
+            taxon_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,                    -- from 0, in the API record's order
+            name     TEXT NOT NULL,                       -- 'IUCN SSC Primate Specialist Group'
+            url      TEXT,                                -- 'http://www.primate-sg.org/'; NULL when not given or not an http(s) address
+            PRIMARY KEY (taxon_id, position)
+        ) WITHOUT ROWID;
 
         -- Other taxa in the release named in the taxonomic notes of a taxon's global assessments, one row
         -- per assessment whose notes name the taxon (SiteNotesTaxa): by scientific name, else by an IUCN
@@ -497,6 +508,8 @@ public static class SiteDbSchema {
             population_size              TEXT,                -- number of mature individuals as IUCN publishes it (supplementary_info.population_size):
                                                               -- '1000-1200', '2177', '500000-999999,800000' (range, best estimate), 'U' (unknown);
                                                               -- NULL when not given or the payload is not cached
+            generation_length            TEXT,                -- generation length in years as IUCN publishes it (supplementary_info.generational_length):
+                                                              -- '6.5', '10-15', '10-200,60' (range, best estimate), '<10years'; NULL when not given
             citation_json                TEXT,                -- IucnCitationParts as JSON; NULL when the API payload is not cached
             replaced_by_assessment_id    INTEGER,             -- the errata or amended version that replaced this assessment; NULL otherwise
             has_taxonomic_notes          INTEGER,             -- 1: the cached payload's documentation.taxonomic_notes has text; 0: empty or missing;

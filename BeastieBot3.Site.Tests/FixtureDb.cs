@@ -298,6 +298,9 @@ public static class FixtureDb {
         w.Assessment(PolarBear1996, PolarBear, "Global", false, "LR/cd", criteriaVersion: "2.3", year: 1996, date: "1996-06-30");
         // site build-db stores IUCN's "Earlier Version" as a NULL criteria version.
         w.Assessment(PolarBear1988Nt, PolarBear, "Global", false, "nt", year: 1988, apiNotFound: true);
+        // The latest assessment's generation length, and the taxon's Red List Authority.
+        w.Run("UPDATE assessment SET generation_length = '11.5' WHERE assessment_id = @a", PolarBearLatest);
+        w.Run("INSERT INTO red_list_authority (taxon_id, position, name, url) VALUES (@a, 0, 'IUCN SSC Polar Bear Specialist Group', 'http://pbsg.npolar.no/')", PolarBear);
         w.Name(PolarBear, "Ursus maritimus", "scientific", null, "iucn");
         w.Name(PolarBear, "Polar bear", "common", "en", "iucn", preferred: true);
         w.Name(PolarBear, "Polar Bear", "common", "en", "wikidata");

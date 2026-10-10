@@ -246,6 +246,19 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   assessments' taxonomic notes name another taxon in the release", "Taxa named in another taxon's
   taxonomic notes (pairs of taxa)", "Taxa named in an assessment's taxonomic notes (notes_taxon
   rows)" and "Names in taxonomic notes that fit two or more taxa (left out)". In the build of 10 October 2026, the notes of 17,441 taxa name 25,041 other taxa, in 44,194 rows (1,372 of them from the notes of old ids); 46 names fit two or more taxa.
+- `assessment.generation_length` (schema 30) is the generation length in years as IUCN publishes it
+  in the payload's `supplementary_info.generational_length`: a number ("6.5"), a range ("10-15"), a
+  range and a best estimate ("10-200,60", as IUCN writes population sizes), or text ("<10years").
+  In October 2026, 64,027 cached payloads have one. The taxon page shows the latest assessment's
+  under "Generation length" (`Display/GenerationLength.cs`): "6.5 years", "10–15 years",
+  "10–200 years (best estimate 60)", other text as published, nothing for "unknown".
+- `red_list_authority` (schema 30) lists the IUCN SSC groups of each taxon's API record
+  (`taxon.ssc_groups`, read by `SiteApiTaxaReader.ReadSscGroups`): the name and the website (only an
+  http or https address). The groups' descriptions are left out: they name the chairs and Red List
+  Authority focal points with their email addresses. 76,077 of the 192,712 cached taxon records
+  name one, 224 of them two or more; IUCN's website shows them under "Authority / Authorities" in an
+  assessment's credits. The taxon page shows them in the latest assessment's facts under "Red List
+  Authority", each linked to its website.
 - `epbc_listing` has one row per SPRAT profile of a taxon (schema version 3; version 2 had the
   columns `taxon.sprat_taxon_id` and `taxon.epbc_status` instead). `applies_to` is `taxon` for the
   profile of the whole taxon (matched by the taxon's scientific name, or by one of the IUCN names

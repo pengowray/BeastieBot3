@@ -298,6 +298,10 @@ internal sealed class SiteDbBuild {
             foreach (var link in taxonLinks) {
                 writer.AddTaxonLink(link);
             }
+            writer.InsertRows("INSERT INTO red_list_authority (taxon_id, position, name, url) VALUES (@t, @p, @n, @u)",
+                ["@t", "@p", "@n", "@u"],
+                taxonList.SelectMany(t => t.RedListAuthorities.Select((g, i) => new object?[] { t.TaxonId, i, g.Name, g.Url })));
+            _stats.TaxaWithRedListAuthority = taxonList.Count(t => t.RedListAuthorities.Count > 0);
             writer.InsertRows("INSERT INTO notes_taxon (taxon_id, named_taxon_id, assessment_id, name_in_notes, position) VALUES (@t, @n, @a, @w, @p)",
                 ["@t", "@n", "@a", "@w", "@p"], notesTaxa.Select(r => new object?[] { r.TaxonId, r.NamedTaxonId, r.AssessmentId, r.NameInNotes, r.Position }));
             writer.AddGreenStatuses(greenStatuses);

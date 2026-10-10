@@ -182,6 +182,20 @@ public sealed partial class SiteQueries {
         return rows;
     }
 
+    /// The taxon's Red List Authority: the IUCN SSC groups its API record names, in that order.
+    public IReadOnlyList<(string Name, string? Url)> GetRedListAuthorities(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT name, url FROM red_list_authority WHERE taxon_id = @id ORDER BY position";
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        var rows = new List<(string, string?)>();
+        while (reader.Read()) {
+            rows.Add((reader.GetString(0), Text(reader, 1)));
+        }
+        return rows;
+    }
+
     // The taxa in the release with an IUCN name of the type under one of the folded keys.
     private List<(string Key, TaxonSummary Taxon)> TaxaByNameKeys(IEnumerable<string> keys, string nameType, string? kingdom, long excludeTaxonId) {
         var rows = new List<(string, TaxonSummary)>();
@@ -500,7 +514,7 @@ public sealed partial class SiteQueries {
                    possibly_extinct_in_the_wild, criteria, criteria_version, year_published,
                    assessment_date, population_trend, citation_json, replaced_by_assessment_id,
                    wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id,
-                   population_size, api_not_found
+                   population_size, api_not_found, generation_length
             FROM assessment
             WHERE taxon_id = @id
             ORDER BY year_published DESC, assessment_date DESC, assessment_id DESC
@@ -530,7 +544,8 @@ public sealed partial class SiteQueries {
                 Text(reader, 17),
                 Long(reader, 18),
                 Text(reader, 19),
-                reader.GetInt64(20) != 0));
+                reader.GetInt64(20) != 0,
+                Text(reader, 21)));
         }
         return rows;
     }

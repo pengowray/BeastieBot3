@@ -123,6 +123,9 @@ internal sealed class SiteTaxon {
 
     public List<IucnCommonName> IucnCommonNames { get; set; } = new();
     public List<SiteSynonym> IucnSynonyms { get; set; } = new();
+    /// The IUCN SSC groups of the taxon's API record (taxon.ssc_groups): name and website; their
+    /// descriptions (chairs and email addresses) are left out.
+    public List<(string Name, string? Url)> RedListAuthorities { get; set; } = new();
     public List<(string Name, string Source, bool IsPreferred)> EnglishNames { get; } = new();
     public List<SiteSynonym> ColSynonyms { get; } = new();
     public List<SiteSynonym> WikidataSynonyms { get; } = new();
@@ -180,6 +183,9 @@ internal sealed class SiteAssessment {
     public string? PopulationTrend { get; set; }
     /// The number of mature individuals as IUCN publishes it ('1000-1200', '500000-999999,800000', 'U'); null when not given.
     public string? PopulationSize { get; set; }
+    /// Generation length in years as IUCN publishes it (supplementary_info.generational_length):
+    /// "6.5", "10-15", "10-200,60" (range, best estimate), "<10years".
+    public string? GenerationLength { get; set; }
     public string? CitationJson { get; set; }
     /// The credits as StoredCredits JSON (ids into credit_name); null when there is no payload or it has no credits.
     public string? CreditsJson { get; set; }
@@ -441,6 +447,8 @@ internal sealed class SiteBuildStats {
     /// names that fit two or more taxa.
     public int NotesTaxa;
     public int NotesTaxonRows;
+    /// Taxa whose API record names an IUCN SSC group (red_list_authority).
+    public int TaxaWithRedListAuthority;
     public int TaxaWithNotesTaxa;
     public int NotesNamesOfSeveralTaxa;
     /// Assessments with no scope given a probable scope from rules/iucn-probable-scopes.yml, and

@@ -227,6 +227,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Taxa whose global assessments' taxonomic notes name another taxon in the release", s.TaxaWithNotesTaxa);
         Row("Taxa named in another taxon's taxonomic notes (pairs of taxa)", s.NotesTaxa);
         Row("Taxa named in an assessment's taxonomic notes (notes_taxon rows)", s.NotesTaxonRows);
+        Row("Taxa with a Red List Authority (IUCN SSC group) in their API record", s.TaxaWithRedListAuthority);
         Row("Names in taxonomic notes that fit two or more taxa (left out)", s.NotesNamesOfSeveralTaxa);
         Row("Assessments with no scope given a probable scope (rules/iucn-probable-scopes.yml)", s.ProbableScopes);
         Row("Assessments with no scope and no probable scope", s.NoScopeWithoutProbableScope);

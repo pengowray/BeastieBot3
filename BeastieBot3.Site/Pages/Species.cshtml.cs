@@ -155,6 +155,9 @@ public sealed class SpeciesModel : TaxonPageModel {
     /// The genus this taxon is in, for the link to the genus's list page; null when the site has no group for it.
     public GroupRow? GenusGroup => Classification.LastOrDefault(g => g.IsGenus);
 
+    /// The taxon's Red List Authority: the IUCN SSC groups of its API record, with their websites.
+    public IReadOnlyList<(string Name, string? Url)> RedListAuthorities { get; private set; } = [];
+
     /// English common names, names in other languages and synonyms, with their sources.
     public TaxonNames Names { get; private set; } = new([], [], []);
 
@@ -212,6 +215,7 @@ public sealed class SpeciesModel : TaxonPageModel {
         var externalIds = _queries.GetExternalIds(taxon.TaxonId);
         (CommonsGallery, CommonsCategory) = BeastieBot3.Shared.SiteData.ExternalDatabases.Commons(externalIds);
         ExternalLinks = BeastieBot3.Shared.SiteData.ExternalDatabases.Links(externalIds);
+        RedListAuthorities = _queries.GetRedListAuthorities(taxon.TaxonId);
         if (StatusAssessment is { } status) {
             StatusParts = PartsOf(status);
             StatusCredits = CreditsView.Build(_queries.GetCredits(status.AssessmentId));

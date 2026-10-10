@@ -126,3 +126,27 @@ public class NotesTaxaTests {
         Assert.Equal(1, stats.NotesNamesOfSeveralTaxa);
     }
 }
+
+// The Red List Authority of a taxon record (taxon.ssc_groups): name and http(s) website only.
+public class RedListAuthorityTests {
+    [Fact]
+    public void ReadSscGroups_NameAndWebsite_DescriptionLeftOut() {
+        using var document = System.Text.Json.JsonDocument.Parse("""
+            {"ssc_groups": [
+              {"name": "IUCN SSC Primate Specialist Group", "url": "http://www.primate-sg.org/", "description": "Chair: A. B. (email: a@example.org)"},
+              {"name": "IUCN SSC Primate Specialist Group", "url": "http://www.primate-sg.org/"},
+              {"name": "Another group", "url": "mailto:a@example.org"},
+              {"name": " ", "url": "https://example.org/"},
+              {"url": "https://example.org/"}
+            ]}
+            """);
+        Assert.Equal([("IUCN SSC Primate Specialist Group", "http://www.primate-sg.org/"), ("Another group", (string?)null)],
+            SiteApiTaxaReader.ReadSscGroups(document.RootElement));
+    }
+
+    [Fact]
+    public void ReadSscGroups_NoneWhenMissing() {
+        using var document = System.Text.Json.JsonDocument.Parse("""{"scientific_name": "Ursus maritimus"}""");
+        Assert.Empty(SiteApiTaxaReader.ReadSscGroups(document.RootElement));
+    }
+}

@@ -56,7 +56,8 @@ public sealed record AssessmentRow(
     string? WikidataItemLabelEn = null,
     long? WikidataItemAssessmentId = null,
     string? PopulationSize = null,
-    bool ApiNotFound = false) {
+    bool ApiNotFound = false,
+    string? GenerationLength = null) {
     public bool IsGlobal => string.Equals(Scope.Trim(), "Global", StringComparison.OrdinalIgnoreCase);
 
     /// IUCN published the assessment with no geographic scope. It is not global, and is listed

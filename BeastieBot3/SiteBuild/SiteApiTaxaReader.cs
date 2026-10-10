@@ -167,6 +167,7 @@ internal sealed class SiteApiTaxaReader {
                     taxon.IucnCommonNames = ReadCommonNames(te);
                     taxon.IucnSynonyms = ReadSynonyms(te, _stats);
                     taxon.ApiSpeciesId = FirstSpeciesId(te);
+                    taxon.RedListAuthorities = ReadSscGroups(te);
                 }
             }
 
@@ -325,6 +326,24 @@ internal sealed class SiteApiTaxaReader {
         element.TryGetProperty(property, out var value)
         && (value.ValueKind == JsonValueKind.True
             || (value.ValueKind == JsonValueKind.String && bool.TryParse(value.GetString(), out var parsed) && parsed));
+
+    // taxon.ssc_groups: [{"name": "IUCN SSC Primate Specialist Group", "url": "http://www.primate-sg.org/",
+    // "description": "Chair: ... (email: ...)"}]. The name and an http(s) website only.
+    internal static List<(string Name, string? Url)> ReadSscGroups(JsonElement taxon) {
+        var groups = new List<(string, string?)>();
+        if (!taxon.TryGetProperty("ssc_groups", out var list) || list.ValueKind != JsonValueKind.Array) {
+            return groups;
+        }
+        foreach (var group in list.EnumerateArray()) {
+            if (group.ValueKind != JsonValueKind.Object || SiteBuildRules.NullIfBlank(ReadString(group, "name")?.Trim()) is not { } name
+                || groups.Any(g => g.Item1 == name)) {
+                continue;
+            }
+            var url = ReadString(group, "url")?.Trim();
+            groups.Add((name, Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) ? url : null));
+        }
+        return groups;
+    }
 
     internal static long? ReadLong(JsonElement element, string property) {
         if (!element.TryGetProperty(property, out var value)) {

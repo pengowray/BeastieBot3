@@ -327,6 +327,7 @@ internal sealed class SiteAssessmentPass {
                 assessment.CriteriaVersion = CriteriaVersion(root);
             }
             assessment.PopulationSize = PopulationSize(root);
+            assessment.GenerationLength = GenerationLength(root);
             if (_taxa.TryGetValue(assessment.TaxonId, out var taxon) && taxon.LatestGlobalAssessmentId == assessment.AssessmentId) {
                 _areas.Add(assessment.TaxonId, root);
             }
@@ -569,6 +570,12 @@ internal sealed class SiteAssessmentPass {
         root.ValueKind == JsonValueKind.Object
         && root.TryGetProperty("supplementary_info", out var info) && info.ValueKind == JsonValueKind.Object
             ? SiteBuildRules.NullIfBlank(SiteApiTaxaReader.ReadString(info, "population_size")?.Trim())
+            : null;
+
+    private static string? GenerationLength(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object
+        && root.TryGetProperty("supplementary_info", out var info) && info.ValueKind == JsonValueKind.Object
+            ? SiteBuildRules.NullIfBlank(SiteApiTaxaReader.ReadString(info, "generational_length")?.Trim())
             : null;
 
     // red_list_category: {"version": "3.1", "description": {...}, "code": "VU"}

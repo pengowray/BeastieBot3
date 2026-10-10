@@ -231,6 +231,13 @@ public static partial class SiteText {
     /// Before item index (from 0) of count in a list of taxa: "", ", " or " and ".
     public static string TaxonListSeparator(int index, int count) => index == 0 ? string.Empty : index == count - 1 ? " and " : ", ";
 
+    /// In the facts of the latest assessment: the generation length IUCN gives, and the Red List
+    /// Authority (the IUCN SSC groups of the taxon's record, each linked to its website).
+    public const string LabelGenerationLength = "Generation length";
+    public static string GenerationLengthYears(string value, bool one) => one ? $"{value} year" : $"{value} years";
+    public static string GenerationLengthBest(string range, string best) => $"{range} years (best estimate {best})";
+    public static string LabelRedListAuthority(int count) => count == 1 ? "Red List Authority" : "Red List Authorities";
+
     public const string AccessLabel = "Access date";
     public static string AccessDownload(string date) => $"Date downloaded from IUCN ({date})";
     public static string AccessToday(string date) => $"Today ({date}, UTC)";
