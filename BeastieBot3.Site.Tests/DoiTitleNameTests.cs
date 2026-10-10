@@ -212,8 +212,9 @@ public sealed class NotesTaxaPageTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("Name in the notes: <i>Platanista gangetica minor</i>", section);
         // The choices, hidden until site.js shows them, and the lists by assessment, hidden.
         Assert.Contains("<div class=\"notes-taxa-choices\" data-notes-choices hidden>", section);
-        Assert.Contains("<legend>Group by</legend>", section);
-        Assert.Contains("> IUCN category (Extinct first)</label>", section);
+        Assert.Contains("<select name=\"notes-group\">", section);
+        // One taxon: nothing to sort.
+        Assert.DoesNotContain("notes-sort", section);
         Assert.Contains("<div data-notes-view=\"assessment\" hidden>", section);
         Assert.Contains($"<h4 class=\"notes-assessment\"><a href=\"https://www.iucnredlist.org/species/{FixtureDb.GangeticaOld}/{FixtureDb.GangeticaOld2012}\">2012</a> global assessment</h4>", section);
         Assert.True(Html.IndexOf(section, ">2012</a> global assessment</h4>") < Html.IndexOf(section, ">1996</a> global assessment</h4>"));
@@ -246,6 +247,7 @@ public sealed class NotesTaxaModelTests {
         Assert.Equal([2021, 2008], notes.ByAssessment.Select(g => g.Assessment.Year ?? 0));
         Assert.Equal([2L, 1L], notes.ByAssessment[0].Entries.Select(e => e.Taxon.TaxonId));
         Assert.True(notes.OffersGrouping);
+        Assert.False(notes.OffersSorting);
     }
 
     [Theory]

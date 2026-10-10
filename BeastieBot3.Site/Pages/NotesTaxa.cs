@@ -30,8 +30,10 @@ public sealed record NotesTaxa(long TaxonId, IReadOnlyList<NotesTaxonEntry> ByTa
     /// The grouping choice is offered only when the notes of two or more assessments name taxa.
     public bool OffersGrouping => ByAssessment.Count > 1;
 
-    /// The sort and group choices are offered when there is something to reorder.
-    public bool OffersChoices => ByTaxon.Count > 1 || OffersGrouping;
+    /// The sort choice is offered only for three or more taxa; one or two are read at a glance.
+    public bool OffersSorting => ByTaxon.Count > 2;
+
+    public bool OffersChoices => OffersSorting || OffersGrouping;
 
     /// rows: GetNotesTaxa's, newest assessment first and then in the order the notes name them.
     /// Assessments published in the same year (an assessment and its errata or amended version) count

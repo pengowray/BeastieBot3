@@ -621,8 +621,8 @@
             }
             choices.hidden = false;
             function apply() {
-                var group = choices.querySelector("input[name=\"notes-group\"]:checked");
-                var sort = choices.querySelector("input[name=\"notes-sort\"]:checked");
+                var group = choices.querySelector("select[name=\"notes-group\"]");
+                var sort = choices.querySelector("select[name=\"notes-sort\"]");
                 var view = group ? group.value : "taxon";
                 section.querySelectorAll("[data-notes-view]").forEach(function (element) {
                     element.hidden = element.getAttribute("data-notes-view") !== view;

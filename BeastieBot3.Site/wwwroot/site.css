@@ -1896,25 +1896,15 @@ th.num {
 .notes-taxa-choices {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem 1.5rem;
-    margin: 0.5rem 0;
+    gap: 0.25rem 1.25rem;
+    margin: 0.25rem 0 0.5rem;
+    font-size: 0.875rem;
+    color: var(--muted);
 }
 
-.notes-taxa-choices .option-group {
-    border: 0;
-    padding: 0;
-    margin: 0;
-}
-
-.notes-taxa-choices legend {
-    font-weight: 600;
-    padding: 0;
-    margin-bottom: 0.2rem;
-}
-
-.notes-taxa-choices label {
-    margin-right: 1rem;
-    white-space: nowrap;
+.notes-taxa-choices select {
+    margin-left: 0.3em;
+    font-size: inherit;
 }
 
 .notes-assessment {

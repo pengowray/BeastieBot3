@@ -6,18 +6,22 @@
     @if (Model.OffersChoices) {
         <div class="notes-taxa-choices" data-notes-choices hidden>
             @if (Model.OffersGrouping) {
-                <fieldset class="option-group">
-                    <legend>@SiteText.NotesGroupLegend</legend>
-                    <label><input type="radio" name="notes-group" value="taxon" checked> @SiteText.NotesGroupByTaxon</label>
-                    <label><input type="radio" name="notes-group" value="assessment"> @SiteText.NotesGroupByAssessment</label>
-                </fieldset>
+                <label>@SiteText.NotesGroupLegend
+                    <select name="notes-group">
+                        <option value="taxon" selected>@SiteText.NotesGroupByTaxon</option>
+                        <option value="assessment">@SiteText.NotesGroupByAssessment</option>
+                    </select>
+                </label>
             }
-            <fieldset class="option-group">
-                <legend>@SiteText.NotesSortLegend</legend>
-                <label><input type="radio" name="notes-sort" value="order" checked> @SiteText.NotesSortByNotes</label>
-                <label><input type="radio" name="notes-sort" value="name"> @SiteText.NotesSortByName</label>
-                <label><input type="radio" name="notes-sort" value="rank"> @SiteText.NotesSortByCategory</label>
-            </fieldset>
+            @if (Model.OffersSorting) {
+                <label>@SiteText.NotesSortLegend
+                    <select name="notes-sort">
+                        <option value="order" selected>@SiteText.NotesSortByNotes</option>
+                        <option value="name">@SiteText.NotesSortByName</option>
+                        <option value="rank">@SiteText.NotesSortByCategory</option>
+                    </select>
+                </label>
+            }
         </div>
     }
     <div data-notes-view="taxon">
