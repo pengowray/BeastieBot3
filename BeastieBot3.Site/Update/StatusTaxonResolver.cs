@@ -7,7 +7,8 @@ namespace BeastieBot3.Site.Update;
 ///   1. a scientific name of exactly one taxon in the release (a trinomial also with ssp., subsp. and var.);
 ///   2. a synonym of exactly one taxon (from any source in the name table), noted;
 ///   3. the taxon id in the IUCN citations on the item's status (a {{cite iucn}} written there, or a
-///      named reference used there whose definition has a T…A… id), when they name one taxon, noted.
+///      named reference used there whose definition has a T…A… id or a Red List address, of the
+///      current site or an earlier one), when they name one taxon, noted.
 ///      This also settles a name that matches several taxa, when the cited taxon is one of them;
 ///   4. a link in the item's row or line to the English Wikipedia article of exactly one taxon (the
 ///      article title the site has for it), noted; never for an item the article gives NE;
@@ -131,6 +132,7 @@ public sealed partial class StatusTaxonResolver {
                     ids.Add(taxonId);
                 }
             }
+            ids.UnionWith(TaxaInAddresses(text));
             foreach (Match use in RefUse().Matches(text)) {
                 var name = use.Groups["name"].Value.Trim();
                 if (_references.TaxaOf(name) is { } cited) {
@@ -168,6 +170,11 @@ public sealed partial class StatusTaxonResolver {
             }
         }
     }
+
+    /// The taxon ids in the Red List addresses in text, those of the Red List's earlier sites included
+    /// ("http://www.iucnredlist.org/details/22823/0", which names a taxon but not an assessment).
+    internal static IEnumerable<long> TaxaInAddresses(string text) =>
+        Data.RedListAddress.FindAll(text).Select(a => a.TaxonId).OfType<long>();
 
     /// An IUCN assessment's ids in text: "T22823A14871490" (in a DOI or article number) or a Red List
     /// address "/species/22823/14871490".

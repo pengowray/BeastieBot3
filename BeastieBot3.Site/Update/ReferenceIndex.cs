@@ -3,9 +3,10 @@ using System.Text.RegularExpressions;
 namespace BeastieBot3.Site.Update;
 
 /// The named references a text defines (<ref name="X">...</ref>) and the IUCN assessments their
-/// citations name ("T44853A22072238" in an article number or DOI, or a Red List address), read once
-/// per text: for finding an item's taxon by the reference on its status (StatusTaxonResolver), and for
-/// using a reference again instead of adding another one for the same assessment.
+/// citations name ("T44853A22072238" in an article number or DOI, or a Red List address of the
+/// current site or an earlier one), read once per text: for finding an item's taxon by the reference
+/// on its status (StatusTaxonResolver), and for using a reference again instead of adding another one
+/// for the same assessment.
 public sealed partial class ReferenceIndex {
     private readonly Dictionary<string, HashSet<long>> _taxaByName = new(StringComparer.Ordinal);
     private readonly Dictionary<long, string> _nameByTaxon = [];
@@ -30,6 +31,15 @@ public sealed partial class ReferenceIndex {
                 if (long.TryParse(id.Groups["a"].Value, out var assessmentId)) {
                     index._nameByAssessment.TryAdd(assessmentId, name);
                 }
+            }
+            // An address of the Red List's earlier sites names the taxon but not the assessment it cites,
+            // so the reference finds the taxon (TaxaOf) but is not used again for a new row of the taxon
+            // (NameForTaxon), which needs a reference to the latest assessment.
+            foreach (var taxonId in StatusTaxonResolver.TaxaInAddresses(m.Groups["body"].Value)) {
+                if (!index._taxaByName.TryGetValue(name, out var ids)) {
+                    index._taxaByName[name] = ids = [];
+                }
+                ids.Add(taxonId);
             }
         }
         return index;

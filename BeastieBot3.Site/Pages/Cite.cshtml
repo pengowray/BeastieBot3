@@ -30,6 +30,8 @@
 
 @if (Model.TooShort) {
     <p>@SiteText.TooShort</p>
+} else if (Model.IucnIdNotFound is { } notFoundIds) {
+    <p>@SiteText.IucnIdNotFound(notFoundIds)</p>
 } else if (Model.Searched && Model.Items.Count == 0) {
     <p>@SiteText.CiteNothingFound(Model.Query)</p>
 } else if (Model.Items.Count > 0) {

@@ -31,6 +31,11 @@ public sealed class SearchModel : PageModel {
     /// and the site has the taxon but not the assessment.
     public long? MissingAssessmentId { get; private set; }
 
+    /// Set when the text was an IUCN id (a taxon id, an assessment id, or a plain number, which can be
+    /// either), or a Red List address or IUCN DOI with ids in it, and no taxon or assessment on the
+    /// site has them. Shown in place of the message for a name that was not found.
+    public IdQuery? IucnIdNotFound { get; private set; }
+
     /// Set when the text was a Wikidata item ("Q33609") that no taxon or assessment on the site has,
     /// or a Wikidata property ("P31").
     public string? MissingWikidataItem { get; private set; }
@@ -82,6 +87,10 @@ public sealed class SearchModel : PageModel {
         if (ids is not null && FindById(ids, all == "1") is { } idResult) {
             return idResult;
         }
+        if (ids is { HasIucnIds: true }) {
+            IucnIdNotFound = ids;
+            return Page();
+        }
         if (ids?.WikidataItem is { } item) {
             if (_queries.GetExtraSpeciesByWikidataItem(item) is { } extraSpecies) {
                 return Redirect(Web.SiteUrls.Extra(extraSpecies));
@@ -128,7 +137,11 @@ public sealed class SearchModel : PageModel {
         ExtraItems = extra.Hits;
         ExtraTotal = extra.Total;
         if (Items.Count == 0 && Groups.Count == 0 && ExtraItems.Count == 0) {
-            Suggestions = FindSuggestions(Query);
+            if (ids?.Number is not null) {
+                IucnIdNotFound = ids;
+            } else {
+                Suggestions = FindSuggestions(Query);
+            }
         }
         return Page();
     }

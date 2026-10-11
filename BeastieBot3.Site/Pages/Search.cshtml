@@ -42,6 +42,8 @@
         <p class="message"><a href="@(Model.IsWikidataProperty ? SiteFormat.WikidataPropertyUrl(qid) : SiteFormat.WikidataUrl(qid))">@qid</a>@SiteText.WikidataTermAfter(Model.IsWikidataProperty, wikidataLabel)</p>
     } else if (Model.MissingWikidataItem is { } missingQid) {
         <p class="message">@(Model.IsWikidataProperty ? SiteText.WikidataPropertyNotUsed(missingQid) : SiteText.WikidataItemNotFound(missingQid))</p>
+    } else if (Model.IucnIdNotFound is { } notFoundIds) {
+        <p class="message">@SiteText.IucnIdNotFound(notFoundIds)</p>
     } else if (Model.Items.Count == 0 && Model.Groups.Count == 0 && Model.ExtraItems.Count == 0) {
         <p class="message">@SiteText.NoResults(Model.Query)</p>
         @if (Model.Suggestions.Count > 0) {

@@ -1661,7 +1661,10 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   ID" or "Matched IUCN assessment ID". A DOI is read for the ids in it, so the DOI of an errata
   version that names the assessment it corrects finds that assessment. When the text names a
   taxon and an assessment and the site has only the taxon, the taxon is listed under a line
-  saying the assessment was not found. No id matches: the text is searched as a name.
+  saying the assessment was not found. When no taxon or assessment has the ids, the page says
+  which IUCN taxon ID or assessment ID was not found (`SiteText.IucnIdNotFound`), and `/cite` does
+  the same. A plain number that matches no id is also searched as a name, and the message is shown
+  only when the name search finds nothing either.
   A Wikidata item (`Q33609`, or a `wikidata.org/wiki/Q33609` or `/entity/Q33609` address) finds
   the taxa whose item it is (`taxon.wikidata_qid`) and the assessments whose item it is
   (`assessment.wikidata_item_qid`), listed with "Matched Wikidata item". When one taxon in the
@@ -2181,7 +2184,12 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   ignored. A taxon with no population size gives no row. In October 2026 this listed 0 to 8 rows in
   each of 6 family lists. `range`, `size`, `habitat` and `diet` are not checked; the page says so.
 - `{{cite iucn}}` anywhere outside a taxobox's `status_ref`: found by the T…A… id in
-  `|article-number=`, `|id=`, `|url=` or `|doi=`. A citation of a regional assessment is skipped. A
+  `|article-number=`, `|id=`, `|url=` or `|doi=`, else by the taxon id in a `|url=` of the Red
+  List's earlier sites (`http://www.iucnredlist.org/details/22823/0`; `Data/RedListAddress.cs`
+  lists the forms). Such an address names no assessment; its second number is the region (0
+  global, 1 Europe, 3 Mediterranean), so it is checked only for region 0 or none, and only when
+  the text is compared with global assessments; whether it cites the latest assessment is decided
+  by `|year=`. A citation of a regional assessment is skipped. A
   citation of an older global assessment is reported, and replaced only when the reader asks.
 - Wikitable cells in a column whose header mentions IUCN or the Red List, or says "status" without
   naming another list (EPBC, CITES, ...): a bare code or `{{IUCN status|X}}` with no ids. The taxon is
@@ -2191,7 +2199,9 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   of Life, Wikidata and Wikipedia taxoboxes) only when no scientific name matches and they name one
   taxon, with a note naming the synonym; then the taxon id in an IUCN citation in the row or line
   (a `{{cite iucn}}` written there, or a `<ref name="X"/>` whose definition anywhere in the text has
-  a T…A… id), when the citations name one taxon in the release, which also settles a name that
+  a T…A… id or a Red List address, of the current site or an earlier one such as
+  `http://www.iucnredlist.org/details/22823/0`, which 2,204 references in the cached articles had
+  in October 2026), when the citations name one taxon in the release, which also settles a name that
   matches several taxa. Only the references on the status count: the status cell, the text from an
   `{{IUCN status}}` to the end of its line, a species table row's `iucn-status`, `direction` and
   `population`, and a taxobox's `status_ref`. Other cells cite other assessments: List of

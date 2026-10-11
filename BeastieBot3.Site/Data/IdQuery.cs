@@ -9,11 +9,9 @@ namespace BeastieBot3.Site.Data;
 ///   22823 (either: Number is set, and the search looks for both)
 ///   a DOI, with or without "doi:" or a doi.org address: 10.2305/IUCN.UK.2016-3.RLTS.T22823A14871490.en
 ///   a Red List page address: iucnredlist.org/species/22823/14871490, or /species/22823, or the PDF
-///   of an assessment, iucnredlist.org/species/pdf/14871490
-///   an address of the Red List's earlier sites (taxon id only): iucnredlist.org/details/22823/0,
-///   /details/full/22823/0, /apps/redlist/details/22823/0, /search/details.php/22823/all,
-///   redlist.org/search/details.php?species=22823, maps.iucnredlist.org/map.html?id=22823,
-///   apiv3.iucnredlist.org/api/v3/taxonredirect/22823
+///   of an assessment, iucnredlist.org/species/pdf/14871490, or an address of the Red List's
+///   earlier sites, which give the taxon id only: iucnredlist.org/details/22823/0,
+///   /apps/redlist/details/22823 (every form is listed on RedListAddress)
 ///   a Wikidata item: Q33609, or its address (wikidata.org/wiki/Q33609, wikidata.org/entity/Q33609)
 ///   a Wikidata property: P31, or its address (wikidata.org/wiki/Property:P31, wikidata.org/entity/P31)
 /// An IUCN DOI is read for the ids in it, so an errata version whose DOI names the assessment it
@@ -43,28 +41,9 @@ public sealed record IdQuery(long? TaxonId, long? AssessmentId, long? Number, lo
     private static readonly Regex Doi = new(
         @"10\.2305/[^\s]*?\bT(\d{1,15})A(\d{1,15})\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    // A Red List address. The host is iucnredlist.org or redlist.org with any subdomain (www., oldredlist.,
-    // apistaging., maps.), but not nationalredlist.org, whose ids are not IUCN's. Only the current
-    // site's /species/ pages have an assessment id; the second number of an earlier site's /details/
-    // address is a region (0 for global).
-    //   https://www.iucnredlist.org/species/22823/14871490, /fr/species/22823/14871490
-    //   https://www.iucnredlist.org/species/pdf/14871490 (an assessment's PDF)
-    //   http://www.iucnredlist.org/details/22823/0, /details/22823/all, /details/full/22823/0
-    //   http://www.iucnredlist.org/apps/redlist/details/22823/0, /apps/redlist/details/22823/0/full
-    //   http://www.iucnredlist.org/search/details.php/22823/all, /search/details.php?species=22823
-    //   http://www.iucnredlist.org/search/rangemap.php?species=22823
-    //   http://maps.iucnredlist.org/map.html?id=22823
-    //   https://apiv3.iucnredlist.org/api/v3/taxonredirect/22823
-    private static readonly Regex RedListUrl = new(
-        @"(?<![a-z0-9-])(?:[a-z0-9-]+\.)*(?:iucn)?redlist\.org/+(?:"
-        + @"(?:[a-z]{2}(?:-[a-z]+)?/)?species/(?:pdf/(?<a>\d{1,15})|(?<t>\d{1,15})(?:/(?<a>\d{1,15}))?)"
-        + @"|(?:apps/redlist/)?details/(?:[a-z]+/)?(?<t>\d{1,15})"
-        + @"|search/details\.php(?:/|\?(?:[^#]*&)?(?:species|id)=)(?<t>\d{1,15})"
-        + @"|search/rangemap\.php\?(?:[^#]*&)?species=(?<t>\d{1,15})"
-        + @"|map\.html\?(?:[^#]*&)?id=(?<t>\d{1,15})"
-        + @"|api/v\d+/taxonredirect/(?<t>\d{1,15})"
-        + @")(?!\d)",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    /// Whether the text was an IUCN taxon id, assessment id, or a Red List address or IUCN DOI with
+    /// one in it. A plain number (Number) is not counted: it is also searched as a name.
+    public bool HasIucnIds => TaxonId is not null || AssessmentId is not null;
 
     /// The ids in the text, or null when the text is not one of the accepted forms.
     public static IdQuery? Parse(string? text) {
@@ -84,10 +63,8 @@ public sealed record IdQuery(long? TaxonId, long? AssessmentId, long? Number, lo
         if (Doi.Match(trimmed) is { Success: true } doi) {
             return new IdQuery(ToId(doi.Groups[1].Value), ToId(doi.Groups[2].Value), null);
         }
-        if (RedListUrl.Match(trimmed) is { Success: true } url) {
-            var taxonId = url.Groups["t"].Success ? ToId(url.Groups["t"].Value) : null;
-            var assessment = url.Groups["a"].Success ? ToId(url.Groups["a"].Value) : null;
-            return new IdQuery(taxonId, assessment, null);
+        if (RedListAddress.Find(trimmed) is { } address) {
+            return new IdQuery(address.TaxonId, address.AssessmentId, null);
         }
         if (TaxonAndAssessment.Match(trimmed) is { Success: true } both) {
             return new IdQuery(ToId(both.Groups[1].Value), ToId(both.Groups[2].Value), null);

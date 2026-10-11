@@ -277,9 +277,12 @@ public sealed partial class StatusUpdater {
 
     // ---------------------------------------------------------------- {{cite iucn}}
 
-    // A citation is matched to its taxon by the T…A… id in article-number, id, url or doi. Only a
-    // citation of a global assessment is checked (of the region's, when the text is compared with a
-    // region): one of another scope is not reported.
+    // A citation is matched to its taxon by the T…A… id in article-number, id, url or doi, else by
+    // the taxon id in a url of the Red List's earlier sites ("http://www.iucnredlist.org/details/22823/0").
+    // Only a citation of a global assessment is checked (of the region's, when the text is compared
+    // with a region): one of another scope is not reported. An earlier site's address gives no
+    // assessment, only the region of the one it showed (0 for global), so it is checked only when the
+    // text is compared with global assessments and the region is 0 or not given.
     private StatusFinding? CitationFinding(WikitextScanner s, WikiTemplate cite, List<Edit> edits) {
         var line = s.LineOf(cite.Span.Start);
         var before = s.Original(cite.Span);
@@ -292,16 +295,23 @@ public sealed partial class StatusUpdater {
                 break;
             }
         }
-        if (ids is null) {
+        long taxonId;
+        if (ids is not null) {
+            var cited = long.Parse(ids.Groups["a"].Value, CultureInfo.InvariantCulture);
+            var scope = _lookup.AssessmentScope(cited);
+            if (scope is not null && !string.Equals(scope.Trim(), _lookup.Region ?? "Global", StringComparison.OrdinalIgnoreCase)) {
+                return null;
+            }
+            taxonId = long.Parse(ids.Groups["t"].Value, CultureInfo.InvariantCulture);
+        } else if (Data.RedListAddress.Find(Value("url")) is { TaxonId: { } addressTaxon, AssessmentId: null } address) {
+            if (address.IsRegional || _lookup.Region is not null) {
+                return null;
+            }
+            taxonId = addressTaxon;
+        } else {
             return new StatusFinding(StatusItemKind.Citation, line, StatusOutcome.NotUpdated, before, null, null,
                 [new StatusNote(StatusNoteKind.CitationWithoutIds)]);
         }
-        var cited = long.Parse(ids.Groups["a"].Value, CultureInfo.InvariantCulture);
-        var scope = _lookup.AssessmentScope(cited);
-        if (scope is not null && !string.Equals(scope.Trim(), _lookup.Region ?? "Global", StringComparison.OrdinalIgnoreCase)) {
-            return null;
-        }
-        var taxonId = long.Parse(ids.Groups["t"].Value, CultureInfo.InvariantCulture);
         var notes = new List<StatusNote>();
         var taxon = _lookup.GetTaxon(taxonId);
         if (taxon is null) {

@@ -720,6 +720,28 @@ public sealed class StatusUpdaterTests {
     // ---------------------------------------------------------------- {{cite iucn}}
 
     [Fact]
+    public void CitationWithAnEarlierRedListAddressIsCheckedForItsTaxon() {
+        var parts = new IucnCitationParts {
+            TaxonId = 4828, AssessmentId = 21289898, Year = 2015, ScientificName = "Amblysomus hottentotus",
+            Authors = [new CitationAuthor(CitationAuthorKind.Person, "Bronner, G.", "Bronner", "G.")],
+        };
+        var lookup = new FakeStatusLookup().Taxon(4828, "Amblysomus hottentotus", "EN", 2015, 21289898, citationJson: parts.ToJson());
+        const string old = "<ref>{{cite iucn |year=2008 |title=''Amblysomus hottentotus'' |url=http://www.iucnredlist.org/details/4828/0}}</ref>";
+        const string current = "<ref>{{cite iucn |year=2015 |title=''Amblysomus hottentotus'' |url=http://www.iucnredlist.org/details/4828/0}}</ref>";
+        // Region 1 is Europe: a citation of a regional assessment is not an item.
+        const string regional = "<ref>{{cite iucn |year=2009 |url=http://www.iucnredlist.org/details/4828/1}}</ref>";
+
+        var result = Run(old + " " + current + " " + regional, lookup);
+        Assert.Equal(2, result.Findings.Count);
+        Assert.Equal(1, result.CountNotes(StatusNoteKind.CitationOlder));
+        Assert.Contains(result.Findings, f => f.Outcome == StatusOutcome.Current && f.Taxon?.TaxonId == 4828);
+        Assert.Equal(0, result.CountNotes(StatusNoteKind.CitationWithoutIds));
+
+        var replaced = Run(old, lookup, options: new StatusUpdateOptions { UpdateCitations = true });
+        Assert.Contains("|last1=Bronner |first1=G. |year=2015", replaced.Text);
+    }
+
+    [Fact]
     public void CitationOfAnOlderAssessmentIsReplacedOnlyWhenAsked() {
         var parts = new IucnCitationParts {
             TaxonId = 4828, AssessmentId = 21289898, Year = 2015, ScientificName = "Amblysomus hottentotus",
@@ -830,6 +852,39 @@ public sealed class StatusUpdaterTests {
         var finding = Assert.Single(Run("* ''Ficus variegata'' {{IUCN status|LC}}<ref>{{cite iucn |article-number=e.T501A5011}}</ref>\n").Findings,
             f => f.Kind == StatusItemKind.ListLine);
         Assert.Equal(501, finding.Taxon!.TaxonId);
+    }
+
+    [Theory]
+    [InlineData("http://www.iucnredlist.org/details/4828/0")]
+    [InlineData("http://www.iucnredlist.org/apps/redlist/details/4828")]
+    [InlineData("http://www.iucnredlist.org/search/details.php/4828/all")]
+    public void ARowIsFoundByAnEarlierRedListAddressInItsReference(string address) {
+        var text = $$$"""
+            {{Species table/row
+            |name=[[Giant golden mole]] |binomial=C. giganteus
+            |iucn-status=VU |population=Unknown
+            |direction={{population change unknown}}<ref name="IUCNmole"/>
+            }}
+            == References ==
+            <ref name="IUCNmole">{{cite web |url={{{address}}} |title=''Amblysomus hottentotus'' |year=2008}}</ref>
+            """;
+        var finding = Assert.Single(Run(text).Findings, f => f.Kind == StatusItemKind.SpeciesTableRow);
+        Assert.Equal(4828, finding.Taxon!.TaxonId);
+        Assert.Equal(new StatusNote(StatusNoteKind.MatchedByCitation, "IUCNmole"), finding.Notes[0]);
+    }
+
+    [Fact]
+    public void AListLineIsFoundByABareEarlierRedListAddress() {
+        var finding = Assert.Single(Run("* [[Unknown mole]] {{IUCN status|VU}}<ref>[http://www.iucnredlist.org/details/4828/0 IUCN 2008]</ref>\n").Findings,
+            f => f.Kind == StatusItemKind.ListLine);
+        Assert.Equal(4828, finding.Taxon!.TaxonId);
+    }
+
+    [Fact]
+    public void ANationalRedListAddressIsNotAnIucnId() {
+        var finding = Assert.Single(Run("* [[Unknown mole]] {{IUCN status|VU}}<ref>[https://www.nationalredlist.org/species-information/?speciesID=4828 NRL]</ref>\n").Findings,
+            f => f.Kind == StatusItemKind.ListLine);
+        Assert.Null(finding.Taxon);
     }
 
     [Fact]

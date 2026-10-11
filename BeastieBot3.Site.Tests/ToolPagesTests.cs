@@ -40,6 +40,19 @@ public sealed class ToolPagesTests(SiteFactory factory) : IClassFixture<SiteFact
     }
 
     [Fact]
+    public async Task CiteWithAnEarlierRedListAddressGoesToTheTaxon() {
+        var response = await _client.GetAsync($"/cite?q=http%3A%2F%2Fwww.iucnredlist.org%2Fdetails%2F{FixtureDb.Tiger}%2F0");
+        Assert.Equal($"/species/{FixtureDb.Tiger}/wikitext", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task CiteWithAnIucnIdNotOnTheSiteSaysSo() {
+        var text = Html.Text(await _client.GetStringAsync("/cite?q=T999999999"));
+        Assert.Contains("Species Check has no taxon with IUCN taxon ID 999999999. Check the ID, or search for the taxon by name.", text);
+        Assert.DoesNotContain("No taxon found", text);
+    }
+
+    [Fact]
     public async Task CiteListsSeveralTaxaLinkingTheirToolPages() {
         var html = await _client.GetStringAsync("/cite?q=Panthera&for=wikidata");
         Assert.Contains($"href=\"/species/{FixtureDb.Tiger}/wikidata\"", html);

@@ -27,6 +27,10 @@ public sealed class CiteModel : PageModel {
     public string Wiki { get; private set; } = OtherWikipedias.English.Code;
     public bool TooShort { get; private set; }
     public bool Searched { get; private set; }
+
+    /// Set when the text was an IUCN id, or a Red List address or IUCN DOI with ids in it, and no taxon
+    /// or assessment on the site has them (SearchModel.IucnIdNotFound).
+    public IdQuery? IucnIdNotFound { get; private set; }
     public IReadOnlyList<TaxonListItem> Items { get; private set; } = [];
 
     public IActionResult OnGet() {
@@ -37,13 +41,18 @@ public sealed class CiteModel : PageModel {
             return Page();
         }
         Searched = true;
-        if (IdQuery.Parse(Query) is { } ids && _queries.FindByIds(ids) is { Count: > 0 } idHits) {
+        var ids = IdQuery.Parse(Query);
+        if (ids is not null && _queries.FindByIds(ids) is { Count: > 0 } idHits) {
             if (idHits.Count == 1) {
                 return Redirect(ToolUrl(idHits[0].Taxon.TaxonId, idHits[0] is { AssessmentId: { } aid, IsDefault: false } ? aid : null));
             }
             Items = idHits.Select(h => TaxonListItem.FromIdHit(h) with {
                 Url = ToolUrl(h.Taxon.TaxonId, h is { AssessmentId: { } aid, IsDefault: false } ? aid : null),
             }).ToList();
+            return Page();
+        }
+        if (ids is { HasIucnIds: true }) {
+            IucnIdNotFound = ids;
             return Page();
         }
         if (FtsQuery.IsTooShort(Query)) {
@@ -55,6 +64,9 @@ public sealed class CiteModel : PageModel {
             return Redirect(ToolUrl(hit.Taxon.TaxonId, null));
         }
         Items = result.Hits.Select(h => TaxonListItem.FromHit(h) with { Url = ToolUrl(h.Taxon.TaxonId, null) }).ToList();
+        if (Items.Count == 0 && ids?.Number is not null) {
+            IucnIdNotFound = ids;
+        }
         return Page();
     }
 

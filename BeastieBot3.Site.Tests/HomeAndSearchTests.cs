@@ -402,6 +402,36 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains($"Matched IUCN taxon ID: {FixtureDb.PolarBear}", text);
     }
 
+    [Theory]
+    [InlineData("http://www.iucnredlist.org/apps/redlist/details/{0}")]
+    [InlineData("http://www.iucnredlist.org/details/{0}/0")]
+    [InlineData("http://www.iucnredlist.org/search/details.php/{0}/all")]
+    public async Task AnAddressOfAnEarlierRedListSiteRedirectsToTheTaxon(string address) {
+        var response = await _client.GetAsync("/search?q=" + Uri.EscapeDataString(string.Format(address, FixtureDb.Tiger)));
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.Tiger}", response.Headers.Location?.OriginalString);
+    }
+
+    [Theory]
+    [InlineData("http://www.iucnredlist.org/details/999999999/0",
+        "Species Check has no taxon with IUCN taxon ID 999999999. Check the ID, or search for the taxon by name.")]
+    [InlineData("T999999999",
+        "Species Check has no taxon with IUCN taxon ID 999999999. Check the ID, or search for the taxon by name.")]
+    [InlineData("https://www.iucnredlist.org/species/999999999/888888888",
+        "Species Check has no taxon with IUCN taxon ID 999999999 and no assessment with IUCN assessment ID 888888888. Check the IDs, or search for the taxon by name.")]
+    [InlineData("https://www.iucnredlist.org/species/pdf/888888888",
+        "Species Check has no assessment with IUCN assessment ID 888888888. Check the ID, or search for the taxon by name.")]
+    [InlineData("999999999",
+        "Species Check has no taxon with IUCN taxon ID 999999999 and no assessment with IUCN assessment ID 999999999. Check the number, or search for the taxon by name.")]
+    public async Task AnIucnIdNotOnTheSiteSaysSo(string q, string message) {
+        var response = await _client.GetAsync("/search?q=" + Uri.EscapeDataString(q));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var text = Html.Text(await response.Content.ReadAsStringAsync());
+        Assert.Contains(message, text);
+        Assert.DoesNotContain("No taxa found", text);
+        Assert.DoesNotContain("Similar names", text);
+    }
+
     [Fact]
     public async Task AllResultsListsAnAssessmentIdMatch() {
         var html = await _client.GetStringAsync($"/search?q=A{FixtureDb.PolarBear2008}&all=1");

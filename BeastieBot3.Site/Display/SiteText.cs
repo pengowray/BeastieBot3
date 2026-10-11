@@ -73,6 +73,20 @@ public static partial class SiteText {
         $"Species Check has no taxon or assessment with Wikidata item {qid}.";
     public static string AssessmentIdNotFound(long assessmentId) =>
         $"Species Check has no assessment with IUCN assessment ID {assessmentId.ToString(CultureInfo.InvariantCulture)}.";
+    /// When the search text was an IUCN id, or a Red List address or IUCN DOI with ids in it, and no
+    /// taxon or assessment has them. A plain number is looked up as a taxon ID and as an assessment ID.
+    public static string IucnIdNotFound(Data.IdQuery ids) {
+        static string Id(long id) => id.ToString(CultureInfo.InvariantCulture);
+        return ids switch {
+            { Number: { } n } =>
+                $"Species Check has no taxon with IUCN taxon ID {Id(n)} and no assessment with IUCN assessment ID {Id(n)}. Check the number, or search for the taxon by name.",
+            { TaxonId: { } t, AssessmentId: { } a } =>
+                $"Species Check has no taxon with IUCN taxon ID {Id(t)} and no assessment with IUCN assessment ID {Id(a)}. Check the IDs, or search for the taxon by name.",
+            { TaxonId: { } t } => $"Species Check has no taxon with IUCN taxon ID {Id(t)}. Check the ID, or search for the taxon by name.",
+            { AssessmentId: { } a } => $"Species Check has no assessment with IUCN assessment ID {Id(a)}. Check the ID, or search for the taxon by name.",
+            _ => string.Empty,
+        };
+    }
     public static string NoResults(string query) =>
         $"No taxa found for “{query}”. Check the spelling, or search for the scientific name. If the spelling is right, the taxon may not be on the IUCN Red List.";
     /// Before the links to searches with a misspelled word corrected, when a search found nothing.
