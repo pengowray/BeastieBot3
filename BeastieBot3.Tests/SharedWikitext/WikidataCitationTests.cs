@@ -583,9 +583,28 @@ public class WikidataCitationTests {
     }
 
     [Fact]
+    public void SubjectNamedAs_OnlyForANameKnownToBePublished() {
+        // A DOI of the 2014 release, registered in 2015: Crossref's title may have a later name, so no
+        // "subject named as", though the title and the alias are written.
+        var later = Lupulella with { RegisteredName = "Canis mesomelas", Doi = "10.2305/IUCN.UK.2014-1.RLTS.T3755A46122476.en", DoiCreated = "2015-09-10" };
+        var commands = WikidataCitation.CreateItemCommands(later, "Q190012", Model);
+        Assert.Contains(L("LAST", "P1476", "en:\"Canis mesomelas\""), commands);
+        Assert.Contains(L("LAST", "P921", "Q190012"), commands);
+        Assert.Contains(commands, c => c.Contains("\tAen\t", StringComparison.Ordinal));
+        // Registered in the release's year: the published name.
+        var atRelease = later with { Doi = "10.2305/IUCN.UK.2016-3.RLTS.T3755A46122476.en", DoiCreated = "2016-12-08" };
+        Assert.Contains(L("LAST", "P921", "Q190012", "P1810", "\"Canis mesomelas\""), WikidataCitation.CreateItemCommands(atRelease, "Q190012", Model));
+        // An item's own title alone does not say the name was published; with Table 7's name it does.
+        Assert.Null(WikidataCitation.SubjectNamedAs(Lupulella, "Canis mesomelas"));
+        Assert.Equal("Canis mesomelas", WikidataCitation.SubjectNamedAs(Lupulella, "Canis mesomelas", "Canis mesomelas"));
+        Assert.Null(WikidataCitation.SubjectNamedAs(Lupulella, "Canis mesomelas", "Canis aureus"));
+    }
+
+    [Fact]
     public void CreateItemCommands_CurrentNameInternal_NoAlias() {
         var commands = WikidataCitation.CreateItemCommands(
-            Lupulella with { ScientificName = "Larus glaucoides_old", RegisteredName = "Larus glaucoides" }, "Q1", Model);
+            Lupulella with { ScientificName = "Larus glaucoides_old", RegisteredName = "Larus glaucoides" }, "Q1", Model,
+            summaryTableName: "Larus glaucoides");
         Assert.Contains(L("LAST", "P921", "Q1", "P1810", "\"Larus glaucoides\""), commands);
         Assert.DoesNotContain(commands, c => c.Contains("\tAen\t", StringComparison.Ordinal));
     }
@@ -596,8 +615,9 @@ public class WikidataCitationTests {
         // Label and main subject present: nothing about the current name, since the item may have it already.
         var full = WikidataCitation.AddMissingCommands(Lupulella, "Q1", new HashSet<string> { "P31", "P1476", "P921", "Len" }, "Q190012", Model, titles);
         Assert.DoesNotContain(full, c => c.Contains("\tAen\t", StringComparison.Ordinal) || c.Contains("P921", StringComparison.Ordinal));
-        // Main subject missing: added with the title's name as "subject named as".
-        var noSubject = WikidataCitation.AddMissingCommands(Lupulella, "Q1", new HashSet<string> { "P31", "P1476", "Len" }, "Q190012", Model, titles);
+        // Main subject missing: added with the title's name as "subject named as", which Table 7 prints.
+        var noSubject = WikidataCitation.AddMissingCommands(Lupulella, "Q1", new HashSet<string> { "P31", "P1476", "Len" }, "Q190012", Model, titles,
+            summaryTableName: "Canis mesomelas");
         Assert.Contains(L("Q1", "P921", "Q190012", "P1810", "\"Canis mesomelas\""), noSubject);
         Assert.DoesNotContain(noSubject, c => c.Contains("\tAen\t", StringComparison.Ordinal));
         // Label missing: the alias comes with it.

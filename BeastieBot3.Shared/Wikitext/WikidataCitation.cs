@@ -22,8 +22,9 @@ namespace BeastieBot3.Shared.Wikitext;
 //   P123 publisher       model.Publisher (IUCN)
 //   P921 main subject    the taxon's item, when the caller knows it, with the qualifier P1810
 //                        "subject named as" holding the title's name when it is not IUCN's
-//                        citation name (the taxon's current name): the name the work uses for its
-//                        subject, as P1932 does for an author
+//                        citation name (the taxon's current name) and is known to be the name the
+//                        assessment was published under (SubjectNamedAs): the name the work uses
+//                        for its subject, as P1932 does for an author
 //   P407 language        the language the DOI names (.en English, .es Spanish, .fr French,
 //                        .pt Portuguese); model.Language when there is no DOI. The dry run always
 //                        writes model.Language; it only plans latest global assessments, which are in
@@ -271,15 +272,26 @@ public static partial class WikidataCitation {
     public static string NameText(string? name) => CleanValue(name);
 
     /// The name for "subject named as" (P1810) on main subject: the title's name when it is not
-    /// IUCN's citation name, the taxon's current name (SameName); null otherwise.
-    public static string? SubjectNamedAs(IucnCitationParts parts, string? name) =>
-        name is { Length: > 0 } && !IsIucnInternalName(name) && !SameName(name, parts.ScientificName) ? name : null;
+    /// IUCN's citation name, the taxon's current name (SameName), and it is the name the assessment
+    /// was published under: the name Table 7 prints (summaryTableName), else Crossref's name when
+    /// IUCN registered the DOI at publication (IucnCitationParts.RegisteredNameIsFromPublication).
+    /// Null otherwise: a Crossref title of a DOI registered later, or an item title alone, may have a
+    /// later name.
+    public static string? SubjectNamedAs(IucnCitationParts parts, string? name, string? summaryTableName = null) {
+        if (name is not { Length: > 0 } || IsIucnInternalName(name) || SameName(name, parts.ScientificName)) {
+            return null;
+        }
+        var published = CleanValue(summaryTableName) is { Length: > 0 } printed ? printed
+            : parts.RegisteredNameIsFromPublication ? CleanValue(parts.RegisteredName) : null;
+        return published is { Length: > 0 } && SameName(published, name) ? name : null;
+    }
 
     /// The English alias for an item whose title has another name than IUCN's citation name: the
     /// label (model.LabelTemplate) with the current name. Null when the names are the same, the
     /// current name is one of IUCN's internal names, or the label can't be made.
     public static string? CurrentNameAlias(IucnCitationParts parts, WikidataItemModel model, string? name) {
-        if (SubjectNamedAs(parts, name) is null || CleanValue(parts.ScientificName) is not { Length: > 0 } current || IsIucnInternalName(current)) {
+        if (name is not { Length: > 0 } || IsIucnInternalName(name) || SameName(name, parts.ScientificName)
+            || CleanValue(parts.ScientificName) is not { Length: > 0 } current || IsIucnInternalName(current)) {
             return null;
         }
         return Label(parts, model, current) is { } alias && alias != Label(parts, model, name!) ? alias : null;
@@ -337,7 +349,7 @@ public static partial class WikidataCitation {
         if (CurrentNameAlias(parts, model, name.Name) is { } alias) {
             commands.Add(Line("LAST", "Aen", Quote(alias)));
         }
-        foreach (var statement in Statements(parts, name.Name, taxonQid, model, includeUnjudged: true)) {
+        foreach (var statement in Statements(parts, name.Name, taxonQid, model, includeUnjudged: true, summaryTableName)) {
             commands.Add(statement.ToLine("LAST"));
         }
         return commands;
@@ -363,7 +375,7 @@ public static partial class WikidataCitation {
             }
         }
         var hasAuthors = presentProperties.Contains("P2093") || presentProperties.Contains("P50");
-        foreach (var statement in Statements(parts, name, taxonQid, model, includeUnjudged: false)) {
+        foreach (var statement in Statements(parts, name, taxonQid, model, includeUnjudged: false, summaryTableName)) {
             var present = statement.Property is "P2093" or "P50" ? hasAuthors : presentProperties.Contains(statement.Property);
             if (!present) {
                 commands.Add(statement.ToLine(item));
@@ -461,9 +473,9 @@ public static partial class WikidataCitation {
     }
 
     // includeUnjudged: P123 and P407, which a create batch writes and an add batch leaves out.
-    // name: the title (TitleNameFor); null leaves P1476 out.
+    // name: the title (TitleNameFor); null leaves P1476 out. summaryTableName: for SubjectNamedAs.
     private static IEnumerable<Statement> Statements(IucnCitationParts parts, string? name, string? taxonQid, WikidataItemModel model,
-        bool includeUnjudged) {
+        bool includeUnjudged, string? summaryTableName) {
         var doi = OwnDoi(parts, out var doiLanguage);
 
         if (IsItemId(model.InstanceOf)) yield return new Statement("P31", model.InstanceOf.Trim());
@@ -471,7 +483,7 @@ public static partial class WikidataCitation {
         if (IsItemId(model.PublishedIn)) yield return new Statement("P1433", model.PublishedIn.Trim());
         if (includeUnjudged && IsItemId(model.Publisher)) yield return new Statement("P123", model.Publisher.Trim());
         if (taxonQid is not null && IsItemId(taxonQid)) {
-            yield return new Statement("P921", taxonQid.Trim(), SubjectNamedAs(parts, name) is { } namedAs ? ["P1810", Quote(namedAs)] : null);
+            yield return new Statement("P921", taxonQid.Trim(), SubjectNamedAs(parts, name, summaryTableName) is { } namedAs ? ["P1810", Quote(namedAs)] : null);
         }
         if (includeUnjudged) {
             var language = doiLanguage is not null && DoiLanguageItems.TryGetValue(doiLanguage, out var fromDoi) ? fromDoi : model.Language;

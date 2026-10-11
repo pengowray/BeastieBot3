@@ -1371,7 +1371,10 @@ the release, so the page says the assessment was published under its name.
 When the name is not IUCN's citation name (`SameName`), which is the taxon's current name, the
 commands follow Wikidata's practice for a work whose subject has been renamed: the title and label
 keep the name of the work, main subject (P921) gets the qualifier "subject named as" (P1810) with
-that name (`SubjectNamedAs`), and the label with the current name is added as an English alias
+that name when it is known to be the name the assessment was published under (`SubjectNamedAs`:
+Table 7's name, or Crossref's name of a DOI registered in the release's year or the next,
+`RegisteredNameIsFromPublication`; not a later DOI's name or an item's title alone), and the label
+with the current name is added as an English alias
 (`Aen`, `CurrentNameAlias`), so a search for either name finds the item. The cache records neither
 an item's aliases nor P921's qualifiers, so the add commands write P1810 only on a main subject
 they add, and the alias only with a label they add; `FixCommands` adds the alias with the label it
