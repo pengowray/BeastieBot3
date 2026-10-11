@@ -195,11 +195,11 @@ public static partial class SiteText {
     // Error pages
     public const string NotFoundHeading = "Page not found";
     public const string NotFoundLine = "Check the address, or search for a taxon.";
-    public static string TaxonNotFoundHeading(long id) => $"No taxon with IUCN id {id}";
+    public static string TaxonNotFoundHeading(long id) => $"No taxon with IUCN ID {id}";
     public static string TaxonNotFoundLine(string version) =>
-        $"This id is not in IUCN Red List version {version}, and Species Check has no earlier assessments with this id. Check the id, or search for the taxon by name.";
+        $"This ID is not in IUCN Red List version {version}, and Species Check has no earlier assessments with this ID. Check the ID, or search for the taxon by name.";
     public const string TaxonNotFoundLineNoVersion =
-        "Species Check has no assessments with this id. Check the id, or search for the taxon by name.";
+        "Species Check has no assessments with this ID. Check the ID, or search for the taxon by name.";
     public const string TooManyHeading = "Too many requests";
     public const string TooManyLine = "Try again in a minute.";
     /// The wait before the limit lets this address in again, from the Retry-After header.

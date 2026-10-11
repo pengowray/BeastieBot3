@@ -564,8 +564,8 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         var response = await _client.GetAsync("/species/999999999");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var text = Html.Text(await response.Content.ReadAsStringAsync());
-        Assert.Contains("No taxon with IUCN id 999999999", text);
-        Assert.Contains("This id is not in IUCN Red List version 2026-1, and Species Check has no earlier assessments with this id. Check the id, or search for the taxon by name.", text);
+        Assert.Contains("No taxon with IUCN ID 999999999", text);
+        Assert.Contains("This ID is not in IUCN Red List version 2026-1, and Species Check has no earlier assessments with this ID. Check the ID, or search for the taxon by name.", text);
         Assert.Contains("Search for a taxon", text);
     }
 
