@@ -8,6 +8,9 @@
             case TitleNameSource.ItemTitle:
                 @SiteText.NameFromItemTitle(name.Name, cited)
                 break;
+            case TitleNameSource.SummaryTable:
+                @SiteText.NamePublished(name.Name, cited)
+                break;
             case TitleNameSource.Crossref:
                 @SiteText.NameRegistered(name.Name, cited)
                 break;
@@ -17,6 +20,10 @@
         }
         @if (Model.CommandsUseName && name.Source != TitleNameSource.IucnCitation) {
             @(" ")@SiteText.NameCommandsUse(name.Name)
+        }
+        @if (Model.CommandsAddAlias || Model.CommandsAddSubjectNamedAs) {
+            @(" ")@SiteText.NameCommandsAddCurrent(name.Name, cited, Model.CommandsAddAlias, Model.CommandsAddSubjectNamedAs,
+                afterUse: Model.CommandsUseName && name.Source != TitleNameSource.IucnCitation)
         }
     </p>
 }

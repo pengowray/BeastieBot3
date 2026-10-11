@@ -33,7 +33,8 @@ public abstract class AssessmentToolModel : TaxonPageModel {
     protected WikidataCiteView? BuildWikidataCite(CiteQOptions citeQOptions) => Selected is not { } selected ? null
         : WikidataCite.Build(selected, Parts, Taxon?.WikidataQid, ReadItemModel(), citeQOptions,
             (what, e) => _logger.LogWarning(e, "WikidataCitation.{Method} failed for assessment {AssessmentId}", what, selected.AssessmentId),
-            hasPage: id => Assessments.Any(a => a.AssessmentId == id), taxonItemDoubt: TaxonItemDoubt.Of(Taxon));
+            hasPage: id => Assessments.Any(a => a.AssessmentId == id), taxonItemDoubt: TaxonItemDoubt.Of(Taxon),
+            summaryTableName: SummaryTableNameOf(selected));
 
     /// The taxon item's IUCN status (P141) compared with the latest global assessment, with commands;
     /// null unless the selected assessment is the latest global assessment of a taxon in the release.

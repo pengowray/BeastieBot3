@@ -372,8 +372,9 @@ public class WikidataCitationTests {
             L("Q56481550", "P1476", "en:\"Canis mesomelas\""),
             L("-Q56481550", "P1476", "en:\"" + old + "\""),
             L("Q56481550", "Len", "\"Canis mesomelas. The IUCN Red List of Threatened Species 2014: e.T3755A46122476\""),
+            // The current name as an alias, so a search for it finds the item.
+            L("Q56481550", "Aen", "\"Lupulella mesomelas. The IUCN Red List of Threatened Species 2014: e.T3755A46122476\""),
         }, fix.Commands);
-        Assert.DoesNotContain(fix.Commands, c => c.Contains("Lupulella", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -544,7 +545,64 @@ public class WikidataCitationTests {
         Assert.Contains(L("LAST", "P1476", "en:\"Canis mesomelas\""), commands);
         Assert.Contains(L("LAST", "Len", "\"Canis mesomelas. The IUCN Red List of Threatened Species 2014: e.T3755A46122476\""), commands);
         Assert.Contains(L("LAST", "Den", "\"IUCN Red List assessment of Canis mesomelas\""), commands);
-        Assert.DoesNotContain(commands, c => c.Contains("Lupulella", StringComparison.Ordinal));
+        // The current name only in the alias.
+        Assert.Equal([L("LAST", "Aen", "\"Lupulella mesomelas. The IUCN Red List of Threatened Species 2014: e.T3755A46122476\"")],
+            commands.Where(c => c.Contains("Lupulella", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void CreateItemCommands_Table7sName_ComesBeforeCrossrefsAndIsTheSubjectNamedAs() {
+        var parts = Lupulella with { RegisteredName = "Canis aureus mesomelas" };
+        var commands = WikidataCitation.CreateItemCommands(parts, "Q190012", Model, summaryTableName: "Canis mesomelas");
+        Assert.Contains(L("LAST", "P1476", "en:\"Canis mesomelas\""), commands);
+        Assert.Contains(L("LAST", "P921", "Q190012", "P1810", "\"Canis mesomelas\""), commands);
+        Assert.Contains(L("LAST", "Aen", "\"Lupulella mesomelas. The IUCN Red List of Threatened Species 2014: e.T3755A46122476\""), commands);
+        Assert.DoesNotContain(commands, c => c.Contains("aureus", StringComparison.Ordinal));
+        Assert.Equal(TitleNameSource.SummaryTable, WikidataCitation.TitleNameFor(parts, summaryTableName: "Canis mesomelas")!.Source);
+    }
+
+    [Fact]
+    public void CreateItemCommands_Table7PrintsTheCurrentName_NoSubjectNamedAsOrAlias() {
+        // The site passes IUCN's citation name when Table 7 prints the current name, so it wins over Crossref's.
+        var commands = WikidataCitation.CreateItemCommands(Lupulella with { RegisteredName = "Canis mesomelas" }, "Q190012", Model,
+            summaryTableName: "Lupulella mesomelas");
+        Assert.Contains(L("LAST", "P1476", "en:\"Lupulella mesomelas\""), commands);
+        Assert.Contains(L("LAST", "P921", "Q190012"), commands);
+        Assert.DoesNotContain(commands, c => c.Contains("\tAen\t", StringComparison.Ordinal) || c.Contains("P1810", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CreateItemCommands_SameNameAsIucn_NoSubjectNamedAsOrAlias() {
+        var commands = WikidataCitation.CreateItemCommands(Lupulella, "Q190012", Model);
+        Assert.Contains(L("LAST", "P921", "Q190012"), commands);
+        Assert.DoesNotContain(commands, c => c.Contains("\tAen\t", StringComparison.Ordinal) || c.Contains("P1810", StringComparison.Ordinal));
+        // "ssp." for "subsp." is the same name.
+        var subsp = WikidataCitation.CreateItemCommands(Lupulella with { ScientificName = "Apollonias barbujana subsp. ceballosi" }, "Q1", Model,
+            summaryTableName: "Apollonias barbujana ssp. ceballosi");
+        Assert.DoesNotContain(subsp, c => c.Contains("\tAen\t", StringComparison.Ordinal) || c.Contains("P1810", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CreateItemCommands_CurrentNameInternal_NoAlias() {
+        var commands = WikidataCitation.CreateItemCommands(
+            Lupulella with { ScientificName = "Larus glaucoides_old", RegisteredName = "Larus glaucoides" }, "Q1", Model);
+        Assert.Contains(L("LAST", "P921", "Q1", "P1810", "\"Larus glaucoides\""), commands);
+        Assert.DoesNotContain(commands, c => c.Contains("\tAen\t", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AddMissingCommands_AliasOnlyWithANewLabel_SubjectNamedAsOnlyWithANewMainSubject() {
+        IReadOnlyList<WikidataTitle> titles = [new WikidataTitle("Canis mesomelas", "en")];
+        // Label and main subject present: nothing about the current name, since the item may have it already.
+        var full = WikidataCitation.AddMissingCommands(Lupulella, "Q1", new HashSet<string> { "P31", "P1476", "P921", "Len" }, "Q190012", Model, titles);
+        Assert.DoesNotContain(full, c => c.Contains("\tAen\t", StringComparison.Ordinal) || c.Contains("P921", StringComparison.Ordinal));
+        // Main subject missing: added with the title's name as "subject named as".
+        var noSubject = WikidataCitation.AddMissingCommands(Lupulella, "Q1", new HashSet<string> { "P31", "P1476", "Len" }, "Q190012", Model, titles);
+        Assert.Contains(L("Q1", "P921", "Q190012", "P1810", "\"Canis mesomelas\""), noSubject);
+        Assert.DoesNotContain(noSubject, c => c.Contains("\tAen\t", StringComparison.Ordinal));
+        // Label missing: the alias comes with it.
+        var noLabel = WikidataCitation.AddMissingCommands(Lupulella, "Q1", new HashSet<string> { "P31", "P1476", "P921" }, "Q190012", Model, titles);
+        Assert.Contains(L("Q1", "Aen", "\"Lupulella mesomelas. The IUCN Red List of Threatened Species 2014: e.T3755A46122476\""), noLabel);
     }
 
     [Fact]

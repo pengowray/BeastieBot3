@@ -38,6 +38,12 @@ public sealed record WikidataCiteView {
     /// True when the commands set the item's title or label (create, add or fix).
     public bool CommandsUseName { get; init; }
 
+    /// True when the commands add an English alias with the taxon's current name
+    /// (WikidataCitation.CurrentNameAlias), and when they add Name as "subject named as" (P1810) on
+    /// main subject (WikidataCitation.SubjectNamedAs).
+    public bool CommandsAddAlias { get; init; }
+    public bool CommandsAddSubjectNamedAs { get; init; }
+
     /// No item and no create commands: no usable name is known (IUCN's citation has an internal
     /// name such as "Larus glaucoides_old", and Crossref's title is not known).
     public bool NoUsableName { get; init; }
@@ -259,9 +265,10 @@ public static partial class WikidataCite {
     /// page for an assessment id of the taxon. taxonItemDoubt: set when the taxon's item may not be
     /// the taxon's (TaxonItemDoubt.Of); the commands then leave out main subject (P921). onError is
     /// told about any renderer that throws; only the box that renderer makes is left out.
+    /// summaryTableName: the name IUCN's Table 7 prints for the assessment (TaxonPageModel.SummaryTableNameOf).
     public static WikidataCiteView Build(AssessmentRow assessment, IucnCitationParts? parts, string? taxonQid, WikidataItemModel? model,
         CiteQOptions citeQOptions, Action<string, Exception>? onError = null, Func<long, bool>? hasPage = null,
-        TaxonItemDoubt? taxonItemDoubt = null) {
+        TaxonItemDoubt? taxonItemDoubt = null, string? summaryTableName = null) {
         var itemQid = ItemId(assessment.WikidataItemQid);
         var knownTaxonItem = ItemId(taxonQid);
         var taxonItem = taxonItemDoubt is null ? knownTaxonItem : null;
@@ -301,18 +308,19 @@ public static partial class WikidataCite {
             // offered (rather than every statement).
             if (parts is not null && model is not null && !string.IsNullOrWhiteSpace(assessment.WikidataItemProperties)) {
                 var present = Properties(assessment.WikidataItemProperties);
-                add = Try("AddMissingCommands", () => WikidataCitation.AddMissingCommands(parts, itemQid, present, taxonItem, model, titles)) ?? [];
+                add = Try("AddMissingCommands", () => WikidataCitation.AddMissingCommands(parts, itemQid, present, taxonItem, model, titles, summaryTableName)) ?? [];
                 mainSubjectLeftOut = taxonItemDoubt is not null && knownTaxonItem is not null && !present.Contains("P921");
             }
             // A title is changed only when its exact text and language are known
             // (wikidata_item_titles); the label whenever it differs from the model's.
             var fix = parts is null || model is null ? WikidataItemFix.None
-                : Try("FixCommands", () => WikidataCitation.FixCommands(parts, itemQid, titles, assessment.WikidataItemLabelEn, model))
+                : Try("FixCommands", () => WikidataCitation.FixCommands(parts, itemQid, titles, assessment.WikidataItemLabelEn, model, summaryTableName))
                     ?? WikidataItemFix.None;
             IReadOnlyList<string>? commands = add.Count + fix.Commands.Count > 0 ? [.. add, .. fix.Commands] : null;
             // From the add commands only: the fix commands name P1476 and Len for a title and label
-            // the item already has.
-            var added = StatementsAdded(add);
+            // the item already has. The alias is left out: the item may have it already, and the
+            // name note says the commands add it.
+            var added = StatementsAdded(add.Where(c => !IsAliasCommand(c)));
             return new WikidataCiteView {
                 ItemQid = itemQid,
                 CiteQ = citeQBox,
@@ -321,9 +329,11 @@ public static partial class WikidataCite {
                 QuickStatementsUrl = commands is null ? null : FittingUrl(Try("QuickStatementsUrl", () => WikidataCitation.QuickStatementsUrl(commands))),
                 AddedStatements = added,
                 Changes = fix.Changes,
-                Name = parts is null ? null : WikidataCitation.TitleNameFor(parts, titles),
+                Name = parts is null ? null : WikidataCitation.TitleNameFor(parts, titles, summaryTableName),
                 CitationName = citationName,
                 CommandsUseName = fix.Changes.Count > 0 || add.Any(c => c.Split('\t') is [_, "P1476" or "Len", ..]),
+                CommandsAddAlias = commands?.Any(IsAliasCommand) == true,
+                CommandsAddSubjectNamedAs = commands?.Any(IsSubjectNamedAsCommand) == true,
                 MainSubjectLeftOut = mainSubjectLeftOut && commands is not null ? taxonItemDoubt : null,
             };
         }
@@ -332,8 +342,8 @@ public static partial class WikidataCite {
         if (parts is null || model is null) {
             return view;
         }
-        var name = WikidataCitation.TitleNameFor(parts);
-        var create = Try("CreateItemCommands", () => WikidataCitation.CreateItemCommands(parts, taxonItem, model));
+        var name = WikidataCitation.TitleNameFor(parts, summaryTableName: summaryTableName);
+        var create = Try("CreateItemCommands", () => WikidataCitation.CreateItemCommands(parts, taxonItem, model, summaryTableName));
         if (create is not { Count: > 0 }) {
             return view with { NoUsableName = name is null };
         }
@@ -342,9 +352,17 @@ public static partial class WikidataCite {
             QuickStatementsUrl = FittingUrl(Try("QuickStatementsUrl", () => WikidataCitation.QuickStatementsUrl(create))),
             Name = name,
             CommandsUseName = true,
+            CommandsAddAlias = create.Any(IsAliasCommand),
+            CommandsAddSubjectNamedAs = create.Any(IsSubjectNamedAsCommand),
             MainSubjectLeftOut = knownTaxonItem is null ? null : taxonItemDoubt,
         };
     }
+
+    // An English alias command ("Q1\tAen\t\"...\"").
+    private static bool IsAliasCommand(string command) => command.Split('\t') is [_, "Aen", ..];
+
+    // A main subject (P921) command with the "subject named as" (P1810) qualifier.
+    private static bool IsSubjectNamedAsCommand(string command) => command.Split('\t') is [_, "P921", _, "P1810", ..];
 
     // A link too long for browsers or the tool is left out; the commands box can still be copied.
     private static string? FittingUrl(string? url) =>

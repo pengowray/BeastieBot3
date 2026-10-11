@@ -62,6 +62,18 @@ public static partial class SiteText {
     // name was read from: neither title proves the name an assessment first appeared under.
     public static string NameFromItemTitle(string name, string cited) =>
         $"The name in the item's title (P1476) is {name}. {CitedName(cited)}";
+    public static string NamePublished(string name, string cited) =>
+        $"IUCN published this assessment under the name {name} (Table 7 of IUCN's summary statistics). {CitedName(cited)}";
+    /// What the commands add with the current name (IUCN's citation name); afterUse: it follows
+    /// NameCommandsUse in the same paragraph.
+    public static string NameCommandsAddCurrent(string name, string current, bool alias, bool subjectNamedAs, bool afterUse) {
+        var who = afterUse ? "They also" : "The commands";
+        return (alias, subjectNamedAs) switch {
+            (true, true) => $"{who} add an English alias with the current name, {current}, and record {name} as “subject named as” (P1810) on main subject (P921).",
+            (true, false) => $"{who} add an English alias with the current name, {current}.",
+            _ => $"{who} record {name} as “subject named as” (P1810) on main subject (P921).",
+        };
+    }
     public static string NameRegistered(string name, string cited) =>
         $"The name in the title registered with Crossref for this assessment's DOI is {name}. {CitedName(cited)}";
     private static string CitedName(string cited) => WikidataCitation.IsIucnInternalName(cited)

@@ -277,8 +277,30 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
     }
 
     [Fact]
+    public async Task NewItem_WithTable7sName_UsesThePublishedNameAndAddsTheCurrentNameAsAnAlias() {
+        var html = await CiteQPart($"/species/{FixtureDb.Bromus}/wikidata");
+        var text = Html.Text(html);
+        Assert.Contains("IUCN published this assessment under the name Bromus mollis var. interruptus (Table 7 of IUCN's summary statistics). "
+            + "IUCN's citation gives a different name, Bromus interruptus. The commands use Bromus mollis var. interruptus. "
+            + "They also add an English alias with the current name, Bromus interruptus.", text);
+        var commands = Html.Textarea(html, "wikidata-commands")!;
+        Assert.Contains("LAST\tP1476\ten:\"Bromus mollis var. interruptus\"", commands);
+        Assert.Contains("LAST\tAen\t\"Bromus interruptus. The IUCN Red List of Threatened Species 2011: e.T165247A5995954\"", commands);
+    }
+
+    [Fact]
+    public async Task Table7NameWithoutTheRankMarker_IsTheCurrentName() {
+        // Table 7 prints "Panthera pardus orientalis" for the 2008 assessment of Panthera pardus ssp. orientalis.
+        var html = await CiteQPart($"/species/{FixtureDb.AmurLeopard}/wikidata?assessment={FixtureDb.AmurLeopard2008}");
+        var commands = Html.Textarea(html, "wikidata-commands") ?? "";
+        Assert.DoesNotContain("\tAen\t", commands);
+        Assert.DoesNotContain("P1810", commands);
+        Assert.DoesNotContain("IUCN published this assessment under the name", Html.Text(html));
+    }
+
+    [Fact]
     public async Task NewItem_WithIucnsCitationName_SaysTheTitleNameIsNotKnown() {
-        var text = Html.Text(await CiteQPart($"/species/{FixtureDb.Bromus}/wikidata"));
+        var text = Html.Text(await CiteQPart($"/species/{FixtureDb.Bromus}/wikidata?assessment={FixtureDb.Bromus1998Ex}"));
         Assert.Contains("The commands use the name in IUCN's citation, Bromus interruptus. IUCN's citation gives the taxon's current name, even for an older assessment.", text);
     }
 

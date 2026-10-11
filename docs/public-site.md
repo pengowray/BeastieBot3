@@ -1350,18 +1350,32 @@ first of these:
 
 1. the name part of the item's own title (`ItemTitle`), when the item has exactly one title that is
    not deprecated;
-2. the name part of the title registered with Crossref for the assessment's DOI (`Crossref`, from
+2. the name IUCN's summary statistics Table 7 of the assessment's year or the next prints for it
+   (`SummaryTable`, `category_change.printed_name`; the page passes it as `summaryTableName`, from
+   `TaxonPageModel.SummaryTableNameOf`). When Table 7 prints the current name (rank markers aside,
+   `PublishedName.For`), the page passes IUCN's citation name instead, since Table 7 settles it;
+3. the name part of the title registered with Crossref for the assessment's DOI (`Crossref`, from
    `IucnCitationParts.RegisteredName`);
-3. IUCN's citation name (`IucnCitation`).
+4. IUCN's citation name (`IucnCitation`).
 
-For a new item, `TitleNameFor` has no item title to read, so it tries Crossref's title first.
+For a new item, `TitleNameFor` has no item title to read, so it tries Table 7, then Crossref's title.
 IUCN's citation gives the taxon's current name even for an older assessment: the title registered
 for the 2014 assessment of the black-backed jackal is "Canis mesomelas: Hoffmann, M.", and IUCN's
 citation now gives *Lupulella mesomelas*. Neither the item's title nor Crossref's title proves the
 name an assessment first appeared under. Crossref's records for some 2008 and 2010 DOIs were made
 in 2015 and deposited again with the names current in 2015 (the code comments cite the items
 Q29037714 and Q29393952), and SourceMD, the tool that made most assessment items, copied most of
-their titles from Crossref. The page says only which title a name was read from.
+their titles from Crossref. The page says only which title a name was read from. Table 7 is the exception: it is printed with
+the release, so the page says the assessment was published under its name.
+
+When the name is not IUCN's citation name (`SameName`), which is the taxon's current name, the
+commands follow Wikidata's practice for a work whose subject has been renamed: the title and label
+keep the name of the work, main subject (P921) gets the qualifier "subject named as" (P1810) with
+that name (`SubjectNamedAs`), and the label with the current name is added as an English alias
+(`Aen`, `CurrentNameAlias`), so a search for either name finds the item. The cache records neither
+an item's aliases nor P921's qualifiers, so the add commands write P1810 only on a main subject
+they add, and the alias only with a label they add; `FixCommands` adds the alias with the label it
+replaces. No alias is made when the current name is an internal name ("_old").
 
 A name with `_` is IUCN's internal name for a taxon that IUCN has replaced ("Larus
 glaucoides_old"), and `TitleNameFor` never uses one (`IsIucnInternalName`). When `TitleNameFor`

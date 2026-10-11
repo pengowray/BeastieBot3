@@ -232,6 +232,17 @@ public abstract class TaxonPageModel : PageModel {
         return PublishedName.For(taxon?.ScientificName, ChangeReasons.GetValueOrDefault(assessment.AssessmentId), PartsOf(assessment));
     }
 
+    /// The name IUCN's Table 7 prints for the assessment, for the title of its Wikidata item
+    /// (WikidataCitation.TitleNameFor): the printed name when it differs from the taxon's current
+    /// name (PublishedName.For), else IUCN's citation name, since a Table 7 name that is the current
+    /// one settles it. Null when Table 7 has no row with a name for the assessment.
+    public string? SummaryTableNameOf(AssessmentRow assessment) {
+        if (ChangeReasons.GetValueOrDefault(assessment.AssessmentId)?.PrintedName is null) {
+            return null;
+        }
+        return PublishedNameOf(assessment) is { Source: PublishedNameSource.SummaryTable } published ? published.Name : PartsOf(assessment)?.ScientificName;
+    }
+
     /// A short note for the assessment tables when the assessment is an errata or amended version,
     /// or was replaced by one ("Replaced by the errata version"); null otherwise. An errata version
     /// keeps the year of the assessment it replaces, so without the note the two rows look the same.
