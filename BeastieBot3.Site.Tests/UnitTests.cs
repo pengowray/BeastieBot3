@@ -648,6 +648,32 @@ public sealed class IdQueryTests {
     [InlineData("doi:10.2305/IUCN.UK.2008.RLTS.T22823A9390963.en", 22823L, 9390963L, null)]
     [InlineData("https://www.iucnredlist.org/species/22823/14871490", 22823L, 14871490L, null)]
     [InlineData("iucnredlist.org/species/22823", 22823L, null, null)]
+    [InlineData("https://www.iucnredlist.org/species/22823/0", 22823L, null, null)]
+    [InlineData("https://www.iucnredlist.org/species/21178/44140209#assessment-information", 21178L, 44140209L, null)]
+    [InlineData("https://www.iucnredlist.org/species/44579003/4457901.", 44579003L, 4457901L, null)]
+    [InlineData("https://www.iucnredlist.org/fr/species/22725708/94900378", 22725708L, 94900378L, null)]
+    [InlineData("https://apistaging.iucnredlist.org/species/135606/21912674", 135606L, 21912674L, null)]
+    [InlineData("https://www.iucnredlist.org/species/pdf/14871490", null, 14871490L, null)]
+    [InlineData("http://www.iucnredlist.org/apps/redlist/details/15955", 15955L, null, null)]
+    [InlineData("http://www.iucnredlist.org/apps/redlist/details/153538/0", 153538L, null, null)]
+    [InlineData("http://www.iucnredlist.org/apps/redlist/details/136231/0/full", 136231L, null, null)]
+    [InlineData("http://www.redlist.org/apps/redlist/details/6924/0", 6924L, null, null)]
+    [InlineData("https://www.iucnredlist.org/details/7961/0", 7961L, null, null)]
+    [InlineData("https://iucnredlist.org/details/64410/0", 64410L, null, null)]
+    [InlineData("http://oldredlist.iucnredlist.org/details/22685258/0", 22685258L, null, null)]
+    [InlineData("www.iucnredlist.org/details/157284/1", 157284L, null, null)]
+    [InlineData("https://www.iucnredlist.org/details/13989/0/0", 13989L, null, null)]
+    [InlineData("http://www.iucnredlist.org/details/6509/all", 6509L, null, null)]
+    [InlineData("http://www.iucnredlist.org/details/136740", 136740L, null, null)]
+    [InlineData("http://www.iucnredlist.org/details/full/166438/0", 166438L, null, null)]
+    [InlineData("http://www.iucnredlist.org/details/summary/151884/0", 151884L, null, null)]
+    [InlineData("https://www.iucnredlist.org/details/classify/22708037/0", 22708037L, null, null)]
+    [InlineData("http://www.iucnredlist.org/search/details.php/39247/all", 39247L, null, null)]
+    [InlineData("http://www.iucnredlist.org/search/details.php/8391/summ", 8391L, null, null)]
+    [InlineData("http://www.redlist.org/search/details.php?species=39690", 39690L, null, null)]
+    [InlineData("http://www.iucnredlist.org/search/rangemap.php?species=55898", 55898L, null, null)]
+    [InlineData("http://maps.iucnredlist.org/map.html?id=22680186", 22680186L, null, null)]
+    [InlineData("https://apiv3.iucnredlist.org/api/v3/taxonredirect/152911", 152911L, null, null)]
     public void ReadsTheIds(string text, long? taxonId, long? assessmentId, long? number) =>
         Assert.Equal(new IdQuery(taxonId, assessmentId, number), IdQuery.Parse(text));
 
@@ -682,6 +708,10 @@ public sealed class IdQueryTests {
     [InlineData("Qabc")]
     [InlineData("P0")]
     [InlineData("https://www.wikidata.org/wiki/Talk:Q33609")]
+    [InlineData("https://www.nationalredlist.org/species-information/?speciesID=248765")]
+    [InlineData("https://www.iucnredlist.org/search?taxonomies=22676456&searchType=species")]
+    [InlineData("http://www.iucnredlist.org/static/categories_criteria_3_1")]
+    [InlineData("https://www.iucnredlist.org/details/1234567890123456789/0")]
     public void IsNullForOtherText(string text) => Assert.Null(IdQuery.Parse(text));
 }
 

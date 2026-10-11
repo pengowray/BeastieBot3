@@ -1649,7 +1649,13 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   and before the minimum length check): `T22823A14871490` with or without `e.` and `.en`, `T22823`
   (taxon id), `A14871490` (assessment id), a plain number (looked up as both), an IUCN DOI
   (`10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en`, also with `doi:` or a doi.org address) and a
-  Red List address (`iucnredlist.org/species/22823/14871490`). One match redirects to the taxon
+  Red List address (`iucnredlist.org/species/22823/14871490`, or an assessment's PDF,
+  `iucnredlist.org/species/pdf/14871490`), including the addresses of the Red List's earlier
+  sites that Wikipedia articles still cite, which give the taxon id only: `details/22823/0`,
+  `details/full/22823/0`, `apps/redlist/details/22823`, `search/details.php/22823/all`,
+  `redlist.org/search/details.php?species=22823`, `maps.iucnredlist.org/map.html?id=22823` and
+  `apiv3.iucnredlist.org/api/v3/taxonredirect/22823` (the second number of a `details` address
+  is a region, 0 for global). One match redirects to the taxon
   page; an assessment that is not the taxon's latest global one opens the taxon's wikitext page
   with that assessment's wikitext shown (`/species/{id}/wikitext?assessment=N#wikitext`). Several matches are listed with "Matched IUCN taxon
   ID" or "Matched IUCN assessment ID". A DOI is read for the ids in it, so the DOI of an errata
