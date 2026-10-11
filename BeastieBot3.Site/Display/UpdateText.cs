@@ -19,8 +19,8 @@ public static partial class UpdateText {
     /// The summary of the introduction, closed once a result is shown.
     public const string IntroSummary = "What this page updates";
 
-    public const string IntroTemplatesTitle = "{{IUCN status}} templates with a taxon id";
-    public const string IntroTemplates = ", such as {{IUCN status|EN|4828/21289898|1|year=2015}}: the code, the ids and the year. EX and EW have no year, so the year is removed. An old taxon id is changed to the current id.";
+    public const string IntroTemplatesTitle = "{{IUCN status}} templates with an IUCN taxon ID";
+    public const string IntroTemplates = ", such as {{IUCN status|EN|4828/21289898|1|year=2015}}: the code, the IUCN taxon ID and assessment ID, and the year. EX and EW have no year, so the year is removed. An old IUCN taxon ID is changed to the current taxon ID.";
 
     public const string IntroTablesTitle = "Status columns in wikitables";
     public const string IntroTables = ": cells that contain only a code (\"EN\", \"LR/nt\") or {{IUCN status|EN}}, in a column with \"IUCN\", \"Red List\" or \"status\" in its heading. Status columns named for other lists, such as EPBC or CITES, are not changed. The taxon is found by the scientific name in the same row.";
@@ -43,7 +43,7 @@ public static partial class UpdateText {
 
     public const string OptionsLegend = "Also change";
     public const string OptionPossiblyExtinct = "CR to CR(PE) or CR(PEW) in table cells and species tables, for possibly extinct taxa";
-    public const string OptionIds = "Add the taxon id and assessment id to {{IUCN status}} templates that lack them";
+    public const string OptionIds = "Add the IUCN taxon ID and assessment ID to {{IUCN status}} templates that lack them";
     public const string OptionYear = "Add year= to {{IUCN status}} templates that have no year";
     public const string OptionCitations = "Replace {{cite iucn}} citations of older assessments with citations of the latest ones";
     public const string OptionCiteQ = "Use {{cite Q}} instead of {{cite iucn}} in replaced citations when the latest assessment has a Wikidata item";
@@ -66,10 +66,10 @@ public static partial class UpdateText {
         n == 1 ? "1 item kept CR for a possibly extinct taxon." : $"{Count(n)} items kept CR for possibly extinct taxa.";
     public const string OfferPossiblyExtinctButton = "Use CR(PE) and CR(PEW)";
     public static string OfferIds(int n) =>
-        n == 1 ? "1 {{IUCN status}} template has no ids." : $"{Count(n)} {{{{IUCN status}}}} templates have no ids.";
-    public const string OfferIdsButton = "Add ids";
+        n == 1 ? "1 {{IUCN status}} template has no IUCN IDs." : $"{Count(n)} {{{{IUCN status}}}} templates have no IUCN IDs.";
+    public const string OfferIdsButton = "Add IDs";
     public static string OfferAssessmentIds(int n) =>
-        n == 1 ? "1 {{IUCN status}} template has a taxon id but no assessment id." : $"{Count(n)} {{{{IUCN status}}}} templates have a taxon id but no assessment id.";
+        n == 1 ? "1 {{IUCN status}} template has an IUCN taxon ID but no assessment ID." : $"{Count(n)} {{{{IUCN status}}}} templates have an IUCN taxon ID but no assessment ID.";
     public static string OfferYear(int n) =>
         n == 1 ? "1 {{IUCN status}} template has no year." : $"{Count(n)} {{{{IUCN status}}}} templates have no year.";
     public const string OfferYearButton = "Add years";

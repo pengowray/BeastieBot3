@@ -91,8 +91,8 @@ public static partial class SiteText {
     }
     public static string ShowWikidataOtherIdAccessible(long taxonId, int? year, string? versionNote = null) {
         var text = year is null
-            ? $"See IUCN id {taxonId} for the Wikidata item of the assessment"
-            : $"See IUCN id {taxonId} for the Wikidata item of its {year} assessment";
+            ? $"See T{taxonId} (IUCN taxon ID {taxonId}) for the Wikidata item of the assessment"
+            : $"See T{taxonId} (IUCN taxon ID {taxonId}) for the Wikidata item of its {year} assessment";
         return versionNote is null ? text : $"{text} ({char.ToLowerInvariant(versionNote[0])}{versionNote[1..]})";
     }
 }

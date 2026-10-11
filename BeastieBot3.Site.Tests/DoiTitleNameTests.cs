@@ -128,7 +128,7 @@ public sealed class SynonymTaxaTests(SiteFactory factory) : IClassFixture<SiteFa
     public async Task SynonymThatIsAnotherTaxonsName_LinksToIt() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.Minor}");
         var table = Html.Between(html, "<table class=\"names-table synonyms-table\">", "</table>");
-        Assert.Contains($"<div class=\"match-note\">Also the scientific name of <a href=\"/species/{FixtureDb.Gangetica}\">IUCN id {FixtureDb.Gangetica}</a></div>", table);
+        Assert.Contains($"<div class=\"match-note\">Also the scientific name of <a href=\"/species/{FixtureDb.Gangetica}\">IUCN taxon ID {FixtureDb.Gangetica}</a></div>", table);
         Assert.DoesNotContain("listed-as-synonym", html);
     }
 

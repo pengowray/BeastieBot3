@@ -126,7 +126,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         var text = Html.Text(html);
         Assert.Contains("DOI from GBIF's copy of the IUCN checklist.", text);
         Assert.Contains($"Check these author names, given exactly as IUCN wrote them: {FixtureDb.VerbatimAuthor}", text);
-        Assert.Contains("<summary>Citation as given by IUCN</summary>", html);
+        Assert.Contains("<span class=\"iucn-citation-label\">Citation as given by IUCN:</span>", html);
         Assert.Contains("aria-label=\"Copy {{cite iucn}} wikitext\" hidden>Copy</button>", html);
         Assert.Contains("Date downloaded from IUCN (18 August 2026)", text);
     }

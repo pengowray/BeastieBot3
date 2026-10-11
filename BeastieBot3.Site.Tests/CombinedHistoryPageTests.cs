@@ -48,17 +48,17 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
         // The same name: no Name column.
         Assert.DoesNotContain("<th scope=\"col\">Name</th>", Section(html));
         // The old id links to its page, and its wikitext link goes there with the assessment.
-        Assert.Contains($"<a href=\"/species/{FixtureDb.WoylieOld}\" aria-label=\"IUCN id {FixtureDb.WoylieOld}\">{FixtureDb.WoylieOld}</a>", html);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.WoylieOld}\" aria-label=\"IUCN taxon ID {FixtureDb.WoylieOld}\">{FixtureDb.WoylieOld}</a>", html);
         Assert.Contains($"data-options-link=\"{FixtureDb.WoylieOld}-{FixtureDb.WoylieOld2008}\" href=\"/species/{FixtureDb.WoylieOld}/wikitext?assessment={FixtureDb.WoylieOld2008}#wikitext\"", html);
         // The legend, in place of the line "Earlier assessments of a taxon with this name ...".
-        Assert.Contains("Global assessments of IUCN ids 2790 and 2785, newest first.", text);
-        Assert.Contains("IUCN id 2790 This page (Bettongia penicillata): in Red List version 2026-1; 1 global assessment, published 2015.", text);
-        Assert.Contains("IUCN id 2785 (Bettongia penicillata): not in Red List version 2026-1; 1 global assessment, published 2008. "
-            + "Same scientific name as IUCN id 2790.", text);
+        Assert.Contains("Global assessments of IUCN taxon IDs 2790 and 2785, newest first.", text);
+        Assert.Contains("IUCN taxon ID 2790 This page (Bettongia penicillata): in Red List version 2026-1; 1 global assessment, published 2015.", text);
+        Assert.Contains("IUCN taxon ID 2785 (Bettongia penicillata): not in Red List version 2026-1; 1 global assessment, published 2008. "
+            + "Same scientific name as IUCN taxon ID 2790.", text);
         Assert.DoesNotContain("Earlier assessments of a taxon with this name", text);
-        Assert.Contains("aria-label=\"See IUCN id 2785 for the wikitext of its 2008 assessment\">See IUCN id 2785</a>", html);
-        Assert.Contains("IUCN's taxonomic notes may explain why these assessments are under more than one IUCN id: see the 2015 assessment of "
-            + "IUCN id 2790 and the 2008 assessment of IUCN id 2785 on the IUCN Red List website.", text);
+        Assert.Contains("aria-label=\"See T2785 (IUCN taxon ID 2785) for the wikitext of its 2008 assessment\">See T2785</a>", html);
+        Assert.Contains("IUCN's taxonomic notes may explain why these assessments are under more than one IUCN taxon ID: see the 2015 assessment of "
+            + "IUCN taxon ID 2790 and the 2008 assessment of IUCN taxon ID 2785 on the IUCN Red List website.", text);
         // Both newest assessments have taxonomic notes: links to them, the taxon in the release first.
         var notes = Regex.Match(html, "<p class=\"note taxonomic-notes\">.*?</p>", RegexOptions.Singleline).Value;
         var current = notes.IndexOf($"iucnredlist.org/species/{FixtureDb.Woylie}/{FixtureDb.WoylieLatest}\"", StringComparison.Ordinal);
@@ -78,7 +78,7 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
         Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}/wikitext?assessment={FixtureDb.WoylieOld2008}#wikitext\"", html);
         Assert.Contains($"href=\"/species/{FixtureDb.Woylie}/wikitext?assessment={FixtureDb.WoylieLatest}#wikitext\"", html);
         // The status section of the taxon page still names the taxon in the release.
-        Assert.Contains($"lists <span class=\"sci-name\"><i>Bettongia penicillata</i></span> under <a href=\"/species/{FixtureDb.Woylie}\">IUCN id {FixtureDb.Woylie}</a>.</p>",
+        Assert.Contains($"lists <span class=\"sci-name\"><i>Bettongia penicillata</i></span> under <a href=\"/species/{FixtureDb.Woylie}\">IUCN taxon ID {FixtureDb.Woylie}</a>.</p>",
             await Page(FixtureDb.WoylieOld));
     }
 
@@ -107,17 +107,17 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
         var notes = Regex.Match(html, "<p class=\"note taxonomic-notes\">.*?</p>", RegexOptions.Singleline).Value;
         Assert.Contains($"iucnredlist.org/species/{FixtureDb.Palmerae}/{FixtureDb.PalmeraeLatest}\"", notes);
         Assert.DoesNotContain($"iucnredlist.org/species/{FixtureDb.Minuta}/", notes);
-        Assert.Contains("IUCN id 133018 (Acropora minuta): not in Red List version 2026-1; 1 global assessment, published 2008. "
+        Assert.Contains("IUCN taxon ID 133018 (Acropora minuta): not in Red List version 2026-1; 1 global assessment, published 2008. "
             + "IUCN lists Acropora minuta as a synonym of Acropora palmerae.", Html.Text(html));
-        Assert.Contains("see the 2024 assessment of IUCN id 133531 on the IUCN Red List website.", Html.Text(html));
+        Assert.Contains("see the 2024 assessment of IUCN taxon ID 133531 on the IUCN Red List website.", Html.Text(html));
 
         var old = await Page(FixtureDb.Minuta);
         // The same synonym sentence, from the other side.
-        Assert.Contains("IUCN id 133531 (Acropora palmerae): in Red List version 2026-1; 2 global assessments, published 2008 to 2024. "
+        Assert.Contains("IUCN taxon ID 133531 (Acropora palmerae): in Red List version 2026-1; 2 global assessments, published 2008 to 2024. "
             + "IUCN lists Acropora minuta as a synonym of Acropora palmerae.", Html.Text(old));
-        Assert.Contains("IUCN lists Acropora minuta as a synonym of Acropora palmerae (IUCN id 133531).", Html.Text(old));
+        Assert.Contains("IUCN lists Acropora minuta as a synonym of Acropora palmerae (IUCN taxon ID 133531).", Html.Text(old));
         Assert.Contains($"<p class=\"current-taxon\">IUCN lists <span class=\"sci-name\"><i>Acropora minuta</i></span> as a synonym of <span class=\"sci-name\"><i>Acropora palmerae</i></span>", old);
-        Assert.Contains($"<a href=\"/species/{FixtureDb.Palmerae}\">IUCN id {FixtureDb.Palmerae}</a>", old);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.Palmerae}\">IUCN taxon ID {FixtureDb.Palmerae}</a>", old);
         Assert.DoesNotContain("IUCN Red List version 2026-1 lists", Html.Text(old));
     }
 
@@ -140,15 +140,15 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
         Assert.Contains($"IUCN lists <span class=\"sci-name\"><i>Platanista gangetica</i></span> as a synonym of <span class=\"sci-name\"><i>Platanista minor</i></span>", html);
         // Each taxon in the release has a latest assessment, tagged in the table.
         Assert.Equal(2, Regex.Matches(Section(html), "<span class=\"tag\">Latest</span>").Count);
-        Assert.Contains("Global assessments of IUCN ids 41756, 41757 and 41758, newest first.", Html.Text(html));
+        Assert.Contains("Global assessments of IUCN taxon IDs 41756, 41757 and 41758, newest first.", Html.Text(html));
         // The page's own name is the synonym.
-        Assert.Contains("IUCN id 41757 (Platanista minor): in Red List version 2026-1; 1 global assessment, published 2022. "
+        Assert.Contains("IUCN taxon ID 41757 (Platanista minor): in Red List version 2026-1; 1 global assessment, published 2022. "
             + "IUCN lists Platanista gangetica as a synonym of Platanista minor.", Html.Text(html));
         // Its Asia assessment stays in its own Regional assessments table.
         Assert.Contains($"iucnredlist.org/species/{FixtureDb.GangeticaOld}/{FixtureDb.GangeticaOldAsia}\"", html);
         // Three assessments with taxonomic notes, in the order of the legend.
-        Assert.Contains("see the 2022 assessment of IUCN id 41756, the 2022 assessment of IUCN id 41757 and the 2012 assessment of "
-            + "IUCN id 41758 on the IUCN Red List website.", Html.Text(html));
+        Assert.Contains("see the 2022 assessment of IUCN taxon ID 41756, the 2022 assessment of IUCN taxon ID 41757 and the 2012 assessment of "
+            + "IUCN taxon ID 41758 on the IUCN Red List website.", Html.Text(html));
     }
 
     // The page of a taxon in the release names the regional assessments of a linked old id.
@@ -157,7 +157,7 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
         var html = await Page(FixtureDb.Gangetica);
         Assert.Equal(new[] { (FixtureDb.Gangetica, FixtureDb.GangeticaLatest), (FixtureDb.GangeticaOld, FixtureDb.GangeticaOld2012),
             (FixtureDb.GangeticaOld, FixtureDb.GangeticaOld1996) }, Rows(html));
-        Assert.Contains($"<p class=\"note\">Regional assessments of <a href=\"/species/{FixtureDb.GangeticaOld}#regional\">IUCN id {FixtureDb.GangeticaOld}</a> are on its page.</p>", html);
+        Assert.Contains($"<p class=\"note\">Regional assessments of <a href=\"/species/{FixtureDb.GangeticaOld}#regional\">IUCN taxon ID {FixtureDb.GangeticaOld}</a> are on its page.</p>", html);
         Assert.DoesNotContain($"iucnredlist.org/species/{FixtureDb.GangeticaOld}/{FixtureDb.GangeticaOldAsia}\"", html);
         Assert.DoesNotContain("id=\"regional\"", html);
     }
@@ -169,7 +169,7 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
 
         Assert.Equal(new[] { (FixtureDb.Turricaspia, FixtureDb.Turricaspia2011) }, Rows(html));
         Assert.Contains("No global assessment. This taxon has been assessed in ", Html.Text(html));
-        Assert.Contains("IUCN id 212620635 This page (Clessiniola variabilis): in Red List version 2026-1; no global assessments.", Html.Text(html));
+        Assert.Contains("IUCN taxon ID 212620635 This page (Clessiniola variabilis): in Red List version 2026-1; no global assessments.", Html.Text(html));
         // The Regional assessments table is still the taxon's own.
         Assert.Contains($"iucnredlist.org/species/{FixtureDb.Clessiniola}/{FixtureDb.ClessiniolaEurope}\"", html);
     }
@@ -183,8 +183,8 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
         Assert.Contains(">Assessment history</h2>", current);
         Assert.DoesNotContain("combined-table", current);
         Assert.Contains($"<p class=\"note earlier-id\">Earlier assessments of <span class=\"sci-name\"><i>Pupilla bigranata</i></span>", current);
-        Assert.Contains($"<a href=\"/species/{FixtureDb.PupillaBigranata}\">IUCN id {FixtureDb.PupillaBigranata}</a>", current);
-        Assert.Contains("Earlier assessments of Pupilla bigranata are under IUCN id 156831. IUCN lists Pupilla bigranata as a synonym of Pupilla muscorum.",
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PupillaBigranata}\">IUCN taxon ID {FixtureDb.PupillaBigranata}</a>", current);
+        Assert.Contains("Earlier assessments of Pupilla bigranata are under IUCN taxon ID 156831. IUCN lists Pupilla bigranata as a synonym of Pupilla muscorum.",
             Html.Text(current));
 
         var old = await Page(FixtureDb.PupillaBigranata);

@@ -109,7 +109,7 @@ public static partial class SiteText {
     public static string CurrentTaxonBefore(string? version) =>
         version is null ? "The IUCN Red List lists " : $"IUCN Red List version {version} lists ";
     public const string CurrentTaxonMiddle = " under ";
-    public static string IucnIdLink(long id) => $"IUCN id {id}";
+    public static string IucnIdLink(long id) => $"IUCN taxon ID {id}";
     public const string CurrentTaxonAfter = ".";
 
     /// Under the assessment history of a taxon in the release, for each taxon with the same name that
@@ -385,14 +385,14 @@ public static partial class SiteText {
     /// "Global assessments of IUCN ids 2790 and 2785, newest first."; with more than 3 ids, their number.
     public static string CombinedIntro(IReadOnlyList<long> ids) {
         if (ids.Count > 3) {
-            return $"Global assessments of {ids.Count} IUCN ids, newest first.";
+            return $"Global assessments of {ids.Count} IUCN taxon IDs, newest first.";
         }
         var list = ids.Count == 1 ? $"{ids[0]}"
             : string.Join(", ", ids.Take(ids.Count - 1)) + $" and {ids[^1]}";
-        return $"Global assessments of IUCN ids {list}, newest first.";
+        return $"Global assessments of IUCN taxon IDs {list}, newest first.";
     }
 
-    public const string ColIucnId = "IUCN id";
+    public const string ColIucnId = "IUCN taxon ID";
     /// The tag beside the page's own id, in the legend and in the IUCN id column.
     public const string ThisPageTag = "This page";
 
@@ -415,24 +415,24 @@ public static partial class SiteText {
     }
 
     /// After the legend line of an id with the same scientific name as the page's taxon.
-    public static string LegendSameName(long pageTaxonId) => $"Same scientific name as IUCN id {pageTaxonId}.";
+    public static string LegendSameName(long pageTaxonId) => $"Same scientific name as IUCN taxon ID {pageTaxonId}.";
 
     /// In the Wikitext column, for a row of another IUCN id: a link to that id's page, which shows
     /// the assessment's wikitext. The accessible name starts with the visible text.
-    public static string ShowWikitextOtherId(long taxonId) => $"See IUCN id {taxonId}";
+    public static string ShowWikitextOtherId(long taxonId) => $"See T{taxonId}";
     public static string ShowWikitextOtherIdAccessible(long taxonId, int? year, string? versionNote = null) {
         var text = year is null
-            ? $"See IUCN id {taxonId} for the wikitext of the assessment"
-            : $"See IUCN id {taxonId} for the wikitext of its {year} assessment";
+            ? $"See T{taxonId} (IUCN taxon ID {taxonId}) for the wikitext of the assessment"
+            : $"See T{taxonId} (IUCN taxon ID {taxonId}) for the wikitext of its {year} assessment";
         return versionNote is null ? text : $"{text} ({char.ToLowerInvariant(versionNote[0])}{versionNote[1..]})";
     }
 
     /// Under the combined table, when the newest global assessment of one or more ids has taxonomic
     /// notes: TaxonomicNotesBefore + link(TaxonomicNotesLink) [+ ListSeparator + link ...] +
     /// TaxonomicNotesAfter. The links go to the assessments on the IUCN Red List website.
-    public const string TaxonomicNotesBefore = "IUCN's taxonomic notes may explain why these assessments are under more than one IUCN id: see the ";
+    public const string TaxonomicNotesBefore = "IUCN's taxonomic notes may explain why these assessments are under more than one IUCN taxon ID: see the ";
     public static string TaxonomicNotesLink(int? year, long taxonId) =>
-        year is null ? $"newest assessment of IUCN id {taxonId}" : $"{year} assessment of IUCN id {taxonId}";
+        year is null ? $"newest assessment of IUCN taxon ID {taxonId}" : $"{year} assessment of IUCN taxon ID {taxonId}";
     /// Before link number index (from 0) of count: "", ", the " or " and the ".
     public static string ListSeparator(int index, int count) => index == 0 ? string.Empty : index == count - 1 ? " and the " : ", the ";
     public const string TaxonomicNotesAfter = " on the IUCN Red List website.";

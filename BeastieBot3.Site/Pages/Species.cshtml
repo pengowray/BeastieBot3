@@ -194,10 +194,7 @@
         @if (!string.IsNullOrWhiteSpace(Model.StatusParts?.IucnCitationText) || Model.StatusCredits is not null) {
             <div class="citation-notes">
                 @if (!string.IsNullOrWhiteSpace(Model.StatusParts?.IucnCitationText)) {
-                    <details class="iucn-citation" id="iucn-citation">
-                        <summary>@SiteText.IucnCitationLabel</summary>
-                        <p>@Model.StatusParts.IucnCitationText</p>
-                    </details>
+                    <p class="iucn-citation" id="iucn-citation"><span class="iucn-citation-label">@SiteText.IucnCitationLabel:</span> @Model.StatusParts.IucnCitationText</p>
                 }
                 @if (Model.StatusCredits is { } credits) {
                     <partial name="_AssessmentCredits" model="credits" />

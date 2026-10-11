@@ -1622,7 +1622,7 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   own id is marked "This page"), a Name column only when the ids have different names, category,
   criteria, date assessed, wikitext, and the IUCN Red List link. A row of another id links to that
   id's page with `?assessment=` and the visitor's citation options (`OtherIdOptionsUrl`, with that
-  page's default ref name for the assessment), labelled "See IUCN id N".
+  page's default ref name for the assessment), labelled "See TN" (T and the IUCN taxon ID).
   - Each id's rows have a background and a mark on their left edge (`--id-tint-N` and
     `--id-mark-N` in `site.css`, six of them), and the legend has a swatch of the same colours. The
     colours only help: the IUCN id column names each row's id. A table with more than six ids has

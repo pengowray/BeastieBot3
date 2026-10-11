@@ -34,8 +34,8 @@ public static partial class UpdateText {
             var other = changes.Count > 0 ? " other" : "";
             var unchanged = changes.Count > 0 ? "" : "; categories unchanged";
             parts.Add(otherItems == 1
-                ? $"1{other} IUCN status updated (ids, year, reference or trend{unchanged})"
-                : $"{Count(otherItems)}{other} IUCN statuses updated (ids, years, references or trends{unchanged})");
+                ? $"1{other} IUCN status updated (IDs, year, reference or trend{unchanged})"
+                : $"{Count(otherItems)}{other} IUCN statuses updated (IDs, years, references or trends{unchanged})");
         }
         if (added > 0) {
             parts.Add(added == 1 ? "1 IUCN status added" : $"{Count(added)} IUCN statuses added");

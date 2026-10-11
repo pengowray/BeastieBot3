@@ -133,7 +133,7 @@ public static partial class SiteText {
     /// formal name's page, the provisional name.
     public const string PossibleSynonymFormalName = "May be the formal name of this species, described after IUCN assessed it.";
     public const string PossibleSynonymProvisionalName = "May be the provisional name IUCN used for this species before it was formally described.";
-    public static string PossibleSynonymIucnSource(long taxonId) => $"IUCN Red List (IUCN id {taxonId})";
+    public static string PossibleSynonymIucnSource(long taxonId) => $"IUCN Red List (IUCN taxon ID {taxonId})";
     public const string ColName = "Name";
     public const string ColLanguage = "Language";
     public const string ColSource = "Source";

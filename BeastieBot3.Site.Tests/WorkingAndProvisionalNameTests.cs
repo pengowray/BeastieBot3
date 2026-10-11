@@ -22,7 +22,7 @@ public sealed class WorkingAndProvisionalNameTests(SiteFactory factory) : IClass
 
         Assert.Contains("<h2 id=\"regional-heading\">Assessments with no geographic scope</h2>", regional);
         Assert.Contains("No scope given", regional);
-        Assert.Contains($"<a href=\"/species/{FixtureDb.BrydesNew}\">IUCN id {FixtureDb.BrydesNew}</a>", regional);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.BrydesNew}\">IUCN taxon ID {FixtureDb.BrydesNew}</a>", regional);
         Assert.Contains("<i>Balaenoptera edeni_new</i>", regional);
         Assert.Contains($"/species/{FixtureDb.BrydesNew}/{FixtureDb.BrydesNewUae}", regional);
         // The taxon's own global assessment stays the status, and the record is not an earlier id.
@@ -65,7 +65,7 @@ public sealed class WorkingAndProvisionalNameTests(SiteFactory factory) : IClass
         note = note[..note.IndexOf("</p>", StringComparison.Ordinal)];
 
         Assert.Contains($"<a href=\"/species/{FixtureDb.Brydes}\">", note);
-        Assert.Contains($"(IUCN id {FixtureDb.Brydes})", note);
+        Assert.Contains($"(IUCN taxon ID {FixtureDb.Brydes})", note);
         Assert.Contains("IUCN made this second record for an assessment published with no geographic scope.", Html.Text(note));
         // No regional table row of its own record under "Published as".
         Assert.DoesNotContain("published-under", html);
@@ -87,12 +87,12 @@ public sealed class WorkingAndProvisionalNameTests(SiteFactory factory) : IClass
         var names = Section(await Page(FixtureDb.NotogomphusProvisional), "names");
         Assert.Contains(">Possible synonyms</h3>", names);
         Assert.Contains($"<a href=\"/species/{FixtureDb.NotogomphusGorilla}\" class=\"sci-name\"><i>Notogomphus gorilla</i></a>", names);
-        Assert.Contains($"IUCN Red List (IUCN id {FixtureDb.NotogomphusGorilla})", names);
+        Assert.Contains($"IUCN Red List (IUCN taxon ID {FixtureDb.NotogomphusGorilla})", names);
 
         // And the other way.
         var described = Section(await Page(FixtureDb.NotogomphusGorilla), "names");
         Assert.Contains($"<a href=\"/species/{FixtureDb.NotogomphusProvisional}\" class=\"sci-name\">", described);
-        Assert.Contains($"IUCN Red List (IUCN id {FixtureDb.NotogomphusProvisional})", described);
+        Assert.Contains($"IUCN Red List (IUCN taxon ID {FixtureDb.NotogomphusProvisional})", described);
     }
 
     [Fact]

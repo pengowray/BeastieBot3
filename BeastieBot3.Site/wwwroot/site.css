@@ -826,14 +826,13 @@ textarea {
     color: var(--muted);
 }
 
-.iucn-citation summary {
-    cursor: pointer;
+.iucn-citation {
     font-size: 0.9rem;
+    margin: 0.4rem 0 0;
 }
 
-.iucn-citation p {
-    font-size: 0.9rem;
-    margin: 0.3rem 0 0;
+.iucn-citation-label {
+    font-weight: 600;
 }
 
 .iucn-credits {

@@ -134,7 +134,7 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
             Output(html));
         var text = Html.Text(html);
         Assert.Contains("2 items found: 2 changed, 0 already up to date, 0 left as is.", text);
-        Assert.Contains("Old taxon id 2785 replaced with the current taxon id.", text);
+        Assert.Contains("Old IUCN taxon ID 2785 replaced with the current taxon ID.", text);
         Assert.Contains("href=\"/species/22823\"", html);
         Assert.Contains("href=\"/species/2790\"", html);
         // The pasted text is shown again in the form.

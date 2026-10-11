@@ -899,7 +899,7 @@ public sealed class StatusUpdaterTests {
     [Fact]
     public void EditSummaryNamesEachCategoryChange() {
         var result = Run("* {{IUCN status|VU|4828/111|1|year=2008}}\n* ''Panthera tigris'' {{IUCN status|EN}}\n* {{IUCN status|VU|1087/1|1}}\n");
-        Assert.Equal("IUCN Red List 2026-1: Amblysomus hottentotus VU\u2192EN; 1 other IUCN status updated (ids, year, reference or trend) (assisted by species.pengowray.com)",
+        Assert.Equal("IUCN Red List 2026-1: Amblysomus hottentotus VU\u2192EN; 1 other IUCN status updated (IDs, year, reference or trend) (assisted by species.pengowray.com)",
             EditSummary.For(result, "2026-1"));
     }
 

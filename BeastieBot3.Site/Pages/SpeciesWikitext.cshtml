@@ -87,10 +87,7 @@
                             <p class="note">@SiteText.AuthorsUnsplit @string.Join("; ", Model.UnsplitAuthors)</p>
                         }
                         @if (!string.IsNullOrWhiteSpace(Model.Parts?.IucnCitationText)) {
-                            <details class="iucn-citation" id="iucn-citation">
-                                <summary>@SiteText.IucnCitationLabel</summary>
-                                <p>@Model.Parts.IucnCitationText</p>
-                            </details>
+                            <p class="iucn-citation" id="iucn-citation"><span class="iucn-citation-label">@SiteText.IucnCitationLabel:</span> @Model.Parts.IucnCitationText</p>
                         }
                         @if (Model.Credits is { } credits) {
                             <partial name="_AssessmentCredits" model="credits" />
