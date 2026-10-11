@@ -61,11 +61,18 @@
     }
     @if (Model.Classification.Count > 0) {
         var colCount = Model.Classification.Count(g => g.IsCol);
-        @* The groups link to their pages. Catalogue of Life groups are hidden until the box is ticked
-           (site.css, :has), so the page needs no script for it. *@
-        <div class="classification has-col-toggle">
+        List<(string Value, string Label)> lineChoices = colCount > 0
+            ? [("iucn-col", GroupText.LineIucnAndCol), ("iucn", GroupText.LineIucnOnly)]
+            : [("iucn", GroupText.LineIucn)];
+        lineChoices.AddRange(Model.OtherShortLines.Select(l => (l.Source.Key!, l.Source.Title)));
+        @* The groups link to their pages. The dropdown shows the line without the Catalogue of Life
+           groups, or another source's line instead (_ClassificationChoice). *@
+        <div class="classification">
             <h2 id="short-classification-heading" class="visually-hidden">@SiteText.HeadingShortClassification</h2>
-            <ol>
+            @if (lineChoices.Count > 1) {
+                <partial name="_ClassificationChoice" model="lineChoices" />
+            }
+            <ol class="line-main">
                 @foreach (var step in Model.Classification) {
                     var colNames = step.CommonNameEn is null ? Model.ClassificationColNames.GetValueOrDefault(step.NodeId) : null;
                     <li class="@(step.IsCol ? "col-group" : null)">
@@ -86,8 +93,22 @@
                     </li>
                 }
             </ol>
-            @if (colCount > 0) {
-                <label class="col-toggle"><input type="checkbox" class="show-col" autocomplete="off"> @GroupText.ShowColRanks(colCount)</label>
+            @foreach (var (source, steps) in Model.OtherShortLines) {
+                <ol class="line-other" data-source="@source.Key">
+                    @foreach (var line in steps) {
+                        var step = line.Step;
+                        <li>
+                            @if (step.Rank is { } rank) {
+                                <span class="rank">@BeastieBot3.Site.Lists.GroupList.Capitalize(rank)</span>
+                            }
+                            @{ var isGenus = line.IsMain && step.Rank == "genus"; }
+                            @if (step.Url is { } url) {<a href="@url">@if (isGenus) {<i>@step.Name</i>} else {@step.Name}</a>} else if (isGenus) {<i>@step.Name</i>} else {@step.Name}
+                            @if (line.Differs) {
+                                <abbr class="differs-marker" title="@SiteText.RanksDiffersTitle">≠</abbr>
+                            }
+                        </li>
+                    }
+                </ol>
             }
         </div>
     } else if (ranks.Any(r => !string.IsNullOrWhiteSpace(r))) {

@@ -6,8 +6,10 @@ namespace BeastieBot3.Site.Display;
 
 public static partial class GroupText {
     // Classification on a taxon page
-    public static string ShowColRanks(int count) =>
-        count == 1 ? "Show 1 rank from the Catalogue of Life" : $"Show {count} ranks from the Catalogue of Life";
+    public const string LineChoiceLabel = "Classification to show";
+    public const string LineIucnAndCol = "IUCN and Catalogue of Life";
+    public const string LineIucnOnly = "IUCN only";
+    public const string LineIucn = "IUCN";
     public const string ColMarker = "CoL";
     public const string ColMarkerTitle = "From the Catalogue of Life. IUCN uses only kingdom, phylum, class, order, family and genus.";
     public const string RuleMarker = "IUCN: NOT ASSIGNED";

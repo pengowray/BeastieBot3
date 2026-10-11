@@ -51,6 +51,9 @@ public sealed class SpeciesModel : TaxonPageModel {
     public IReadOnlyList<ComparisonRow> ComparativeClassification { get; private set; } = [];
     public IReadOnlyList<LadderColumn> RankColumns { get; private set; } = [];
 
+    /// The classification line under the name as each other source gives it, for the line's dropdown.
+    public IReadOnlyList<(LadderColumn Source, IReadOnlyList<ShortLineStep> Steps)> OtherShortLines { get; private set; } = [];
+
     private IReadOnlyList<ComparisonRow> BuildComparativeClassification(TaxonRow taxon) {
         var leafRank = taxon.Kind switch { TaxonKinds.Species => "species", TaxonKinds.Variety => "variety", TaxonKinds.Subspecies => "subspecies", _ => null };
         if (leafRank is null) {
@@ -67,28 +70,30 @@ public sealed class SpeciesModel : TaxonPageModel {
         var columns = new List<LadderColumn> { new(SiteText.RanksIucn, null, iucn, Backbone: true) };
         if (taxon.ColId is { } colId && _queries.GetLadder("col", colId) is { Count: > 0 } col) {
             columns.Add(new LadderColumn(SiteText.RanksCol, SiteFormat.CatalogueOfLifeUrl(colId),
-                [.. col.Select(s => new LadderStep(s.Rank == "unranked" ? null : s.Rank, s.Name, SiteFormat.CatalogueOfLifeUrl(s.Id)))], Backbone: true));
+                [.. col.Select(s => new LadderStep(s.Rank == "unranked" ? null : s.Rank, s.Name, SiteFormat.CatalogueOfLifeUrl(s.Id)))], Backbone: true, Key: "col"));
         }
         if (taxon.WikidataQid is { } qid && _queries.GetLadder("wikidata", qid) is { Count: > 0 } wikidata) {
             columns.Add(new LadderColumn(SiteText.RanksWikidata, SiteFormat.WikidataUrl(qid),
-                [.. wikidata.Select(s => new LadderStep(s.Rank, s.Name, SiteFormat.WikidataUrl(s.Id)))]));
+                [.. wikidata.Select(s => new LadderStep(s.Rank, s.Name, SiteFormat.WikidataUrl(s.Id)))], Key: "wikidata"));
         }
         if (taxon.EnwikiTitle is { } article && _queries.GetLadder("wikipedia", "article:" + article) is { Count: > 0 } wikipedia) {
             columns.Add(new LadderColumn(SiteText.RanksWikipedia, SiteFormat.WikipediaUrl(article),
                 [.. wikipedia.Select(s => new LadderStep(s.Rank, s.Name,
                     s.Id.StartsWith("article:", StringComparison.Ordinal) ? null : SiteFormat.WikipediaUrl("Template:Taxonomy/" + s.Id)))],
-                Help: SiteText.RanksWikipediaHelp));
+                Help: SiteText.RanksWikipediaHelp, Key: "wikipedia"));
         }
         // Wikispecies: the page of IUCN's name, through any redirect (site build-db keys it by that name).
         if (_queries.GetLadder("wikispecies", "page:" + taxon.ScientificName) is { Count: > 0 } wikispecies) {
             WikispeciesTitle = wikispecies[^1].Name;
             columns.Add(new LadderColumn(SiteText.RanksWikispecies, SiteFormat.WikispeciesUrl(wikispecies[^1].Name),
-                [.. wikispecies.Select(s => new LadderStep(s.Rank, s.Name, SiteFormat.WikispeciesUrl(s.Name)))], Help: SiteText.RanksWikispeciesHelp));
+                [.. wikispecies.Select(s => new LadderStep(s.Rank, s.Name, SiteFormat.WikispeciesUrl(s.Name)))], Help: SiteText.RanksWikispeciesHelp, Key: "wikispecies"));
         }
         if (columns.Count < 2) {
             return [];
         }
         RankColumns = columns;
+        OtherShortLines = [.. columns.Where(c => c.Key is not null)
+            .Select(c => (c, ClassificationComparison.ShortLine(c.Steps, iucn))).Where(l => l.Item2.Count > 0)];
         return ClassificationComparison.Build(columns);
     }
 

@@ -33,9 +33,12 @@
         <p class="taxon-common-name">@species.CommonNameEn</p>
     }
     @if (Model.Path.Count > 0) {
-        <div class="classification has-col-toggle">
+        <div class="classification">
             <h2 id="short-classification-heading" class="visually-hidden">@SiteText.HeadingShortClassification</h2>
-            <ol>
+            @if (colCount > 0) {
+                <partial name="_ClassificationChoice" model="@(new List<(string Value, string Label)> { ("iucn-col", GroupText.LineIucnAndCol), ("iucn", GroupText.LineIucnOnly) })" />
+            }
+            <ol class="line-main">
                 @foreach (var step in Model.Path) {
                     <li class="@(step.IsCol ? "col-group" : null)">
                         @if (step.ShowRank && step.Rank != "unranked") {
@@ -51,9 +54,6 @@
                     </li>
                 }
             </ol>
-            @if (colCount > 0) {
-                <label class="col-toggle"><input type="checkbox" class="show-col" autocomplete="off"> @GroupText.ShowColRanks(colCount)</label>
-            }
         </div>
     }
 </header>

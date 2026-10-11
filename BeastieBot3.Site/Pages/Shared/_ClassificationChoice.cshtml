@@ -1,0 +1,9 @@
+@using BeastieBot3.Site.Display
+@model IReadOnlyList<(string Value, string Label)>
+@* The source of the classification line under a taxon's name. The first option is chosen at first;
+   site.css (:has) shows the line of the chosen option, so the page needs no script for it. *@
+<select class="line-choice" aria-label="@GroupText.LineChoiceLabel" title="@GroupText.LineChoiceLabel" autocomplete="off">
+    @foreach (var (value, label) in Model) {
+        <option value="@value">@label</option>
+    }
+</select>

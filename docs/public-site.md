@@ -817,8 +817,12 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   (`GroupModel.ArrivalText`), so it cannot put other text on the page; `q` is part of the group
   pages' output cache key.
 - On a taxon page, each rank links to its group page, with the group's English name, or else up to
-  three of CoL's names (muted, with a tooltip naming the source and saying they are unchecked). CoL groups are hidden until the
-  reader ticks "Show N ranks from the Catalogue of Life"; the toggle is CSS only (`:has`). A taxon not in the
+  three of CoL's names (muted, with a tooltip naming the source and saying they are unchecked). CoL groups are shown (marked "CoL").
+  A small dropdown at the right of the line (`_ClassificationChoice`) picks "IUCN and Catalogue of Life"
+  (the default), "IUCN only", or another source's line: Catalogue of Life, Wikidata, English Wikipedia,
+  Wikispecies, whichever the comparative classification has (`ClassificationComparison.ShortLine`: every
+  main rank from the kingdom down, and below the first of order, family or genus every other group with a
+  rank, "clade" not counted; a main rank whose name is not IUCN's is marked). It is CSS only (`:has`). A taxon not in the
   release has no place in the tree and shows IUCN's ranks as text, as before.
 
 ### Species from the Catalogue of Life and Wikidata

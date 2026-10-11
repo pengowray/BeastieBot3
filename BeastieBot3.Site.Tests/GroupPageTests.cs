@@ -9,13 +9,14 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
     private readonly HttpClient _client = factory.Client();
 
     [Fact]
-    public async Task TaxonPageLinksItsRanksAndHidesTheCatalogueOfLifeRank() {
+    public async Task TaxonPageLinksItsRanksAndOffersTheLineWithoutTheCatalogueOfLifeRank() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
 
         Assert.Contains("href=\"/taxa/family/ursidae\"", html);
         Assert.Contains("href=\"/taxa/order/carnivora\"", html);
         Assert.Contains("<li class=\"col-group\">", html);
-        Assert.Contains("Show 1 rank from the Catalogue of Life", html);
+        Assert.Contains("<option value=\"iucn-col\">IUCN and Catalogue of Life</option>", html);
+        Assert.Contains("<option value=\"iucn\">IUCN only</option>", html);
         Assert.Contains("<span class=\"group-common\">bears</span>", html);
     }
 

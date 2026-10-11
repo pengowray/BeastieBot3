@@ -176,7 +176,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     public async Task ClassificationIsNotANavigationLandmark() {
         var html = await Page();
         Assert.DoesNotContain("<nav class=\"classification\"", html);
-        Assert.Contains("<div class=\"classification has-col-toggle\">", html);
+        Assert.Contains("<div class=\"classification\">", html);
         Assert.Contains("<h2 id=\"short-classification-heading\" class=\"visually-hidden\">Short classification</h2>", html);
     }
 

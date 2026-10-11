@@ -1215,25 +1215,49 @@ abbr[title] {
 
 /* ---------------------------------------------------------------- groups (higher taxa) */
 
-/* Classification on a taxon page: Catalogue of Life groups are hidden until the box is ticked. */
-.classification.has-col-toggle .col-group {
+/* Classification on a taxon page: the dropdown (_ClassificationChoice) picks the line. IUCN's line
+   with the Catalogue of Life groups is shown at first; "iucn" hides those groups, and another
+   source's value shows that source's line instead. */
+.classification:has(.line-choice option[value="iucn"]:checked) .col-group,
+.classification .line-other,
+.classification:has(.line-choice option:checked:not([value="iucn"]):not([value="iucn-col"])) .line-main {
     display: none;
 }
 
-.classification.has-col-toggle:has(.show-col:checked) .col-group {
-    display: list-item;
+.classification:has(.line-choice option[value="col"]:checked) .line-other[data-source="col"],
+.classification:has(.line-choice option[value="wikidata"]:checked) .line-other[data-source="wikidata"],
+.classification:has(.line-choice option[value="wikipedia"]:checked) .line-other[data-source="wikipedia"],
+.classification:has(.line-choice option[value="wikispecies"]:checked) .line-other[data-source="wikispecies"] {
+    display: flex;
+}
+
+.line-choice {
+    float: right;
+    margin: 0.4rem 0 0 0.75rem;
+    padding: 0.1rem 0.25rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+@media (max-width: 40rem) {
+    .line-choice {
+        float: none;
+        display: block;
+        margin: 0.4rem 0 0;
+    }
+}
+
+.line-choice option {
+    color: var(--fg);
+    background: var(--bg);
 }
 
 .classification .group-common {
     color: var(--muted);
     font-size: 0.85rem;
-}
-
-.col-toggle {
-    display: inline-block;
-    margin-top: 0.3rem;
-    font-size: 0.85rem;
-    color: var(--muted);
 }
 
 /* How many headings a rank adds, or lines a category adds (_OptionCount). An option that adds none is dimmed. */
@@ -1870,7 +1894,8 @@ th.num {
 .comparative-classification:has(.show-above-ranks:checked) .above-rank {
     display: table-row;
 }
-.ranks-table .differs-marker {
+.ranks-table .differs-marker,
+.classification .differs-marker {
     font-weight: bold;
     text-decoration: none;
 }

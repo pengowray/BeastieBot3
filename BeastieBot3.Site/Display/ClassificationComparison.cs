@@ -8,7 +8,11 @@ public sealed record LadderStep(string? Rank, string Name, string? Url = null);
 /// Backbone: IUCN's classification or the Catalogue of Life's (or this site's, built from both),
 /// whose groups are shown at first; a group only the other sources have is a hidden row.
 /// Help: what the column shows, as hover text on its heading.
-public sealed record LadderColumn(string Title, string? Url, IReadOnlyList<LadderStep> Steps, bool Backbone = false, string? Help = null);
+/// Key: the source's value in the short classification's dropdown ("col", "wikidata", ...).
+public sealed record LadderColumn(string Title, string? Url, IReadOnlyList<LadderStep> Steps, bool Backbone = false, string? Help = null, string? Key = null);
+
+/// A group in a source's short classification line. Differs: a main rank whose name is not IUCN's.
+public sealed record ShortLineStep(LadderStep Step, bool IsMain, bool Differs);
 
 /// A row of the comparison: one group, in every column that has it. RankLabel: the main rank
 /// (kingdom to species), else the rank a backbone column gives, else the rank most of its cells
@@ -70,6 +74,32 @@ public static class ClassificationComparison {
                 s is not null && !isMain && Rank(s.Rank) != label))]));
         }
         return rows;
+    }
+
+    /// The groups of one source's classification for the line under a taxon's name: from the kingdom
+    /// down, every main rank, and below the first of order, family or genus that the source has
+    /// (the comparison table's cut) every other group with a rank ("clade" is no rank). The last
+    /// step, the taxon itself, is left out. Iucn: IUCN's steps, to mark main ranks with other names.
+    public static IReadOnlyList<ShortLineStep> ShortLine(IReadOnlyList<LadderStep> steps, IReadOnlyList<LadderStep> iucn) {
+        var groups = steps.Take(steps.Count - 1).ToList();
+        var start = groups.FindIndex(s => MainRankOf(s.Rank) == "kingdom");
+        if (start > 0) {
+            groups = groups[start..];
+        }
+        var cut = CutRanks.Select(r => groups.FindIndex(s => MainRankOf(s.Rank) == r)).FirstOrDefault(i => i >= 0, groups.Count);
+        var iucnNames = iucn.Where(s => MainRankOf(s.Rank) is not null).GroupBy(s => MainRankOf(s.Rank)!)
+            .ToDictionary(g => g.Key, g => Clean(g.First().Name), StringComparer.Ordinal);
+        var line = new List<ShortLineStep>();
+        var seenMain = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < groups.Count; i++) {
+            var step = groups[i];
+            if (MainRankOf(step.Rank) is { } main && seenMain.Add(main)) {
+                line.Add(new ShortLineStep(step, true, iucnNames.TryGetValue(main, out var name) && name != Clean(step.Name)));
+            } else if (i > cut && Rank(step.Rank) is var rank && rank != NoRank && rank != "clade") {
+                line.Add(new ShortLineStep(step, false, false));
+            }
+        }
+        return line;
     }
 
     private static string Rank(string? rank) => string.IsNullOrWhiteSpace(rank) ? NoRank : rank.Trim().ToLowerInvariant();

@@ -70,4 +70,15 @@ public sealed class ClassificationComparisonTests {
     [InlineData("Felis silvestris ssp. lybica", "felis silvestris ssp. lybica")]
     public void NamesCompareWithoutAuthorityOrCase(string name, string clean) => Assert.Equal(clean, ClassificationComparison.Clean(name));
 
+    [Fact]
+    public void ShortLineKeepsMainRanksAndRankedGroupsFromTheOrderDown() {
+        IReadOnlyList<LadderStep> iucn = [S("kingdom", "Animalia"), S("phylum", "Chordata"), S("class", "Mammalia"), S("order", "Cetartiodactyla"),
+            S("family", "Bovidae"), S("genus", "Pseudoryx"), S("species", "Pseudoryx nghetinhensis")];
+        IReadOnlyList<LadderStep> wikipedia = [S("domain", "Eukaryota"), S("kingdom", "Animalia"), S("clade", "Bilateria"), S("phylum", "Chordata"),
+            S("subphylum", "Vertebrata"), S("class", "Mammalia"), S("order", "Artiodactyla"), S("clade", "Artiofabula"), S("suborder", "Ruminantia"),
+            S(null, "Pecora"), S("family", "Bovidae"), S("tribe", "Bovini"), S("genus", "Pseudoryx"), S("species", "Pseudoryx nghetinhensis")];
+        var line = ClassificationComparison.ShortLine(wikipedia, iucn);
+        Assert.Equal(["Animalia", "Chordata", "Mammalia", "Artiodactyla", "Ruminantia", "Bovidae", "Bovini", "Pseudoryx"], line.Select(s => s.Step.Name));
+        Assert.Equal(["Artiodactyla"], line.Where(s => s.Differs).Select(s => s.Step.Name));
+    }
 }
