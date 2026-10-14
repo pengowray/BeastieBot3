@@ -136,7 +136,8 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("This site reformats and combines the data from these sources.", text);
 
         // Every licence cell links to its licence.
-        Assert.Equal(6, Regex.Matches(html, "<td><a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a></td>").Count);
+        Assert.Equal(7, Regex.Matches(html, "<td><a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a></td>").Count);
+        Assert.Contains("<td><a href=\"https://creativecommons.org/licenses/by/3.0/\">CC BY 3.0</a></td>", html);
         Assert.Contains("<td><a href=\"https://creativecommons.org/licenses/by-sa/4.0/\">CC BY-SA 4.0</a></td>", html);
         Assert.Contains("<td><a href=\"https://creativecommons.org/publicdomain/zero/1.0/\">CC0</a></td>", html);
         Assert.Contains("<td><a href=\"https://www.crossref.org/documentation/retrieve-metadata/\">CC0</a></td>", html);
@@ -152,6 +153,10 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("Common names in English and other languages (from article titles), classification and English common names "
             + "(from taxoboxes), and links to English Wikipedia articles", text);
         Assert.Contains("English common names, synonyms, subspecies and classification of mammals", text);
+        // The classifications store's sources, each only when the database has its version.
+        Assert.Contains("Version 15.2, the final version", text);
+        Assert.Contains("WoRMS Editorial Board (2026). World Register of Marine Species.", text);
+        Assert.DoesNotContain("AviList Core Team", text);
         Assert.Contains("<td><a href=\"https://creativecommons.org/licenses/by-nc/4.0/\">CC BY-NC 4.0</a></td>", html);
         Assert.Contains("Mammal Diversity Database. Mammal Diversity Database (v2.5). Zenodo.", text);
         Assert.Contains("AmphibiaWeb. University of California, Berkeley, CA, USA. Names list of", text);

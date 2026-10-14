@@ -136,7 +136,7 @@
                         <th scope="row"><a href="@SiteText.IocUrl">IOC World Bird List</a></th>
                         <td>Classification of birds</td>
                         <td><a href="@SiteText.LicenceCcBy30">CC BY 3.0</a></td>
-                        <td>Version @Model.IocVersion, the last version</td>
+                        <td>Version @Model.IocVersion, the final version</td>
                     </tr>
                 }
                 @if (Model.AviListVersion is not null) {
@@ -267,7 +267,7 @@
             <li><strong>AmphibiaWeb:</strong> @Html.Raw(AboutModel.CitationHtml($"AmphibiaWeb. University of California, Berkeley, CA, USA. Names list of {Model.AmphibiaWebDate}.", SiteText.AmphibiaWebUrl))</li>
         }
         @if (Model.IocVersion is not null) {
-            <li><strong>IOC World Bird List:</strong> @Html.Raw(AboutModel.CitationHtml($"Gill, F., Donsker, D. & Rasmussen, P. (eds). IOC World Bird List (v{Model.IocVersion}). doi:10.14344/IOC.ML.{Model.IocVersion}.", $"https://doi.org/10.14344/IOC.ML.{Model.IocVersion}"))</li>
+            <li><strong>IOC World Bird List:</strong> @Html.Raw(AboutModel.CitationHtml($"Gill, F., Donsker, D. & Rasmussen, P. (eds). IOC World Bird List (v{Model.IocVersion}).", SiteText.IocUrl))</li>
         }
         @if (Model.AviListVersion is not null) {
             <li><strong>AviList:</strong> @Html.Raw(AboutModel.CitationHtml($"AviList Core Team. AviList: The Global Avian Checklist, {Model.AviListVersion}.", SiteText.AviListUrl))</li>

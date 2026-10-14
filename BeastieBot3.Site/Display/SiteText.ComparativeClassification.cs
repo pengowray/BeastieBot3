@@ -23,7 +23,7 @@ public static partial class SiteText {
     public const string RanksWikipediaHelp = "The taxobox of the taxon's English Wikipedia article";
     public const string RanksWikispecies = "Wikispecies";
     public const string RanksWikispeciesHelp = "The Taxonavigation section of the taxon's Wikispecies page";
-    public const string RanksIocHelp = "Version 15.2, the last: AviList replaces the IOC list";
+    public const string RanksIocHelp = "Version 15.2, the final version. The IOC list's successor is AviList.";
     public const string RanksWormsHelp = "World Register of Marine Species";
     public const string RanksItisHelp = "Integrated Taxonomic Information System";
     public const string RanksNoRank = "no rank";
