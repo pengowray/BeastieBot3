@@ -1068,6 +1068,18 @@ public static class FlowCatalogue {
                     Note = "Both ask for 50 titles per request and only for pages not downloaded yet, so a stopped run carries on where it left off. Each round finds the templates above the ones the last round downloaded. The first full `wikispecies fetch` (about 189,000 IUCN names, October 2026) takes about 2 hours. `--refresh-days` under Options also downloads again the pages older than that.",
                 },
                 new FlowStep {
+                    Id = "site-other-classifications",
+                    Title = "Download the classifications of checklists and other databases",
+                    Description = "For the species page's comparison of ranks. `checklists import` stores the groups above each species of the Mammal Diversity Database, the Reptile Database and AmphibiaWeb in the checklists store (with their names and subspecies). `classifications import` downloads AviList, the IOC World Bird List (15.2, the last version), ITIS, Plants of the World Online and WoRMS (the last four from ChecklistBank) into the classifications store (Datastore:classifications_sqlite, else classifications.sqlite in the datastore folder).",
+                    Commands = new[] {
+                        "checklists import --source mdd", "checklists import --source reptiledb", "checklists import --source amphibiaweb",
+                        "classifications import --source all", "classifications status",
+                    },
+                    OutputSourceIds = new[] { "checklists", "classifications" },
+                    Group = "2 · Build the site database",
+                    Note = "Each import downloads its file only when the folder does not have it yet; --download under Options downloads it again. The WoRMS archive is about 350 MB and Plants of the World Online about 130 MB; each source imports in under 30 seconds. AviList's address names its version: when a new version comes out, change it in ClassificationSources.cs.",
+                },
+                new FlowStep {
                     Id = "site-natureserve",
                     Title = "Download NatureServe conservation statuses",
                     Description = "`statuses natureserve-fetch` downloads the NatureServe global rank (G rank), the national and state, province and territory ranks in the United States and Canada, and the US Endangered Species Act, COSEWIC and SARA statuses of every species, subspecies, variety and population on NatureServe Explorer (about 113,500 records, CC BY 4.0) into the status lists store (Datastore:status_lists_sqlite, else status_lists.sqlite in the datastore folder). It stores no descriptions or comments.",

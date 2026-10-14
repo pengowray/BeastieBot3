@@ -214,6 +214,28 @@ public static class DataSourceCatalogue {
             },
         },
         new DataSourceDescriptor {
+            Id = "checklists",
+            Name = "Checklists store",
+            Kind = "sqlite",
+            Description = "Checklists from other sources (`checklists import`): the Mammal Diversity Database, Kew's WCVP, the Reptile Database and AmphibiaWeb, with their countries, names, subspecies and, for MDD, the Reptile Database and AmphibiaWeb, the groups above each species.",
+            ResolvePath = p => p.GetChecklistsPath(),
+            Metrics = new[] {
+                new MetricSpec { Label = "sources",          Sql = "SELECT COUNT(*) FROM checklist_source" },
+                new MetricSpec { Label = "species with groups", Sql = "SELECT COUNT(DISTINCT source || '|' || scientific_name) FROM checklist_rank" },
+            },
+        },
+        new DataSourceDescriptor {
+            Id = "classifications",
+            Name = "Classifications store",
+            Kind = "sqlite",
+            Description = "Classifications from AviList, the IOC World Bird List, ITIS, Plants of the World Online and WoRMS (`classifications import`), for the species site's comparison of classifications.",
+            ResolvePath = p => p.GetClassificationsPath(),
+            Metrics = new[] {
+                new MetricSpec { Label = "sources", Sql = "SELECT COUNT(*) FROM classification_source" },
+                new MetricSpec { Label = "species", Sql = "SELECT COUNT(*) FROM classification_name WHERE synonym = 0" },
+            },
+        },
+        new DataSourceDescriptor {
             Id = "iucn-summary-tables",
             Name = "IUCN summary tables",
             Kind = "sqlite",
