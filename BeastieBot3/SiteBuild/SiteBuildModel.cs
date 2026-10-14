@@ -48,6 +48,9 @@ internal sealed record SiteBuildInputs {
     /// The checklists store (`checklists import`), for the Mammal Diversity Database's and AmphibiaWeb's
     /// names and the Mammal Diversity Database's and the Reptile Database's subspecies.
     public string? Checklists { get; init; }
+    /// The classifications store (`classifications import`): AviList, IOC, ITIS, Plants of the World
+    /// Online and WoRMS, for the comparison of classifications.
+    public string? Classifications { get; init; }
     /// rules/wikidata-taxon-ranks.csv: the names of Wikidata's rank items, for ladder_node.
     public string? WikidataRanks { get; init; }
     /// The site database to replace.
@@ -268,6 +271,8 @@ internal sealed class SiteBuildStats {
     public string? AmphibiaWebVersion;
     /// The Reptile Database's version in the checklists store ("ChecklistBank 1008 (2026-06)"), for the About page's credit of its subspecies.
     public string? ReptileDbVersion;
+    /// The version of each source in the classifications store, by source.
+    public Dictionary<string, string?> ClassificationVersions { get; } = new(StringComparer.Ordinal);
     public int WikidataLadderNodes;
     public int TaxaWithAreas;
     public int TaxonAreaRows;

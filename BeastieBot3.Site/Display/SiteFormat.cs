@@ -73,12 +73,7 @@ public static class SiteFormat {
 
     /// A species' record in a checklist, by the source's id of it: the MDD id, the query of the
     /// Reptile Database's species page ("genus=Python&species=regius"), AmphibiaWeb's species number.
-    public static string? ChecklistRecordUrl(string source, string recordId) => source switch {
-        "mdd" => SiteText.MddUrl + "taxon/" + Uri.EscapeDataString(recordId) + "/",
-        "reptiledb" => "https://reptile-database.reptarium.cz/species?" + recordId,
-        "amphibiaweb" => SiteText.AmphibiaWebUrl + "species/" + Uri.EscapeDataString(recordId),
-        _ => null,
-    };
+    public static string? ChecklistRecordUrl(string source, string recordId) => LadderSources.Find(source)?.NodeUrl(recordId, true);
 
     public static string SpratUrl(long spratTaxonId) => BeastieBot3.Shared.SiteData.OtherStatusSources.SpratUrl(spratTaxonId);
 

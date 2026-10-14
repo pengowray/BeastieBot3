@@ -31,6 +31,15 @@ public sealed class AboutModel : PageModel {
     public string? AmphibiaWebDate { get; private set; }
     /// The Reptile Database's version ("ChecklistBank 1008 (2026-06)"), when the site lists its subspecies.
     public string? ReptileDbVersion { get; private set; }
+    /// The versions of the classifications store's sources, when the site has their classifications:
+    /// IOC's and AviList's as they name them ("15.2", "v2025b"), the others as the date of the copy.
+    public string? IocVersion { get; private set; }
+    public string? AviListVersion { get; private set; }
+    public string? ItisDate { get; private set; }
+    public string? PowoDate { get; private set; }
+    public int? PowoYear { get; private set; }
+    public string? WormsDate { get; private set; }
+    public int? WormsYear { get; private set; }
     public string? SpratDate { get; private set; }
     /// When the site database's copies of NatureServe Explorer and of ECOS were downloaded; null when it has none.
     public string? NatureServeDate { get; private set; }
@@ -101,6 +110,15 @@ public sealed class AboutModel : PageModel {
         ColRelease = snapshot.Get(SiteDbSchema.MetaKeys.ColRelease);
         MddVersion = snapshot.Get(SiteDbSchema.MetaKeys.MddVersion);
         ReptileDbVersion = snapshot.Get(SiteDbSchema.MetaKeys.ReptileDbVersion);
+        IocVersion = snapshot.Get(SiteDbSchema.MetaKeys.ClassificationVersion("ioc"));
+        AviListVersion = snapshot.Get(SiteDbSchema.MetaKeys.ClassificationVersion("avilist"));
+        ItisDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.ClassificationVersion("itis")), out var itis) ? SiteFormat.Date(itis) : null;
+        if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.ClassificationVersion("powo")), out var powo)) {
+            (PowoDate, PowoYear) = (SiteFormat.Date(powo), powo.Year);
+        }
+        if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.ClassificationVersion("worms")), out var worms)) {
+            (WormsDate, WormsYear) = (SiteFormat.Date(worms), worms.Year);
+        }
         AmphibiaWebDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.AmphibiaWebVersion), out var aw) ? SiteFormat.Date(aw) : null;
         GbifCitation = snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistCitation);
         if (snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistDoi) is { } gbifDoi) {

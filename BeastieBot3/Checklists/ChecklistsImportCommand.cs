@@ -147,7 +147,7 @@ internal sealed class ChecklistsImportCommand : AsyncCommand<ChecklistsImportCom
         }
     }
 
-    private static async Task Download(HttpClient http, string url, string file, CancellationToken cancellationToken) {
+    internal static async Task Download(HttpClient http, string url, string file, CancellationToken cancellationToken) {
         var partial = file + ".part";
         using (var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken)) {
             response.EnsureSuccessStatusCode();
@@ -158,7 +158,7 @@ internal sealed class ChecklistsImportCommand : AsyncCommand<ChecklistsImportCom
     }
 
     // Wikimedia's user agent says who runs the bot; the same one is sent to the checklist sources.
-    private static string UserAgent() {
+    internal static string UserAgent() {
         EnvFileLoader.LoadIfPresent();
         return Environment.GetEnvironmentVariable("WIKIPEDIA_USER_AGENT")?.Trim() is { Length: > 0 } agent
             ? agent

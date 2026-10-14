@@ -134,6 +134,24 @@ namespace BeastieBot3.Configuration;
             return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "checklists");
         }
 
+        // Classifications from sources that give no countries (`classifications import`). Defaults to
+        // classifications.sqlite in the datastore folder.
+        public string? GetClassificationsPath() {
+            var configured = _reader.Get("Datastore:classifications_sqlite");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "classifications.sqlite");
+        }
+
+        // Downloaded classification files (`classifications import`). Defaults to a classifications
+        // folder beside the datastore.
+        public string? GetClassificationsDownloadDir() {
+            var configured = _reader.Get("Datasets:classifications_dir");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "classifications");
+        }
+
         // Conservation statuses from systems other than the IUCN Red List (`statuses natureserve-fetch`,
         // `statuses ecos-import`). Defaults to status_lists.sqlite in the datastore folder.
         public string? GetStatusListsPath() {

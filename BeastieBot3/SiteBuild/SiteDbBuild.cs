@@ -314,8 +314,9 @@ internal sealed class SiteDbBuild {
             return $"{taxonList.Count:N0} taxa, {writer.NameCount:N0} names, {taxonLinks.Count:N0} links from old ids";
         });
 
+        List<SiteExternalId> externalIds = [];
         Optional("Wikidata cache: ids in other databases", _inputs.WikidataCache, path => {
-            var rows = SiteExternalIds.Read(path,
+            var rows = externalIds = SiteExternalIds.Read(path,
                 taxonList.Where(t => t.InRelease && t.WikidataQid is not null).Select(t => (t.TaxonId, t.WikidataQid!)), ct);
             writer.InsertRows("INSERT OR IGNORE INTO taxon_external_id (taxon_id, property, value) VALUES (@t, @p, @v)", ["@t", "@p", "@v"],
                 rows.Select(r => new object?[] { r.TaxonId, r.Property, r.Value }));
@@ -363,6 +364,19 @@ internal sealed class SiteDbBuild {
             writer.InsertRows("INSERT INTO taxon_ladder (taxon_id, source, node_id) VALUES (@t, @s, @n)", ["@t", "@s", "@n"],
                 starts.Select(s => new object?[] { s.TaxonId, s.Source, s.NodeId }));
             return string.Join(", ", starts.GroupBy(s => s.Source).Select(g => $"{g.Key} {g.Count():N0} taxa")) + $"; {nodes.Count:N0} nodes";
+        });
+
+        Optional("classifications store: AviList, IOC, ITIS, Plants of the World Online and WoRMS classification", _inputs.Classifications, path => {
+            var (nodes, starts, summary) = SiteLadders.ReadClassifications(path, taxonList, externalIds, ct);
+            writer.InsertRows(ladderInsert, ladderParameters, nodes.Select(n => new object?[] { n.Source, n.Id, n.ParentId, n.Rank, n.Name }));
+            writer.InsertRows("INSERT INTO taxon_ladder (taxon_id, source, node_id) VALUES (@t, @s, @n)", ["@t", "@s", "@n"],
+                starts.Select(s => new object?[] { s.TaxonId, s.Source, s.NodeId }));
+            using (var store = Classifications.ClassificationStore.OpenReadOnly(path)) {
+                foreach (var source in store?.Sources() ?? []) {
+                    _stats.ClassificationVersions[source.Source] = source.Version;
+                }
+            }
+            return string.Join("; ", summary) + $"; {nodes.Count:N0} nodes";
         });
 
         // The subspecies and varieties of each species in the Catalogue of Life, Wikidata and the
@@ -654,6 +668,9 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.MddVersion, _stats.MddVersion);
         writer.SetMeta(SiteDbSchema.MetaKeys.AmphibiaWebVersion, _stats.AmphibiaWebVersion);
         writer.SetMeta(SiteDbSchema.MetaKeys.ReptileDbVersion, _stats.ReptileDbVersion);
+        foreach (var (source, version) in _stats.ClassificationVersions) {
+            writer.SetMeta(SiteDbSchema.MetaKeys.ClassificationVersion(source), version);
+        }
         writer.SetMeta(SiteDbSchema.MetaKeys.ColCitation, _stats.ColCitation);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColDoi, _stats.ColDoi);
         writer.SetMeta(SiteDbSchema.MetaKeys.SpratReport, _stats.SpratReport);

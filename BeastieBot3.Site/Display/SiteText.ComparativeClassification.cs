@@ -1,7 +1,7 @@
 namespace BeastieBot3.Site.Display;
 
 // The species page's comparison of ranks in IUCN, on this site, in the Catalogue of Life, Wikidata, English Wikipedia and Wikispecies,
-// and in the Mammal Diversity Database, the Reptile Database or AmphibiaWeb (titled by SiteText.SourceLabel).
+// and in the sources of LadderSources (titled by SiteText.SourceLabel).
 
 public static partial class SiteText {
     public const string HeadingComparativeClassification = "Classification";
@@ -23,6 +23,9 @@ public static partial class SiteText {
     public const string RanksWikipediaHelp = "The taxobox of the taxon's English Wikipedia article";
     public const string RanksWikispecies = "Wikispecies";
     public const string RanksWikispeciesHelp = "The Taxonavigation section of the taxon's Wikispecies page";
+    public const string RanksIocHelp = "Version 15.2, the last: AviList replaces the IOC list";
+    public const string RanksWormsHelp = "World Register of Marine Species";
+    public const string RanksItisHelp = "Integrated Taxonomic Information System";
     public const string RanksNoRank = "no rank";
 
     public const string RanksDiffersTitle = "Another name than in IUCN's classification";

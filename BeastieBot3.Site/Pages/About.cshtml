@@ -131,6 +131,46 @@
                         <td>@Model.AmphibiaWebDate</td>
                     </tr>
                 }
+                @if (Model.IocVersion is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.IocUrl">IOC World Bird List</a></th>
+                        <td>Classification of birds</td>
+                        <td><a href="@SiteText.LicenceCcBy30">CC BY 3.0</a></td>
+                        <td>Version @Model.IocVersion, the last version</td>
+                    </tr>
+                }
+                @if (Model.AviListVersion is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.AviListUrl">AviList</a></th>
+                        <td>Classification of birds</td>
+                        <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
+                        <td>@Model.AviListVersion</td>
+                    </tr>
+                }
+                @if (Model.PowoDate is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.PowoUrl">Plants of the World Online</a>, Royal Botanic Gardens, Kew</th>
+                        <td>Classification of plants</td>
+                        <td><a href="@SiteText.LicenceCcBy30">CC BY 3.0</a></td>
+                        <td>@Model.PowoDate</td>
+                    </tr>
+                }
+                @if (Model.WormsDate is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.WormsUrl">World Register of Marine Species (WoRMS)</a></th>
+                        <td>Classification</td>
+                        <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
+                        <td>@Model.WormsDate</td>
+                    </tr>
+                }
+                @if (Model.ItisDate is not null) {
+                    <tr>
+                        <th scope="row"><a href="@SiteText.ItisUrl">Integrated Taxonomic Information System (ITIS)</a></th>
+                        <td>Classification</td>
+                        <td><a href="@SiteText.LicenceCc0">CC0</a></td>
+                        <td>@Model.ItisDate</td>
+                    </tr>
+                }
                 <tr>
                     <th scope="row"><a href="@SiteText.SpratUrl">Species Profile and Threats Database (SPRAT)</a>, @SiteText.SpratLicensor</th>
                     <td>Links to SPRAT profiles, and the EPBC Act and state and territory statuses of Australian species</td>
@@ -225,6 +265,21 @@
         }
         @if (Model.AmphibiaWebDate is not null) {
             <li><strong>AmphibiaWeb:</strong> @Html.Raw(AboutModel.CitationHtml($"AmphibiaWeb. University of California, Berkeley, CA, USA. Names list of {Model.AmphibiaWebDate}.", SiteText.AmphibiaWebUrl))</li>
+        }
+        @if (Model.IocVersion is not null) {
+            <li><strong>IOC World Bird List:</strong> @Html.Raw(AboutModel.CitationHtml($"Gill, F., Donsker, D. & Rasmussen, P. (eds). IOC World Bird List (v{Model.IocVersion}). doi:10.14344/IOC.ML.{Model.IocVersion}.", $"https://doi.org/10.14344/IOC.ML.{Model.IocVersion}"))</li>
+        }
+        @if (Model.AviListVersion is not null) {
+            <li><strong>AviList:</strong> @Html.Raw(AboutModel.CitationHtml($"AviList Core Team. AviList: The Global Avian Checklist, {Model.AviListVersion}.", SiteText.AviListUrl))</li>
+        }
+        @if (Model.PowoDate is not null) {
+            <li><strong>Plants of the World Online:</strong> @Html.Raw(AboutModel.CitationHtml($"POWO ({Model.PowoYear}). Plants of the World Online. Facilitated by the Royal Botanic Gardens, Kew. Published on the Internet; {SiteText.PowoUrl} Retrieved {Model.PowoDate}.", SiteText.PowoUrl))</li>
+        }
+        @if (Model.WormsDate is not null) {
+            <li><strong>WoRMS:</strong> @Html.Raw(AboutModel.CitationHtml($"WoRMS Editorial Board ({Model.WormsYear}). World Register of Marine Species. Available from {SiteText.WormsUrl} at VLIZ. Accessed {Model.WormsDate}. doi:10.14284/170.", "https://doi.org/10.14284/170"))</li>
+        }
+        @if (Model.ItisDate is not null) {
+            <li><strong>ITIS:</strong> @Html.Raw(AboutModel.CitationHtml($"Retrieved {Model.ItisDate}, from the Integrated Taxonomic Information System (ITIS) on-line database, www.itis.gov, CC0.", "https://doi.org/10.5066/F7KH0KBK"))</li>
         }
         <li><strong>SPRAT:</strong> @Html.Raw(AboutModel.CitationHtml($"Species Profile and Threats Database, {SiteText.SpratLicensor}.", SiteText.SpratUrl))</li>
         @if (Model.NatureServeDate is not null) {

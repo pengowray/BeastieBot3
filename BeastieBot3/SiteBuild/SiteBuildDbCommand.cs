@@ -65,6 +65,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [Description("Folder with the Catalogue of Life ColDP zip, read for the release's citation and DOI. Default: Datasets:COL_dir in paths.ini.")]
         public string? ColDir { get; init; }
 
+        [CommandOption("--classifications-db <PATH>")]
+        [Description("Classifications store (`classifications import`). Default: Datastore:classifications_sqlite, else classifications.sqlite in the datastore folder.")]
+        public string? ClassificationsDatabase { get; init; }
+
         [CommandOption("--status-lists-db <PATH>")]
         [Description("Status lists store (statuses natureserve-fetch, statuses ecos-import). Default: Datastore:status_lists_sqlite in paths.ini, else status_lists.sqlite in the datastore folder.")]
         public string? StatusListsDatabase { get; init; }
@@ -134,6 +138,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 TaxonRules = Full(Path.Combine(Path.GetDirectoryName(rulesList)!, "taxon-rules.yml")),
                 WikidataRanks = Full(Path.Combine(Path.GetDirectoryName(rulesList)!, "wikidata-taxon-ranks.csv")),
                 Checklists = Full(paths.GetChecklistsPath()),
+                Classifications = Full(settings.ClassificationsDatabase ?? paths.GetClassificationsPath()),
                 NotAssignedRules = Iucn.IucnNotAssignedRules.LoadForPaths(paths),
                 ProbableScopes = Iucn.IucnProbableScopes.LoadForPaths(paths),
                 WikidataItemModel = wikidataConfig.ToItemModel(),

@@ -1229,7 +1229,12 @@ abbr[title] {
 .classification:has(.line-choice option[value="wikispecies"]:checked) .line-other[data-source="wikispecies"],
 .classification:has(.line-choice option[value="mdd"]:checked) .line-other[data-source="mdd"],
 .classification:has(.line-choice option[value="reptiledb"]:checked) .line-other[data-source="reptiledb"],
-.classification:has(.line-choice option[value="amphibiaweb"]:checked) .line-other[data-source="amphibiaweb"] {
+.classification:has(.line-choice option[value="amphibiaweb"]:checked) .line-other[data-source="amphibiaweb"],
+.classification:has(.line-choice option[value="ioc"]:checked) .line-other[data-source="ioc"],
+.classification:has(.line-choice option[value="avilist"]:checked) .line-other[data-source="avilist"],
+.classification:has(.line-choice option[value="powo"]:checked) .line-other[data-source="powo"],
+.classification:has(.line-choice option[value="worms"]:checked) .line-other[data-source="worms"],
+.classification:has(.line-choice option[value="itis"]:checked) .line-other[data-source="itis"] {
     display: flex;
 }
 
@@ -1872,6 +1877,13 @@ th.num {
    not in IUCN's or the Catalogue of Life's classification are hidden until the box is ticked. */
 .ranks-table td {
     vertical-align: top;
+}
+/* With many sources the table scrolls sideways; the rank labels stay in view. */
+.ranks-table th[scope="row"],
+.ranks-table thead td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--bg);
 }
 .ranks-table tr.main-rank > th,
 .ranks-table tr.main-rank > td {

@@ -655,6 +655,8 @@ public static class SiteDbSchema {
         public const string AmphibiaWebVersion = "amphibiaweb_version";
         /// The Reptile Database's version in the checklists store ("ChecklistBank 1008 (2026-06)"), whose subspecies the site lists.
         public const string ReptileDbVersion = "reptiledb_version";
+        /// The version of a source in the classifications store ("avilist", "ioc", "itis", "powo", "worms").
+        public static string ClassificationVersion(string source) => $"classification_{source}_version";
         /// The release's recommended citation and DOI from the ColDP metadata ("10.48580/dgykv").
         public const string ColCitation = "col_citation";
         public const string ColDoi = "col_doi";

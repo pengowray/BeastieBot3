@@ -820,7 +820,8 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   three of CoL's names (muted, with a tooltip naming the source and saying they are unchecked). CoL groups are shown (marked "CoL").
   A small dropdown at the right of the line (`_ClassificationChoice`) picks "IUCN and Catalogue of Life"
   (the default), "IUCN only", or another source's line: Catalogue of Life, Mammal Diversity Database,
-  The Reptile Database, AmphibiaWeb, Wikidata, English Wikipedia, Wikispecies, whichever the comparative classification has (`ClassificationComparison.ShortLine`: every
+  The Reptile Database, AmphibiaWeb, IOC World Bird List, AviList, Plants of the World Online, WoRMS, ITIS, Wikidata,
+  English Wikipedia, Wikispecies, whichever the comparative classification has (`ClassificationComparison.ShortLine`: every
   main rank from the kingdom down, and below the first of order, family or genus every other group with a
   rank, "clade" not counted; a main rank whose name is not IUCN's is marked). It is CSS only (`:has`). A taxon not in the
   release has no place in the tree and shows IUCN's ranks as text, as before.
@@ -1835,6 +1836,7 @@ has, because the lower ranks are the ones that differ between sources.
 | wikipedia | `article:<enwiki_title>`, then the taxonomy templates its taxobox climbs | `wikipedia fetch-taxonomy-templates` |
 | wikispecies | `page:<IUCN scientific name>`, then the taxonavigation templates its page climbs | `wikispecies fetch` |
 | mdd, reptiledb, amphibiaweb | the `taxon_ladder` row of the taxon: the source's id of the species' record, then `<rank>:<name>` groups | `checklists import --source mdd` (`reptiledb`, `amphibiaweb`) |
+| ioc, avilist, powo, worms, itis | the `taxon_ladder` row of the taxon: the source's id of the species (ITIS TSN, WoRMS AphiaID, IPNI id, `species:<name>` for AviList), then the source's groups | `classifications import --source ioc` (`avilist`, `powo`, `worms`, `itis`) |
 
 The three checklists' groups are in the checklists store's `checklist_rank` (each species' groups,
 highest first): MDD's subclass to subgenus columns, the Reptile Database's parent taxa in its
@@ -1847,6 +1849,22 @@ and have no class column. A group's node is `<rank>:<name>`, or `<rank>:<name>#2
 the same rank and name under another parent (a subgenus name used in two genera). The column's title
 links the species' record. The Reptile Database's export of June 2026 puts every squamate family in
 suborder Iguania; while a snake family is under it, the import leaves that suborder out.
+
+The classifications store (`classifications import`, `BeastieBot3/Classifications/`) has AviList
+(its workbook), the IOC World Bird List 15.2 (the last version; AviList replaces it), ITIS, Plants of
+the World Online and WoRMS (all four from ChecklistBank). `SiteBuild/SiteLadders.Classifications.cs`
+matches an IUCN species in the source's scope (birds for the bird lists, plants for POWO, every
+species for ITIS and WoRMS) by id first (AviList's BirdLife id, which is the IUCN taxon id; the
+taxon's Wikidata item's ITIS TSN P815, POWO id P5037 or WoRMS AphiaID P850), then by its own name,
+then by a synonym unless another IUCN species leads to the same species. When the source's
+classification names a kingdom, the species must be in IUCN's kingdom. POWO links a species only to
+its genus; its families, orders, subclasses, class, phylum and kingdom come from the species' row
+(ids `<rank>:<name>`). The site lists the sources in `Display/LadderSources.cs`, in column order: the
+checklist of the taxon's class, the bird lists, POWO, WoRMS, ITIS. Each source's column title links
+the species' page in the source (the source's home page for IOC and AviList, which have none), and
+ITIS, WoRMS and POWO link every group. WoRMS does not allow its whole database to be passed on; the
+site keeps only the groups above IUCN's species. With up to ten columns the table scrolls sideways;
+the rank labels stay in view.
 
 `wikispecies fetch` keeps its pages in a cache of their own (`Datastore:wikispecies_cache_sqlite`,
 else `wikispecies_cache.sqlite` in the datastore folder), with the same tables as the Wikipedia

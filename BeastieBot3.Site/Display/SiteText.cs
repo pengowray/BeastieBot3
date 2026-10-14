@@ -157,6 +157,11 @@ public static partial class SiteText {
         "mdd" => "Mammal Diversity Database",
         "amphibiaweb" => "AmphibiaWeb",
         "reptiledb" => "The Reptile Database",
+        "ioc" => "IOC World Bird List",
+        "avilist" => "AviList",
+        "itis" => "ITIS",
+        "powo" => "Plants of the World Online",
+        "worms" => "WoRMS",
         "japan-moe" => "Ministry of the Environment (Japan)",
         _ => source,
     };
@@ -227,6 +232,7 @@ public static partial class SiteText {
     public const string LicenceCcBy = "https://creativecommons.org/licenses/by/4.0/";
     public const string LicenceCcBySa = "https://creativecommons.org/licenses/by-sa/4.0/";
     public const string LicenceCcByNc = "https://creativecommons.org/licenses/by-nc/4.0/";
+    public const string LicenceCcBy30 = "https://creativecommons.org/licenses/by/3.0/";
     public const string MddUrl = "https://www.mammaldiversity.org/";
     /// The Mammal Diversity Database's releases on Zenodo (the concept DOI, which leads to the newest).
     public const string MddDoiUrl = "https://doi.org/10.5281/zenodo.4139722";
@@ -234,6 +240,11 @@ public static partial class SiteText {
     /// The Reptile Database's DOI on ChecklistBank (dataset 1008), for every version.
     public const string ReptileDbDoiUrl = "https://doi.org/10.48580/d37s";
     public const string AmphibiaWebUrl = "https://amphibiaweb.org/";
+    public const string IocUrl = "https://www.worldbirdnames.org/";
+    public const string AviListUrl = "https://www.avilist.org/";
+    public const string ItisUrl = "https://www.itis.gov/";
+    public const string PowoUrl = "https://powo.science.kew.org/";
+    public const string WormsUrl = "https://www.marinespecies.org/";
     public const string LicenceCc0 = "https://creativecommons.org/publicdomain/zero/1.0/";
     public const string IucnRedListUrl = "https://www.iucnredlist.org";
     public const string WikidataUrl = "https://www.wikidata.org";
