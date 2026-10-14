@@ -11,6 +11,15 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     private Task<string> Tool(string query = "") => _client.GetStringAsync($"/species/{FixtureDb.PolarBear}/wikitext{query}");
 
     [Fact]
+    public async Task ClassificationHasTheChecklistOfTheTaxonsClassLinkingItsRecord() {
+        var html = await Page();
+        Assert.Contains("<option value=\"mdd\">Mammal Diversity Database</option>", html);
+        Assert.Contains("<ol class=\"line-other\" data-source=\"mdd\">", html);
+        Assert.Contains("href=\"https://www.mammaldiversity.org/taxon/1005967/\"", html);
+        Assert.Contains(">Caniformia<", html);
+    }
+
+    [Fact]
     public async Task SectionsComeInOrder() {
         var html = await Page();
         string[] markers = [

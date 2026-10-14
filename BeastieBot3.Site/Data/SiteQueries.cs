@@ -420,8 +420,6 @@ public sealed partial class SiteQueries {
         return listings.ToDictionary(p => p.Key, p => (IReadOnlyList<EpbcListingRow>)p.Value);
     }
 
-    /// A taxon's classification in another source (ladder_node: "col" or "wikidata"), top down, from
-    /// the node with this id. Empty when the database has none.
     /// The taxon's ids in other databases (taxon_external_id), by Wikidata property.
     public IReadOnlyList<(string Property, string Value)> GetExternalIds(long taxonId) {
         using var connection = _db.OpenConnection();
@@ -448,6 +446,22 @@ public sealed partial class SiteQueries {
             : null;
     }
 
+    /// The taxon's species node in each source that taxon_ladder links (mdd, reptiledb, amphibiaweb).
+    public IReadOnlyDictionary<string, string> GetTaxonLadders(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT source, node_id FROM taxon_ladder WHERE taxon_id = @id";
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        var starts = new Dictionary<string, string>(StringComparer.Ordinal);
+        while (reader.Read()) {
+            starts[reader.GetString(0)] = reader.GetString(1);
+        }
+        return starts;
+    }
+
+    /// A taxon's classification in another source (ladder_node), top down, from the node with this
+    /// id. Empty when the database has none.
     public IReadOnlyList<(string Id, string? Rank, string Name)> GetLadder(string source, string id) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();

@@ -215,6 +215,73 @@ public class ChecklistTests {
     }
 
     [Fact]
+    public void MddGivesEachSpeciesItsGroupsHighestFirstWithoutNa() {
+        var csv = "sciName,id,subclass,infraclass,magnorder,order,family,subfamily,genus,subgenus\n"
+            + "Ornithorhynchus_anatinus,1000001,Prototheria,Australosphenida,NA,Monotremata,Ornithorhynchidae,NA,Ornithorhynchus,NA\n";
+        var parse = ChecklistSources.ParseMdd(new StringReader(csv), "v2.5");
+        Assert.Equal([
+            "0 subclass Prototheria", "1 infraclass Australosphenida", "2 order Monotremata", "3 family Ornithorhynchidae", "4 genus Ornithorhynchus",
+        ], parse.Ranks.Select(r => $"{r.Position} {r.Rank} {r.Name}"));
+        Assert.All(parse.Ranks, r => Assert.Equal("Ornithorhynchus anatinus", r.ScientificName));
+    }
+
+    [Fact]
+    public void ReptileDatabaseGivesEachSpeciesItsParentTaxaHighestFirst() {
+        var names = "id\tscientific_name\tauthorship\trank\n"
+            + "C\tReptilia\t\tclass\n"
+            + "O\tSquamata\t\torder\n"
+            + "F\tLacertidae\t\tfamily\n"
+            + "G\tZootoca\t\tgenus\n"
+            + "N1\tZootoca vivipara\t(Lichtenstein, 1823)\tspecies\n";
+        var taxa = "id\tparent_id\tname_id\tlink\n"
+            + "T1\tTG\tN1\t\n"
+            + "TG\tTF\tG\t\n"
+            + "TF\tTO\tF\t\n"
+            + "TO\tTC\tO\t\n"
+            + "TC\t\tC\t\n";
+        var parse = ChecklistSources.ParseReptileDatabase(new StringReader(names), new StringReader(taxa),
+            new StringReader("taxon_id\tarea\n"), new StringReader("id\ttaxon_id\tname_id\n"), "v");
+        Assert.Equal(["class Reptilia", "order Squamata", "family Lacertidae", "genus Zootoca"], parse.Ranks.Select(r => $"{r.Rank} {r.Name}"));
+        Assert.Equal([0, 1, 2, 3], parse.Ranks.Select(r => r.Position));
+    }
+
+    [Fact]
+    public void ReptileDatabaseLeavesOutSuborderIguaniaWhileItHoldsSnakes() {
+        string Names(string family) => "id\tscientific_name\tauthorship\trank\n"
+            + "O\tSquamata\t\torder\n"
+            + "S\tIguania\t\tsuborder\n"
+            + $"F\t{family}\t\tfamily\n"
+            + "N1\tAus bus\t\tspecies\n";
+        var taxa = "id\tparent_id\tname_id\nT1\tTF\tN1\nTF\tTS\tF\nTS\tTO\tS\nTO\t\tO\n";
+        IEnumerable<string> Groups(string family) => ChecklistSources.ParseReptileDatabase(new StringReader(Names(family)), new StringReader(taxa),
+            new StringReader("taxon_id\tarea\n"), new StringReader("id\ttaxon_id\tname_id\n"), "v").Ranks.Select(r => $"{r.Position} {r.Name}");
+        Assert.Equal(["0 Squamata", "1 Colubridae"], Groups("Colubridae"));
+        Assert.Equal(["0 Squamata", "1 Iguania", "2 Iguanidae"], Groups("Iguanidae"));
+    }
+
+    [Fact]
+    public void AmphibiaWebGivesEachSpeciesItsNumberAndGroups() {
+        var text = "order\tfamily\tsubfamily\tgenus\tsubgenus\tspecies\tisocc\tintro_isocc\taweb_uid\n"
+            + "Anura\tHylidae\tHylinae\tPlectrohyla\t\tixil\tGT\t\t1042\n";
+        var parse = ChecklistSources.ParseAmphibiaWeb(new StringReader(text), "2026-04-01");
+        Assert.Equal([new ChecklistSpecies("Plectrohyla ixil", "1042")], parse.Species);
+        Assert.Equal(["order Anura", "family Hylidae", "subfamily Hylinae", "genus Plectrohyla"], parse.Ranks.Select(r => $"{r.Rank} {r.Name}"));
+    }
+
+    [Fact]
+    public void AnImportReplacesTheSourcesGroups() {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var store = ChecklistStore.OpenFromConnection(connection);
+        store.Replace("mdd", "v2.4", null, null, [], ranks: [new ChecklistRank("Panthera leo", 0, "order", "Carnivora")]);
+        store.Replace("mdd", "v2.5", null, null, [], ranks: [
+            new ChecklistRank("Panthera leo", 1, "family", "Felidae"), new ChecklistRank("Panthera leo", 0, "order", "Carnivora"),
+        ]);
+        Assert.Equal([("order", "Carnivora"), ("family", "Felidae")], store.Ranks("mdd")["Panthera leo"]);
+        Assert.Empty(store.Ranks("reptiledb"));
+    }
+
+    [Fact]
     public void AmphibiaWebGivesEnglishNamesAndSynonyms() {
         var text = "genus\tspecies\tcommon_name\tgaa_name\tsynonymies\tisocc\tintro_isocc\nRhinella\tbeebei\tBeebe's Toad,Beebe Toad\t\tBufo beebei\tCO\t\n";
         var parse = ChecklistSources.ParseAmphibiaWeb(new StringReader(text), "2026-04-01");

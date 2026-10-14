@@ -357,6 +357,14 @@ internal sealed class SiteDbBuild {
             return $"{nodes.Count(n => n.Id.StartsWith(SiteLadders.PagePrefix, StringComparison.Ordinal) && !n.Id.Contains('#')):N0} taxon pages, {nodes.Count:N0} nodes";
         });
 
+        Optional("checklists store: Mammal Diversity Database, Reptile Database and AmphibiaWeb classification", _inputs.Checklists, path => {
+            var (nodes, starts) = SiteLadders.ReadChecklists(path, taxonList, ct);
+            writer.InsertRows(ladderInsert, ladderParameters, nodes.Select(n => new object?[] { n.Source, n.Id, n.ParentId, n.Rank, n.Name }));
+            writer.InsertRows("INSERT INTO taxon_ladder (taxon_id, source, node_id) VALUES (@t, @s, @n)", ["@t", "@s", "@n"],
+                starts.Select(s => new object?[] { s.TaxonId, s.Source, s.NodeId }));
+            return string.Join(", ", starts.GroupBy(s => s.Source).Select(g => $"{g.Key} {g.Count():N0} taxa")) + $"; {nodes.Count:N0} nodes";
+        });
+
         // The subspecies and varieties of each species in the Catalogue of Life, Wikidata and the
         // checklists store, for the species page's list, which adds IUCN's own from the taxon table.
         var subspecies = _stats.Subspecies;

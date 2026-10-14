@@ -86,7 +86,8 @@ internal sealed class ChecklistsImportCommand : AsyncCommand<ChecklistsImportCom
                 }
                 AnsiConsole.MarkupLineInterpolated($"[grey]Reading[/] {file}");
                 var parse = source.Parse(file);
-                store.Replace(source.Key, parse.Version, source.Licence, source.Url, parse.Rows, parse.Synonyms, parse.Names, parse.Species, parse.Infraspecific);
+                store.Replace(source.Key, parse.Version, source.Licence, source.Url, parse.Rows, parse.Synonyms, parse.Names, parse.Species, parse.Infraspecific,
+                    parse.Ranks);
                 var taxa = parse.Rows.Select(r => r.ScientificName).Distinct(StringComparer.Ordinal).Count();
                 AnsiConsole.MarkupLineInterpolated(
                     $"[green]{source.Title}:[/] {ChecklistStore.Count(parse.Rows.Count)} taxon and area rows for {ChecklistStore.Count(taxa)} taxa, {ChecklistStore.Count(parse.Synonyms.Count)} synonyms for matching, {ChecklistStore.Count(parse.Names.Count(n => n.NameType == ChecklistNameTypes.Common))} English names and {ChecklistStore.Count(parse.Names.Count(n => n.NameType == ChecklistNameTypes.Synonym))} synonyms for the site. Licence: {source.Licence}.");
@@ -96,6 +97,10 @@ internal sealed class ChecklistsImportCommand : AsyncCommand<ChecklistsImportCom
                         .Select(g => $"{g.Key} {ChecklistStore.Count(g.Count())}").ToList();
                     AnsiConsole.MarkupLineInterpolated(
                         $"  Subspecies: {ChecklistStore.Count(parse.Infraspecific.Count)} of {ChecklistStore.Count(withSubspecies)} species, {ChecklistStore.Count(parse.InfraspecificNotRead)} entries not read{(notes.Count > 0 ? "; notes: " + string.Join(", ", notes) : "")}.");
+                }
+                if (parse.Ranks.Count > 0) {
+                    var classified = parse.Ranks.Select(r => r.ScientificName).Distinct(StringComparer.Ordinal).Count();
+                    AnsiConsole.MarkupLineInterpolated($"  Classification: the groups of {ChecklistStore.Count(classified)} species ({ChecklistStore.Count(parse.Ranks.Count)} rows).");
                 }
             } catch (Exception e) when (e is HttpRequestException or IOException or InvalidDataException or KeyNotFoundException or TaskCanceledException) {
                 AnsiConsole.MarkupLineInterpolated($"[red]{source.Title} not imported:[/] {e.Message}");

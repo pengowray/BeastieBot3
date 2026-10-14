@@ -1,6 +1,7 @@
 namespace BeastieBot3.Site.Display;
 
-// The species page's comparison of ranks in IUCN, on this site, in the Catalogue of Life, Wikidata, English Wikipedia and Wikispecies.
+// The species page's comparison of ranks in IUCN, on this site, in the Catalogue of Life, Wikidata, English Wikipedia and Wikispecies,
+// and in the Mammal Diversity Database, the Reptile Database or AmphibiaWeb (titled by SiteText.SourceLabel).
 
 public static partial class SiteText {
     public const string HeadingComparativeClassification = "Classification";

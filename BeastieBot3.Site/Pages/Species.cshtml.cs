@@ -46,13 +46,17 @@ public sealed class SpeciesModel : TaxonPageModel {
     /// ranks. Empty for a taxon not in the release, whose page lists its ranks as IUCN gave them.
     public IReadOnlyList<GroupRow> Classification { get; private set; } = [];
 
-    /// The taxon's ranks in IUCN, on this site, in the Catalogue of Life and in Wikidata, side by
+    /// The taxon's ranks in IUCN, the Catalogue of Life, the checklist of its class (Mammal Diversity
+    /// Database, Reptile Database, AmphibiaWeb), Wikidata, English Wikipedia and Wikispecies, side by
     /// side; empty when only IUCN's are known.
     public IReadOnlyList<ComparisonRow> ComparativeClassification { get; private set; } = [];
     public IReadOnlyList<LadderColumn> RankColumns { get; private set; } = [];
 
     /// The classification line under the name as each other source gives it, for the line's dropdown.
     public IReadOnlyList<(LadderColumn Source, IReadOnlyList<ShortLineStep> Steps)> OtherShortLines { get; private set; } = [];
+
+    /// The sources of taxon_ladder that the comparison shows, in its order.
+    private static readonly string[] ChecklistLadders = ["mdd", "reptiledb", "amphibiaweb"];
 
     private IReadOnlyList<ComparisonRow> BuildComparativeClassification(TaxonRow taxon) {
         var leafRank = taxon.Kind switch { TaxonKinds.Species => "species", TaxonKinds.Variety => "variety", TaxonKinds.Subspecies => "subspecies", _ => null };
@@ -71,6 +75,15 @@ public sealed class SpeciesModel : TaxonPageModel {
         if (taxon.ColId is { } colId && _queries.GetLadder("col", colId) is { Count: > 0 } col) {
             columns.Add(new LadderColumn(SiteText.RanksCol, SiteFormat.CatalogueOfLifeUrl(colId),
                 [.. col.Select(s => new LadderStep(s.Rank == "unranked" ? null : s.Rank, s.Name, SiteFormat.CatalogueOfLifeUrl(s.Id)))], Backbone: true, Key: "col"));
+        }
+        // The checklists of one class (Mammal Diversity Database, Reptile Database, AmphibiaWeb), after
+        // the Catalogue of Life: the species links to its record there.
+        foreach (var (source, nodeId) in _queries.GetTaxonLadders(taxon.TaxonId).OrderBy(p => Array.IndexOf(ChecklistLadders, p.Key))) {
+            if (Array.IndexOf(ChecklistLadders, source) >= 0 && _queries.GetLadder(source, nodeId) is { Count: > 0 } steps) {
+                var recordUrl = SiteFormat.ChecklistRecordUrl(source, nodeId);
+                columns.Add(new LadderColumn(SiteText.SourceLabel(source), recordUrl,
+                    [.. steps.Select(s => new LadderStep(s.Rank, s.Name, s.Id == nodeId ? recordUrl : null))], Key: source));
+            }
         }
         if (taxon.WikidataQid is { } qid && _queries.GetLadder("wikidata", qid) is { Count: > 0 } wikidata) {
             columns.Add(new LadderColumn(SiteText.RanksWikidata, SiteFormat.WikidataUrl(qid),

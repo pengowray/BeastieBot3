@@ -18,13 +18,14 @@ using Microsoft.Data.Sqlite;
 //             redirect), with "#<n>" for the taxa above it on the same page, then the taxonavigation
 //             templates the page climbs: a template's last taxon has the template's name as its id,
 //             the ones above it "<template>#<n>". A template with no taxon line is passed through.
+//   mdd, reptiledb, amphibiaweb from the checklists store (SiteLadders.Checklists.cs).
 // Only the nodes above IUCN's taxa are kept, so the tables stay small.
 
 namespace BeastieBot3.SiteBuild;
 
 internal sealed record LadderNode(string Source, string Id, string? ParentId, string? Rank, string Name);
 
-internal static class SiteLadders {
+internal static partial class SiteLadders {
     public const string Col = "col";
     public const string Wikidata = "wikidata";
     public const string Wikipedia = "wikipedia";

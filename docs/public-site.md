@@ -819,8 +819,8 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
 - On a taxon page, each rank links to its group page, with the group's English name, or else up to
   three of CoL's names (muted, with a tooltip naming the source and saying they are unchecked). CoL groups are shown (marked "CoL").
   A small dropdown at the right of the line (`_ClassificationChoice`) picks "IUCN and Catalogue of Life"
-  (the default), "IUCN only", or another source's line: Catalogue of Life, Wikidata, English Wikipedia,
-  Wikispecies, whichever the comparative classification has (`ClassificationComparison.ShortLine`: every
+  (the default), "IUCN only", or another source's line: Catalogue of Life, Mammal Diversity Database,
+  The Reptile Database, AmphibiaWeb, Wikidata, English Wikipedia, Wikispecies, whichever the comparative classification has (`ClassificationComparison.ShortLine`: every
   main rank from the kingdom down, and below the first of order, family or genus every other group with a
   rank, "clade" not counted; a main rank whose name is not IUCN's is marked). It is CSS only (`:has`). A taxon not in the
   release has no place in the tree and shows IUCN's ranks as text, as before.
@@ -1818,7 +1818,8 @@ The citations page writes the same name in the citation title, with the current 
 The species page's comparative classification (headed "Classification" on the page; the hidden
 heading of the line of groups under the taxon's name is "Short classification") lines up the
 taxon's classification in IUCN, on this site (IUCN with the
-Catalogue of Life groups between its ranks), in the Catalogue of Life, Wikidata, English
+Catalogue of Life groups between its ranks), in the Catalogue of Life, the checklist of its class
+(Mammal Diversity Database, Reptile Database or AmphibiaWeb), Wikidata, English
 Wikipedia and Wikispecies, row by main rank (kingdom to species; `Display/ClassificationComparison.cs`).
 `site build-db` writes each source's nodes to `ladder_node` (`SiteBuild/SiteLadders.cs`); the page
 climbs `parent_id` from the taxon's start node. Kingdom, phylum and class are always shown. The
@@ -1833,6 +1834,19 @@ has, because the lower ranks are the ones that differ between sources.
 | wikidata | the taxon's `wikidata_qid` | `wikidata sweep-taxa` |
 | wikipedia | `article:<enwiki_title>`, then the taxonomy templates its taxobox climbs | `wikipedia fetch-taxonomy-templates` |
 | wikispecies | `page:<IUCN scientific name>`, then the taxonavigation templates its page climbs | `wikispecies fetch` |
+| mdd, reptiledb, amphibiaweb | the `taxon_ladder` row of the taxon: the source's id of the species' record, then `<rank>:<name>` groups | `checklists import --source mdd` (`reptiledb`, `amphibiaweb`) |
+
+The three checklists' groups are in the checklists store's `checklist_rank` (each species' groups,
+highest first): MDD's subclass to subgenus columns, the Reptile Database's parent taxa in its
+ChecklistBank export (class to genus), AmphibiaWeb's order to subgenus columns.
+`SiteBuild/SiteLadders.Checklists.cs` matches IUCN species of the checklist's class to the
+checklist's species as the names and subspecies are matched (`SiteChecklistNames.Match`: own name,
+else the one species the checklist's synonyms lead to, unless another IUCN species leads there too)
+and adds class Mammalia or Amphibia above the groups of MDD and AmphibiaWeb, which list one class
+and have no class column. A group's node is `<rank>:<name>`, or `<rank>:<name>#2` for a group of
+the same rank and name under another parent (a subgenus name used in two genera). The column's title
+links the species' record. The Reptile Database's export of June 2026 puts every squamate family in
+suborder Iguania; while a snake family is under it, the import leaves that suborder out.
 
 `wikispecies fetch` keeps its pages in a cache of their own (`Datastore:wikispecies_cache_sqlite`,
 else `wikispecies_cache.sqlite` in the datastore folder), with the same tables as the Wikipedia

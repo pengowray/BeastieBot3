@@ -94,9 +94,7 @@ public static class SubspeciesRows {
         "iucn" => "/species/" + sourceId,
         "col" => SiteFormat.CatalogueOfLifeUrl(sourceId),
         "wikidata" => SiteFormat.WikidataUrl(sourceId),
-        "mdd" => SiteText.MddUrl + "taxon/" + Uri.EscapeDataString(sourceId) + "/",
-        "reptiledb" => "https://reptile-database.reptarium.cz/species?" + sourceId,
-        _ => string.Empty,
+        _ => SiteFormat.ChecklistRecordUrl(source, sourceId) ?? string.Empty,
     };
 
     // The order of the names tables (TaxonNames): IUCN, Wikidata, the Catalogue of Life; then the

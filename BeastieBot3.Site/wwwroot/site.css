@@ -1226,7 +1226,10 @@ abbr[title] {
 .classification:has(.line-choice option[value="col"]:checked) .line-other[data-source="col"],
 .classification:has(.line-choice option[value="wikidata"]:checked) .line-other[data-source="wikidata"],
 .classification:has(.line-choice option[value="wikipedia"]:checked) .line-other[data-source="wikipedia"],
-.classification:has(.line-choice option[value="wikispecies"]:checked) .line-other[data-source="wikispecies"] {
+.classification:has(.line-choice option[value="wikispecies"]:checked) .line-other[data-source="wikispecies"],
+.classification:has(.line-choice option[value="mdd"]:checked) .line-other[data-source="mdd"],
+.classification:has(.line-choice option[value="reptiledb"]:checked) .line-other[data-source="reptiledb"],
+.classification:has(.line-choice option[value="amphibiaweb"]:checked) .line-other[data-source="amphibiaweb"] {
     display: flex;
 }
 

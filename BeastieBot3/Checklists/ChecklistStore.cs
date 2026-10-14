@@ -10,11 +10,15 @@ using Microsoft.Data.Sqlite;
 //                     'name' for a country name not matched to a code) and the origin it gives;
 //   checklist_synonym one row per source synonym and the accepted name it leads to, for matching
 //                     an IUCN name that the source treats as a synonym.
-//   checklist_species one row per accepted species of a source that has subspecies lists (mdd,
-//                     reptiledb), with the source's id of the species' record: the MDD id
-//                     ("1000002") or the query of the Reptile Database's species page
-//                     ("genus=Tachyglossus&species=aculeatus"). `site build-db` matches IUCN species
-//                     to these names and links the record.
+//   checklist_species one row per accepted species of mdd, reptiledb and amphibiaweb, with the
+//                     source's id of the species' record: the MDD id ("1000002"), the query of the
+//                     Reptile Database's species page ("genus=Tachyglossus&species=aculeatus") or
+//                     AmphibiaWeb's species number ("8097"). `site build-db` matches IUCN species to
+//                     these names and links the record.
+//   checklist_rank    the groups each of those species is in, as the source gives them, highest
+//                     first: MDD's subclass to subgenus columns, the Reptile Database's parent taxa
+//                     (class to genus), AmphibiaWeb's order to subgenus columns. For the species
+//                     page's comparison of classifications.
 //   checklist_infraspecific  one row per subspecies a source lists under one of its species: the
 //                     full name ("Tachyglossus aculeatus acanthion"), rank, authority as written, and
 //                     MDD's note ("fossil", "recently extinct", "holocene").
@@ -37,6 +41,10 @@ internal static class ChecklistNameTypes {
 
 /// An accepted species of a source, with the source's id of its record (null when it has none).
 internal sealed record ChecklistSpecies(string ScientificName, string? RecordId);
+
+/// One group a source puts a species in: Position 0 is the highest group the source gives; Rank as
+/// the source names it ("order", "superfamily", "tribe").
+internal sealed record ChecklistRank(string ScientificName, int Position, string Rank, string Name);
 
 /// A subspecies (or variety) a source lists under one of its species: the full name, the rank
 /// (InfraspecificNames.Subspecies or Variety), the authority as the source writes it, and a note the
@@ -150,6 +158,14 @@ internal sealed class ChecklistStore : IDisposable {
                 note            TEXT,
                 PRIMARY KEY (source, scientific_name, name)
             ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS checklist_rank (
+                source          TEXT NOT NULL,
+                scientific_name TEXT NOT NULL,
+                position        INTEGER NOT NULL,
+                rank            TEXT NOT NULL,
+                name            TEXT NOT NULL,
+                PRIMARY KEY (source, scientific_name, position)
+            ) WITHOUT ROWID;
             """;
         command.ExecuteNonQuery();
         using var columns = _connection.CreateCommand();
@@ -165,14 +181,16 @@ internal sealed class ChecklistStore : IDisposable {
     /// or subspecies given twice keeps the first row.
     public void Replace(string source, string? version, string? licence, string? url, IEnumerable<ChecklistArea> rows,
         IEnumerable<(string Name, string Accepted)>? synonyms = null, IEnumerable<ChecklistName>? names = null,
-        IEnumerable<ChecklistSpecies>? species = null, IEnumerable<ChecklistInfraspecific>? infraspecific = null) {
+        IEnumerable<ChecklistSpecies>? species = null, IEnumerable<ChecklistInfraspecific>? infraspecific = null,
+        IEnumerable<ChecklistRank>? ranks = null) {
         using var tx = _connection.BeginTransaction();
         using (var delete = _connection.CreateCommand()) {
             delete.Transaction = tx;
             delete.CommandText = """
                 DELETE FROM checklist_area WHERE source = @source; DELETE FROM checklist_synonym WHERE source = @source;
                 DELETE FROM checklist_name WHERE source = @source; DELETE FROM checklist_species WHERE source = @source;
-                DELETE FROM checklist_infraspecific WHERE source = @source; DELETE FROM checklist_source WHERE source = @source;
+                DELETE FROM checklist_infraspecific WHERE source = @source; DELETE FROM checklist_rank WHERE source = @source;
+                DELETE FROM checklist_source WHERE source = @source;
                 """;
             delete.Parameters.AddWithValue("@source", source);
             delete.ExecuteNonQuery();
@@ -260,6 +278,23 @@ internal sealed class ChecklistStore : IDisposable {
                 insert.ExecuteNonQuery();
             }
         }
+        if (ranks is not null) {
+            using var insert = _connection.CreateCommand();
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT OR IGNORE INTO checklist_rank (source, scientific_name, position, rank, name) VALUES (@source, @species, @position, @rank, @name)";
+            insert.Parameters.AddWithValue("@source", source);
+            var speciesName = insert.Parameters.Add("@species", SqliteType.Text);
+            var position = insert.Parameters.Add("@position", SqliteType.Integer);
+            var rank = insert.Parameters.Add("@rank", SqliteType.Text);
+            var name = insert.Parameters.Add("@name", SqliteType.Text);
+            foreach (var r in ranks) {
+                speciesName.Value = r.ScientificName;
+                position.Value = r.Position;
+                rank.Value = r.Rank;
+                name.Value = r.Name;
+                insert.ExecuteNonQuery();
+            }
+        }
         using (var info = _connection.CreateCommand()) {
             info.Transaction = tx;
             info.CommandText = "INSERT INTO checklist_source (source, version, licence, url, imported_at) VALUES (@source, @version, @licence, @url, @at)";
@@ -296,8 +331,8 @@ internal sealed class ChecklistStore : IDisposable {
         return list;
     }
 
-    /// The source's species that have subspecies lists, with their record ids. Empty for a store
-    /// written before checklist_species existed.
+    /// The source's species, with their record ids. Empty for a store written before
+    /// checklist_species existed.
     public IEnumerable<ChecklistSpecies> Species(string source) {
         if (!HasTable("checklist_species")) {
             yield break;
@@ -325,6 +360,27 @@ internal sealed class ChecklistStore : IDisposable {
             yield return new ChecklistInfraspecific(reader.GetString(0), reader.GetString(1), reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4));
         }
+    }
+
+    /// The groups the source puts each of its species in, highest first, by species. Empty for a store
+    /// written before checklist_rank existed.
+    public IReadOnlyDictionary<string, IReadOnlyList<(string Rank, string Name)>> Ranks(string source) {
+        var map = new Dictionary<string, IReadOnlyList<(string Rank, string Name)>>(StringComparer.Ordinal);
+        if (!HasTable("checklist_rank")) {
+            return map;
+        }
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT scientific_name, rank, name FROM checklist_rank WHERE source = @source ORDER BY scientific_name, position";
+        command.Parameters.AddWithValue("@source", source);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var species = reader.GetString(0);
+            if (!map.TryGetValue(species, out var list)) {
+                map[species] = list = new List<(string, string)>();
+            }
+            ((List<(string, string)>)list).Add((reader.GetString(1), reader.GetString(2)));
+        }
+        return map;
     }
 
     private bool HasTable(string table) {

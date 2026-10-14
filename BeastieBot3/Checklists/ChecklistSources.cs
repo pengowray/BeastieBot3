@@ -10,13 +10,15 @@ using CsvHelper.Configuration;
 // and a parser that turns the file into ChecklistArea rows (and synonyms):
 //   mdd          Mammal Diversity Database (Zenodo, CC BY 4.0): countryDistribution, country names
 //                separated by "|", "?" for uncertain; each species' id and its subspecies column
-//                (MddSubspecies).
+//                (MddSubspecies); its groups from the subclass to subgenus columns.
 //   wcvp         World Checklist of Vascular Plants (Kew, CC BY): wcvp_distribution.csv, TDWG level-3
 //                areas with introduced / extinct / location_doubtful flags; synonyms from wcvp_names.csv.
 //   reptiledb    The Reptile Database on ChecklistBank (dataset 1008, ColDP, CC BY): Distribution.tsv,
 //                free text ("N China (W Xinjiang), Kyrgyzstan") split into place names; the accepted
-//                subspecies (Taxon.tsv rows of rank subspecies under a species) with their authorship.
-//   amphibiaweb  AmphibiaWeb's names file (CC BY-NC 4.0): isocc and intro_isocc, ISO alpha-2 codes.
+//                subspecies (Taxon.tsv rows of rank subspecies under a species) with their authorship;
+//                each species' groups, from its parent taxa in Taxon.tsv.
+//   amphibiaweb  AmphibiaWeb's names file (CC BY-NC 4.0): isocc and intro_isocc, ISO alpha-2 codes;
+//                each species' number (aweb_uid) and its groups from the order to subgenus columns.
 //                AmphibiaWeb asks to be contacted before large downloads; the default URL is the
 //                monthly snapshot they publish on GitHub.
 
@@ -27,8 +29,11 @@ internal sealed record ChecklistParse(string? Version, IReadOnlyList<ChecklistAr
     /// English common names and synonyms of the source's species.
     public IReadOnlyList<ChecklistName> Names { get; init; } = [];
 
-    /// The source's accepted species with their record ids (mdd and reptiledb).
+    /// The source's accepted species with their record ids (mdd, reptiledb and amphibiaweb).
     public IReadOnlyList<ChecklistSpecies> Species { get; init; } = [];
+
+    /// The groups each species is in, highest first (mdd, reptiledb and amphibiaweb).
+    public IReadOnlyList<ChecklistRank> Ranks { get; init; } = [];
 
     /// The subspecies the source lists under its species (mdd and reptiledb), and the number of
     /// subspecies entries the parser could not read.
@@ -103,6 +108,11 @@ internal static partial class ChecklistSources {
         return names;
     }
 
+    /// MDD's columns of the groups above species, highest first. MDD writes "NA" for a rank a species
+    /// has no group at.
+    internal static readonly string[] MddRanks = ["subclass", "infraclass", "magnorder", "superorder", "order", "suborder", "infraorder",
+        "parvorder", "superfamily", "family", "subfamily", "tribe", "subtribe", "genus", "subgenus"];
+
     internal static ChecklistParse ParseMdd(TextReader text, string? version) {
         using var csv = new CsvReader(text, new CsvConfiguration(CultureInfo.InvariantCulture) { BadDataFound = null, MissingFieldFound = null });
         csv.Read();
@@ -112,11 +122,19 @@ internal static partial class ChecklistSources {
         var species = new List<ChecklistSpecies>();
         var subspecies = new List<ChecklistInfraspecific>();
         var subspeciesNotRead = 0;
+        var ranks = new List<ChecklistRank>();
+        var rankColumns = MddRanks.Where(r => csv.HeaderRecord?.Contains(r) == true).ToList();
         while (csv.Read()) {
             var name = csv.GetField("sciName")?.Replace('_', ' ').Trim();
             if (!string.IsNullOrEmpty(name)) {
                 // id: the species' MDD id, which its page on the MDD website has in its address.
                 species.Add(new ChecklistSpecies(name, csv.GetField("id")?.Trim() is { Length: > 0 } id && id != "NA" ? id : null));
+                var position = 0;
+                foreach (var rank in rankColumns) {
+                    if (csv.GetField(rank)?.Trim() is { Length: > 0 } group && group != "NA") {
+                        ranks.Add(new ChecklistRank(name, position++, rank, group));
+                    }
+                }
                 var (read, notRead) = MddSubspecies.Parse(name, csv.GetField("subspecies"));
                 subspecies.AddRange(read);
                 subspeciesNotRead += notRead;
@@ -139,7 +157,7 @@ internal static partial class ChecklistSources {
             }
         }
         return new ChecklistParse(version, rows, [], []) {
-            Names = names, Species = species, Infraspecific = subspecies, InfraspecificNotRead = subspeciesNotRead,
+            Names = names, Species = species, Infraspecific = subspecies, InfraspecificNotRead = subspeciesNotRead, Ranks = ranks,
         };
     }
 
@@ -229,6 +247,8 @@ internal static partial class ChecklistSources {
         // Accepted subspecies: Taxon.tsv rows of rank subspecies (taxon id, parent taxon id, name).
         // The names of rank subspecies in Synonym.tsv are synonyms and are left out.
         var subspeciesTaxa = new List<(string Parent, string Name, string? Authorship)>();
+        // Every taxon's parent and name, for the groups above each species.
+        var taxonNode = new Dictionary<string, (string? Parent, string Rank, string Name)>(StringComparer.Ordinal);
         h = Header(taxa.ReadLine(), '\t');
         var parentColumn = h.GetValueOrDefault("parent_id", -1);
         var linkColumn = h.GetValueOrDefault("link", -1);
@@ -237,6 +257,8 @@ internal static partial class ChecklistSources {
             if (f.Length <= h["name_id"] || !nameText.TryGetValue(f[h["name_id"]], out var n)) {
                 continue;
             }
+            var parentId = parentColumn >= 0 && parentColumn < f.Length && f[parentColumn].Length > 0 ? f[parentColumn] : null;
+            taxonNode[f[h["id"]]] = (parentId, n.Rank.Trim() is { Length: > 0 } r ? r : "unranked", n.Name.Trim());
             if (n.Rank == "species") {
                 taxonName[f[h["id"]]] = n.Name;
                 var link = linkColumn >= 0 && linkColumn < f.Length ? f[linkColumn] : null;
@@ -245,6 +267,24 @@ internal static partial class ChecklistSources {
                 subspeciesTaxa.Add((f[parentColumn], n.Name.Trim(), n.Authorship));
             }
         }
+        var groupsOf = new Dictionary<string, List<(string Rank, string Name)>>(StringComparer.Ordinal);
+        foreach (var (id, speciesName) in taxonName) {
+            var groups = new List<(string Rank, string Name)>();
+            for (var at = taxonNode[id].Parent; at is not null && groups.Count < 40 && taxonNode.TryGetValue(at, out var node); at = node.Parent) {
+                groups.Add((node.Rank, node.Name));
+            }
+            groups.Reverse();
+            groupsOf[speciesName] = groups;
+        }
+        // The export of June 2026 puts every squamate family in suborder Iguania, which is only the
+        // iguanas, agamas, chameleons and their relatives: snakes, skinks and geckos are not in it. While
+        // a snake family is under it, the suborder is left out of every species' groups.
+        if (groupsOf.Values.Any(g => g.Contains(("suborder", "Iguania")) && g.Contains(("family", "Colubridae")))) {
+            foreach (var groups in groupsOf.Values) {
+                groups.Remove(("suborder", "Iguania"));
+            }
+        }
+        var ranks = groupsOf.SelectMany(p => p.Value.Select((g, i) => new ChecklistRank(p.Key, i, g.Rank, g.Name))).ToList();
         var subspecies = new List<ChecklistInfraspecific>();
         var subspeciesNotRead = 0;
         foreach (var (parent, name, authorship) in subspeciesTaxa) {
@@ -275,7 +315,7 @@ internal static partial class ChecklistSources {
             }
         }
         return new ChecklistParse(version, rows, synonymList, []) {
-            Species = species, Infraspecific = subspecies, InfraspecificNotRead = subspeciesNotRead,
+            Species = species, Infraspecific = subspecies, InfraspecificNotRead = subspeciesNotRead, Ranks = ranks,
         };
     }
 
@@ -328,12 +368,23 @@ internal static partial class ChecklistSources {
         var rows = new List<ChecklistArea>();
         var synonyms = new List<(string, string)>();
         var names = new List<ChecklistName>();
+        var species = new List<ChecklistSpecies>();
+        var ranks = new List<ChecklistRank>();
+        var rankColumns = AmphibiaWebRanks.Where(h.ContainsKey).ToList();
         for (var line = text.ReadLine(); line is not null; line = text.ReadLine()) {
             var f = line.Split('\t');
             if (f.Length <= h["intro_isocc"]) {
                 continue;
             }
             var name = $"{f[h["genus"]].Trim()} {f[h["species"]].Trim()}";
+            // aweb_uid: the number in the address of the species' page (amphibiaweb.org/species/8097).
+            species.Add(new ChecklistSpecies(name, h.TryGetValue("aweb_uid", out var uid) && f[uid].Trim() is { Length: > 0 } number ? number : null));
+            var position = 0;
+            foreach (var rank in rankColumns) {
+                if (f[h[rank]].Trim() is { Length: > 0 } group) {
+                    ranks.Add(new ChecklistRank(name, position++, rank, group));
+                }
+            }
             foreach (var code in f[h["isocc"]].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
                 rows.Add(new ChecklistArea(name, code.ToUpperInvariant(), ChecklistSchemes.Iso2, ChecklistOrigins.Native));
             }
@@ -358,8 +409,11 @@ internal static partial class ChecklistSources {
                 }
             }
         }
-        return new ChecklistParse(version, rows, synonyms, []) { Names = names };
+        return new ChecklistParse(version, rows, synonyms, []) { Names = names, Species = species, Ranks = ranks };
     }
+
+    /// AmphibiaWeb's columns of the groups above species, highest first.
+    internal static readonly string[] AmphibiaWebRanks = ["order", "family", "subfamily", "genus", "subgenus"];
 
     private static Dictionary<string, int> Header(string? line, char separator) {
         var header = new Dictionary<string, int>(StringComparer.Ordinal);

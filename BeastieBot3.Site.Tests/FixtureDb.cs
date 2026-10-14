@@ -250,6 +250,17 @@ public static class FixtureDb {
             WriteNameWords(connection);
             // The tiger's ids in two other databases.
             Exec(connection, $"INSERT INTO taxon_external_id (taxon_id, property, value) VALUES ({Tiger}, 'P846', '5219416'), ({Tiger}, 'P3151', '41967'), ({Tiger}, 'P373', 'Panthera tigris'), ({Tiger}, 'commonswiki', 'Panthera tigris')");
+            // The polar bear's classification in the Mammal Diversity Database.
+            Exec(connection, $"""
+                INSERT INTO ladder_node (source, id, parent_id, rank, name) VALUES
+                    ('mdd', 'class:Mammalia', NULL, 'class', 'Mammalia'),
+                    ('mdd', 'order:Carnivora', 'class:Mammalia', 'order', 'Carnivora'),
+                    ('mdd', 'suborder:Caniformia', 'order:Carnivora', 'suborder', 'Caniformia'),
+                    ('mdd', 'family:Ursidae', 'suborder:Caniformia', 'family', 'Ursidae'),
+                    ('mdd', 'genus:Ursus', 'family:Ursidae', 'genus', 'Ursus'),
+                    ('mdd', '1005967', 'genus:Ursus', 'species', 'Ursus maritimus');
+                INSERT INTO taxon_ladder (taxon_id, source, node_id) VALUES ({PolarBear}, 'mdd', '1005967');
+                """);
             // The taxobox statuses of three articles: another category (Tiger: VU, latest EN), up to
             // date (Sumatran tiger), the right category citing another assessment (Lion).
             Exec(connection, $"""

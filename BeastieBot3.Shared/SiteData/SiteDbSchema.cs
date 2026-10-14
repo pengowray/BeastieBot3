@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 30;
+    public const int Version = 31;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -374,6 +374,11 @@ public static class SiteDbSchema {
         -- source 'wikidata': id is a QID (taxon.wikidata_qid), followed through the first parent taxon;
         -- source 'wikipedia': id 'article:<taxon.enwiki_title>' for the article's taxobox, whose parent is
         -- the name of the taxonomy template it starts from ('Felis' for Template:Taxonomy/Felis).
+        -- Sources 'mdd', 'reptiledb' and 'amphibiaweb' (the Mammal Diversity Database, the Reptile
+        -- Database, AmphibiaWeb): a species' id is the source's id of its record (the MDD id, the query of
+        -- the Reptile Database's species page, AmphibiaWeb's species number), which taxon_ladder links to
+        -- the IUCN taxon; a group's id is '<rank>:<name>', with '#2', '#3' ... for a second group of that
+        -- rank and name under another parent.
         CREATE TABLE ladder_node (
             source     TEXT NOT NULL,
             id         TEXT NOT NULL,
@@ -381,6 +386,15 @@ public static class SiteDbSchema {
             rank       TEXT,                                 -- as the source names it: 'family', 'subtribe', 'clade'; NULL when it gives none
             name       TEXT NOT NULL,
             PRIMARY KEY (source, id)
+        ) WITHOUT ROWID;
+
+        -- The species node (ladder_node) of an IUCN taxon in each source whose node is not found from a
+        -- column of taxon: 'mdd', 'reptiledb', 'amphibiaweb'.
+        CREATE TABLE taxon_ladder (
+            taxon_id   INTEGER NOT NULL REFERENCES taxon(taxon_id),
+            source     TEXT NOT NULL,
+            node_id    TEXT NOT NULL,
+            PRIMARY KEY (taxon_id, source)
         ) WITHOUT ROWID;
 
         -- The subspecies and varieties that the Catalogue of Life, Wikidata, the Mammal Diversity Database
