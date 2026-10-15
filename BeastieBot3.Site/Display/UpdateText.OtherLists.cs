@@ -49,7 +49,7 @@ public static partial class UpdateText {
     public static string OtherListOption(string name, int taxa) =>
         $"{name} ({SiteFormat.Number(taxa)} {(taxa == 1 ? "taxon" : "taxa")})";
     public const string OtherListHelp =
-        "Adds a column with each taxon's status in the chosen list to the report and to the tables of the “Comparison with” section, including the table of taxa missing from the page. The wikitext is not changed. The number after each list is how many IUCN Red List taxa have a status in that list. When you load a page from Wikipedia and its title names a country, that country's main list is chosen if it has a status for any of the page's taxa.";
+        "Adds a column with each taxon's status in the chosen list to the report and to the tables of the “Comparison with” section, including the table of taxa missing from the page. The wikitext is not changed. The number after each list is how many IUCN Red List taxa have a status in that list. When you load a page from Wikipedia and its title names a country, a list of that country is chosen if it has a status for any of the page's taxa.";
 
     /// Above the table of missing taxa with a status in the chosen list: "EPBC Act: 12 of the 40 taxa
     /// missing from the page have a status in this list."
