@@ -393,33 +393,6 @@ public sealed partial class SiteQueries {
         return listings.ToDictionary(p => p.Key, p => (IReadOnlyList<PossiblyExtinctListingRow>)p.Value);
     }
 
-    /// The EPBC Act listings of these taxa, by taxon id: the listing of the whole taxon first, then
-    /// those of populations. Taxa with no listing are left out.
-    public IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>> GetEpbcListings(IReadOnlyCollection<long> taxonIds) {
-        var listings = new Dictionary<long, List<EpbcListingRow>>();
-        if (taxonIds.Count == 0) {
-            return new Dictionary<long, IReadOnlyList<EpbcListingRow>>();
-        }
-        using var connection = _db.OpenConnection();
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT taxon_id, sprat_taxon_id, listed_name, status, applies_to, population
-            FROM epbc_listing
-            WHERE taxon_id IN (SELECT value FROM json_each(@ids)) AND status IS NOT NULL
-            ORDER BY taxon_id, CASE applies_to WHEN 'taxon' THEN 0 ELSE 1 END, population, sprat_taxon_id
-            """;
-        command.Parameters.AddWithValue("@ids", "[" + string.Join(',', taxonIds.Distinct()) + "]");
-        using var reader = command.ExecuteReader();
-        while (reader.Read()) {
-            var id = reader.GetInt64(0);
-            if (!listings.TryGetValue(id, out var rows)) {
-                listings[id] = rows = [];
-            }
-            rows.Add(new EpbcListingRow(reader.GetInt64(1), reader.GetString(2), Text(reader, 3), reader.GetString(4), Text(reader, 5)));
-        }
-        return listings.ToDictionary(p => p.Key, p => (IReadOnlyList<EpbcListingRow>)p.Value);
-    }
-
     /// The taxon's ids in other databases (taxon_external_id), by Wikidata property.
     public IReadOnlyList<(string Property, string Value)> GetExternalIds(long taxonId) {
         using var connection = _db.OpenConnection();

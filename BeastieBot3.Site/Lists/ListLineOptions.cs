@@ -11,6 +11,8 @@ using BeastieBot3.Site.Pages;
 //                               end, or the full citation in the line (none when absent)
 //   lcite   q                   {{cite Q}} for an IUCN assessment that has a Wikidata item (IucnReference);
 //                               {{cite iucn}} when absent
+//   other   a list key          the taxon's status in another list after the line (OtherStatusChoices
+//                               key: "au-epbc", "jncc-redlist-gb"); none when absent
 
 namespace BeastieBot3.Site.Lists;
 
@@ -28,10 +30,12 @@ public sealed record ListLineOptions {
     public SpeciesListAuthority Authority { get; init; } = SpeciesListAuthority.None;
     public ListReferenceMode References { get; init; } = ListReferenceMode.None;
     public ReferenceTemplate Template { get; init; } = ReferenceTemplate.CiteIucn;
+    /// The OtherStatusChoices key of the list whose status goes after each line; null for none.
+    public string? OtherList { get; init; }
 
     public bool HasReferences => References != ListReferenceMode.None;
 
-    public static readonly string[] Keys = ["auth", "lrefs", "lcite"];
+    public static readonly string[] Keys = ["auth", "lrefs", "lcite", "other"];
 
     public static ListLineOptions Read(IQueryCollection query) => new() {
         Authority = Last(query, "auth") switch {
@@ -45,6 +49,7 @@ public sealed record ListLineOptions {
             _ => ListReferenceMode.None,
         },
         Template = IucnReference.FromQuery(Last(query, "lcite")),
+        OtherList = Last(query, "other") is { Length: > 0 } other ? other : null,
     };
 
     /// The query string parts that differ from the defaults.
@@ -57,6 +62,9 @@ public sealed record ListLineOptions {
         }
         if (Template != ReferenceTemplate.CiteIucn) {
             yield return "lcite=" + IucnReference.QueryValue(Template);
+        }
+        if (OtherList is not null) {
+            yield return "other=" + Uri.EscapeDataString(OtherList);
         }
     }
 

@@ -189,6 +189,13 @@ public sealed class GroupListModel : GroupPageModel {
     /// The species tables, when the list type is tables.
     public SpeciesTableResult? Tables { get; private set; }
 
+    /// The lists whose status can go after each line, and the one chosen (null for none).
+    public OtherStatusChoices StatusLists => _statusLists ??= new OtherStatusChoices(_queries.GetOtherStatusListCounts());
+    private OtherStatusChoices? _statusLists;
+    public OtherStatusChoice? OtherList { get; private set; }
+    /// How many of the list's taxa have a status in OtherList.
+    public int OtherListTaxa { get; private set; }
+
     /// This page's address with the current options, for the address bar after a live update.
     public string CurrentOptionsUrl =>
         SiteUrls.GroupList(Group!, SpeciesTableQuery.Append(GroupListQuery.Write(Options, DefaultOptions), Table));
@@ -209,6 +216,7 @@ public sealed class GroupListModel : GroupPageModel {
             DefaultOptions = DefaultOptions with { Sections = StatusSection.AllKeys };
         }
         Options = GroupListQuery.Read(Request.Query, DefaultOptions, ranks.Select(r => r.Rank).ToList());
+        OtherList = StatusLists.Find(Options.Line.OtherList);
         // Species from CoL and Wikidata go in the bulleted list only; the species tables list IUCN's taxa.
         var extraCounts = !Table.IsTable && Options.Sources.HasOtherSources ? _queries.GetExtraSpeciesCounts(group.NodeId) : null;
         var countOptions = Table.IsTable ? SpeciesTable.ListOptions(Options) : Options;
@@ -245,7 +253,13 @@ public sealed class GroupListModel : GroupPageModel {
                 ? ListReferences.Build(List, new ListReferenceQueries(_db).GetCitations(group), Sources, Options.Line.Template,
                     DateOnly.FromDateTime(DateTime.UtcNow))
                 : null;
-            Wikitext = GroupList.ToWikitext(List, Options, references);
+            IReadOnlyDictionary<long, string>? lineEnds = null;
+            if (OtherList is { } other) {
+                var statuses = _queries.GetStatusesIn(other.List, taxa.Select(t => t.TaxonId).Where(id => id > 0).ToHashSet());
+                OtherListTaxa = statuses.Count;
+                lineEnds = OtherStatusLineEnd.Build(other, statuses);
+            }
+            Wikitext = GroupList.ToWikitext(List, Options, references, lineEnds);
         }
         return Page();
     }

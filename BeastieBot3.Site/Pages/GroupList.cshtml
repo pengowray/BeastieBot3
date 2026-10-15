@@ -131,6 +131,19 @@
                 <div data-list-type="bullets" hidden="@Model.Table.IsTable">
                     <partial name="_ListSourceOptions" model="@options.Sources" />
                     <partial name="_ListLineOptions" model="@options.Line" />
+                    <fieldset class="option-group" aria-labelledby="legend-other-list">
+                        <legend><span id="legend-other-list">@GroupLineText.OtherListLegend</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-other-list", GroupText.InfoTipLabel(GroupLineText.OtherListLegend), GroupLineText.OtherListHelp))" /></legend>
+                        <select name="other" aria-labelledby="legend-other-list">
+                            <option value="" selected="@(Model.OtherList is null)">@GroupLineText.OtherListNone</option>
+                            @foreach (var (statusGroup, choices) in Model.StatusLists.Groups) {
+                                <optgroup label="@SiteText.OtherStatusGroup(statusGroup)">
+                                    @foreach (var choice in choices) {
+                                        <option value="@choice.Key" selected="@(Model.OtherList?.Key == choice.Key)">@choice.Name</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    </fieldset>
                 </div>
                 <fieldset class="option-group">
                     <legend>@GroupText.OptionSort</legend>
@@ -159,6 +172,9 @@
                 <p class="note">@GroupText.EmptyList(group.Name)</p>
             } else {
                 <p class="list-size">@GroupText.ListSize(list.LineCount)@GroupSourceText.ExtraCountSuffix(GroupListSources.ExtraLineCount(list))</p>
+                @if (Model.OtherList is { } otherList) {
+                    <p class="note">@GroupLineText.OtherListCount(Model.OtherListTaxa, otherList.Heading)</p>
+                }
                 @if (Model.NoticeGroups is { IsEmpty: false } duplicates) {
                     <p class="notices-summary"><a href="#list-notices">@GroupSourceText.NoticesHeading</a>: @GroupSourceText.SummaryCounts(duplicates.LeftOut.EntryCount, duplicates.Kept.PairCount)</p>
                 }

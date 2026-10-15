@@ -721,6 +721,15 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   form: MOS:EL keeps external links out of article text. `Data/ListReferenceQueries.cs` reads the
   citation of every kind of taxon in the group (the species tables read species only). The preview
   shows each reference as a superscript number and lists the citations as written.
+- **Status in another list** (`other=<list key>`, none by default; the keys of the status update
+  page's choice, `OtherStatusChoices`): `Lists/OtherStatusLineEnd.cs` adds the taxon's status in
+  that list at the end of its line, after the `{{IUCN status}}` and any reference, as
+  " (EPBC Act: {{EPBC status|VU}})". English Wikipedia has inline templates for two of the lists,
+  `{{EPBC status}}` (EX, EW, CR, EN, VU, CD) and `{{ESA status}}` (E, T, XN, XE, E(S/A), T(S/A), PE,
+  PT, C); every other list's status is text, with its population or area in brackets unless the
+  whole list is of it. Bulleted lists only: `{{Species table/row}}` has no parameter for it.
+  Wikipedia's taxobox status systems (Module:Conservation status: NZTCS, COSEWIC, CITES,
+  NatureServe, the Australian state acts and others) are for taxoboxes, not list lines.
 - Lists with references are capped at `ListReferences.MaxLines` (550). Measured with `action=parse`
   (October 2026) on genus Pristimantis, 531 lines with authorities and `{{IUCN status}}`: post-expand
   include size 1,522,686 bytes with `{{cite iucn}}` references, list-defined or inline (2.9 KB a
@@ -2161,15 +2170,34 @@ Wikipedia" error), redirects to
 `/update?page=Title`, which loads the wikitext from English Wikipedia's action API
 (`Update/WikipediaPageSource.cs`: redirects followed, answers kept for 5 minutes, at most 2 MB)
 and runs the update as a POST would, with the categories its title names and, for a title that
-names Australia, the EPBC Act column. The page says which page and revision the text is; hidden
+names a country, that country's list in the other-list column (below). The page says which page and revision the text is; hidden
 fields keep that line on later POSTs while the text is unchanged (`pagekey`). The site asks
 Wikipedia only when `Site:WikipediaUserAgent` is set. A load counts against the client's
 `UpdatesPerMinute` like a POST and the shared limit on updates at once, and loads for all clients
 together are capped at `WikipediaLoadsPerMinute` (default 30; a page held from the last 5 minutes
 does not count), after which the page answers 429 and says so. The systemd unit allows connections to Wikimedia's address ranges
-for it. The option "Show the EPBC Act status" (`epbc`) adds each taxon's EPBC Act listing
-(`epbc_listing`, so only taxa IUCN also has) to the report and the comparison's tables, and lists
-the missing taxa that have one.
+for it.
+
+The choice of another list (`other`; `Display/OtherStatusChoices.cs`) adds a column to the report
+and the comparison's tables with each taxon's status in one list of `other_status`, and lists the
+missing taxa that have one. Every list of `other_status` can be chosen except NatureServe's state
+and province ranks: a system that is one list (key `au-epbc`), a list of `other_status_list`
+(`jncc-redlist-gb`, `redlist:se-redlist-2025`), or NatureServe's national ranks of one country
+(`natureserve-national:US`). The choices are grouped as on the species page, each with how many
+taxa have a status in it (`SiteQueries.GetOtherStatusListCounts`, read once per database file). A
+cell leaves out the population or area that at least 90% of the list's rows give ("Great Britain" on
+the Great Britain Red List). A page loaded by title (`?page=`, unless `other=` is given) gets the
+list of the country its title names (`AreaNames.FromTitle`, or "Australia"/"Australian" in the
+title) when that list has any of the text's taxa: AU the EPBC Act, BR ICMBio, CA COSEWIC, FR the
+national red list, GB the Great Britain Red List, JP the Ministry of the Environment's list, NZ the
+NZTCS, US the Endangered Species Act; any other country the one of its national red lists from GBIF
+that has the most of the text's taxa (`OtherStatusChoices.DefaultFor`). The old `epbc=1` field still
+chooses the EPBC Act.
+
+Under the result's summary, the page counts the updated wikitext's statuses by category, as
+`{{IUCN statuses}}` counts them (`IucnStatusesSummary.Count`: the `{{Species table/row}}` rows, else
+the `{{IUCN status}}` templates; CR(PE) and CR(PEW) in CR, with how many are possibly extinct), and
+gives the box's wikitext when the text has no box (`_StatusCounts`).
 
 An editor pastes the wikitext of an article or list and gets the same text back with the IUCN
 statuses changed to match the latest global assessments, and a report with one row per item (line,

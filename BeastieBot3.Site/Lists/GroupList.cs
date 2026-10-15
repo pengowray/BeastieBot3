@@ -324,9 +324,10 @@ public static class GroupList {
 
     /// The list as wikitext. Lines are rendered here with the options' status context per section.
     /// references (ListReferences.Build) puts a <ref> after the lines it has, in the form
-    /// options.Line.References asks for.
+    /// options.Line.References asks for; lineEnds (OtherStatusLineEnd) adds text after the line and its
+    /// reference, by taxon id.
     public static string ToWikitext(GroupListResult list, GroupListOptions options,
-        IReadOnlyDictionary<long, LineReference>? references = null) {
+        IReadOnlyDictionary<long, LineReference>? references = null, IReadOnlyDictionary<long, string>? lineEnds = null) {
         var sb = new StringBuilder();
         var refs = new ListReferenceWriter(options.Line.References, references);
         string? context = null;
@@ -362,6 +363,9 @@ public static class GroupList {
                         ? "*" + SpeciesListLine.FormatInfraspecificUnderSpecies(line.Entry, lineOptions)
                         : SpeciesListLine.Format(line.Entry, lineOptions));
                     refs.AppendRef(sb, line.Taxon.TaxonId);
+                    if (lineEnds?.GetValueOrDefault(line.Taxon.TaxonId) is { } end) {
+                        sb.Append(end);
+                    }
                     sb.Append('\n');
                     previousWasLine = true;
                     break;

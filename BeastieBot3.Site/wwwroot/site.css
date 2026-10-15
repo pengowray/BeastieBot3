@@ -1650,6 +1650,31 @@ th.num {
     font-size: 1.05rem;
 }
 
+/* The counts by category of the updated wikitext: one row of badges and numbers, then the total. */
+.update-counts {
+    margin: 0.25rem 0 1rem;
+}
+.update-counts-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1rem;
+    margin: 0;
+}
+.update-counts-label,
+.update-count-total {
+    font-weight: 600;
+}
+.update-count {
+    white-space: nowrap;
+}
+.update-counts .help {
+    margin: 0.25rem 0 0;
+}
+.update-counts code {
+    overflow-wrap: anywhere;
+}
+
 /* The updated wikitext keeps a fixed height and scrolls, so the report below it is in reach. */
 .update-result .wikitext-box textarea.update-output {
     height: 24rem;

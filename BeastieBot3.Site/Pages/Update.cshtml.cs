@@ -134,9 +134,11 @@ public sealed class UpdateModel : PageModel {
     public const string ScopeField = "scope";
     /// The categories to compare (ListCategories key); empty: from the codes in the wikitext.
     public const string CategoriesField = "cats";
-    /// Show each taxon's EPBC Act listing beside its IUCN status (ticked for a page loaded from
-    /// Wikipedia whose title names Australia).
-    public const string EpbcField = "epbc";
+    /// The list whose statuses are shown beside IUCN's (an OtherStatusChoices key); empty: none. A
+    /// page loaded from Wikipedia whose title names a country gets that country's list.
+    public const string OtherListField = "other";
+    /// The checkbox that showed EPBC Act listings before the choice of list: still read as au-epbc.
+    private const string OldEpbcField = "epbc";
     /// The country or area to compare with (an area code); empty: the whole group.
     public const string AreaField = "area";
     /// Which of the area's records count (AreaMode, by name).
@@ -162,10 +164,20 @@ public sealed class UpdateModel : PageModel {
     /// Every area, for the choice.
     public AreaNames Areas => _queries.AreaNames();
 
-    public bool ShowEpbc { get; private set; }
+    /// The lists the reader can choose to see beside IUCN statuses.
+    public OtherStatusChoices StatusLists => _statusLists ??= new OtherStatusChoices(_queries.GetOtherStatusListCounts());
+    private OtherStatusChoices? _statusLists;
 
-    /// The EPBC Act listings of the taxa in the report and the comparison, when ShowEpbc.
-    public IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>> Epbc { get; private set; } = new Dictionary<long, IReadOnlyList<EpbcListingRow>>();
+    /// The list chosen, or the one of the country in the title of the page loaded from Wikipedia.
+    public OtherStatusChoice? OtherList { get; private set; }
+
+    /// The statuses in OtherList of the taxa in the report and the comparison; null when no list is chosen.
+    public OtherStatusColumn? OtherStatuses { get; private set; }
+
+    /// The counts by category of the statuses in the updated text ({{IUCN statuses}}'s counts).
+    public IucnStatusesSummary.Counts? StatusCounts { get; private set; }
+    /// The updated text has an {{IUCN statuses}} box.
+    public bool StatusBoxInText { get; private set; }
 
     /// "List of reptiles of Australia", "List of Australian birds", "Fauna of Australia".
     public static bool IsAustralianTitle(string title) =>
@@ -255,9 +267,11 @@ public sealed class UpdateModel : PageModel {
         Categories = ListCategories.FromTitle(wikiPage.Title);
         Area = Areas.FromTitle(wikiPage.Title);
         AreaMode = AreaNames.ModeFromTitle(wikiPage.Title);
-        ShowEpbc = IsAustralianTitle(wikiPage.Title);
         Region = KnownRegion(Request.Query[RegionField].FirstOrDefault());
-        Run(wikiPage.Text, scope: null, listAnyway: false, extraSpecies: false, addMissing: false);
+        var other = Request.Query[OtherListField].FirstOrDefault();
+        OtherList = StatusLists.Find(other);
+        Run(wikiPage.Text, scope: null, listAnyway: false, extraSpecies: false, addMissing: false,
+            otherListFromTitle: other is null ? wikiPage.Title : null);
         return Page();
     }
 
@@ -320,7 +334,8 @@ public sealed class UpdateModel : PageModel {
         Categories = ListCategories.Find(form[CategoriesField].LastOrDefault());
         Area = Areas.ByCode(form[AreaField].LastOrDefault());
         AreaMode = Enum.TryParse<AreaMode>(form[AreaModeField].LastOrDefault(), out var mode) && Enum.IsDefined(mode) ? mode : AreaMode.Native;
-        ShowEpbc = On(EpbcField);
+        OtherList = StatusLists.Find(form[OtherListField].LastOrDefault())
+            ?? (On(OldEpbcField) ? StatusLists.Find(OtherStatusSystems.Epbc) : null);
         Region = KnownRegion(form[RegionField].LastOrDefault());
         // A rebuild first leaves out every taxon now in another category, as the button does.
         IReadOnlySet<long>? removing = On(RemoveAllField) || (On(RebuildField) && form[RemoveShownField].LastOrDefault() != TextKey(text)) ? null
@@ -363,8 +378,11 @@ public sealed class UpdateModel : PageModel {
     // now in another category to take out, null for all of them; removeAsked: the reader has asked to
     // take some out (the button, or the checkboxes shown for this text); removeForRebuild: only the
     // rebuild asked, so a refused rebuild takes none out.
+    // otherListFromTitle: the title of a page loaded from Wikipedia with no list chosen, whose
+    // country's list is shown when it has any of the text's taxa.
     private void Run(string text, string? scope, bool listAnyway, bool extraSpecies, bool addMissing,
-        IReadOnlySet<long>? removing = null, bool removeAsked = false, bool rebuild = false, bool removeForRebuild = false) {
+        IReadOnlySet<long>? removing = null, bool removeAsked = false, bool rebuild = false, bool removeForRebuild = false,
+        string? otherListFromTitle = null) {
         using var lookup = _queries.OpenStatusLookup(Region);
         var updater = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options);
         Result = updater.Update(text);
@@ -426,12 +444,23 @@ public sealed class UpdateModel : PageModel {
         }
         // Last, so the counts include the statuses changed and the taxa added above.
         Result = IucnStatusesSummary.Apply(text, Result, Options.AddStatusSummary);
-        if (ShowEpbc) {
+        var counted = new WikitextScanner(Result.Text);
+        StatusCounts = IucnStatusesSummary.Count(counted);
+        StatusBoxInText = counted.Templates.Any(t => t.Name == IucnStatusesSummary.TemplateName);
+        if (otherListFromTitle is not null && OtherList is null) {
+            var area = Areas.FromTitle(otherListFromTitle);
+            var country = area is null ? IsAustralianTitle(otherListFromTitle) ? "AU" : null : area.IsCountry ? area.Code : area.Country;
+            if (country is not null) {
+                var inLists = _queries.CountTaxaInLists((Result.Members ?? []).Select(m => m.Taxon.TaxonId).ToHashSet());
+                OtherList = StatusLists.DefaultFor(country, c => inLists.GetValueOrDefault((c.List.System, c.List.ListKey, c.List.Country)));
+            }
+        }
+        if (OtherList is { } list) {
             var ids = Result.Findings.Select(f => f.Taxon?.TaxonId).OfType<long>()
-                .Concat(Scope?.OtherCategory.Concat(Scope.Outside).Select(m => m.Taxon.TaxonId) ?? [])
+                .Concat(Scope?.OtherCategory.Concat(Scope.Outside).Concat(Scope.NotInRegion).Select(m => m.Taxon.TaxonId) ?? [])
                 .Concat(Scope?.Missing?.Select(t => t.TaxonId).Where(id => id > 0) ?? [])
                 .ToHashSet();
-            Epbc = _queries.GetEpbcListings(ids);
+            OtherStatuses = new OtherStatusColumn(list, _queries.GetStatusesIn(list.List, ids));
         }
     }
 

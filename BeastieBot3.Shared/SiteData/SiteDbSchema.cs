@@ -198,7 +198,7 @@ public static class SiteDbSchema {
         -- Endangered Species Act, from ECOS; and NatureServe's global rank with the COSEWIC and SARA
         -- statuses NatureServe records; the New Zealand Threat Classification System; and ICMBio's
         -- national assessments of Brazil's fauna (SALVE). The EPBC Act
-        -- listings are in epbc_listing too, which the status update page reads.
+        -- listings are in epbc_listing too, which the species page reads for its SPRAT profile links.
         CREATE TABLE other_status (
             taxon_id    INTEGER NOT NULL,
             system      TEXT NOT NULL,                        -- OtherStatusSystems key: 'au-epbc', 'au-act' ... 'au-wa', 'br-salve', 'ca-cosewic',

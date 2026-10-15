@@ -103,3 +103,7 @@ public sealed record TaxonListItem(TaxonSummary Taxon, string? MatchNoteLabel = 
         }
     }
 }
+
+/// The counts by category of the updated wikitext on the status update page (_StatusCounts). ShowBox:
+/// also give the {{IUCN statuses}} box's wikitext, for a text that has none.
+public sealed record StatusCountsModel(BeastieBot3.Site.Update.IucnStatusesSummary.Counts Counts, bool ShowBox);

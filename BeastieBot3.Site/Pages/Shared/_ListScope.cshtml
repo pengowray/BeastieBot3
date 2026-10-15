@@ -110,19 +110,19 @@
                     </table>
                 </div>
             }
-            @if (Model.Epbc is { } epbc) {
-                var listed = missing.Where(t => epbc.ContainsKey(t.TaxonId)).ToList();
-                <p>@UpdateText.MissingEpbc(listed.Count, missing.Count)</p>
+            @if (Model.OtherStatuses is { } other) {
+                var listed = missing.Where(t => other.Has(t.TaxonId)).ToList();
+                <p>@UpdateText.MissingOtherList(listed.Count, missing.Count, other.Choice.Heading)</p>
                 @if (listed.Count > 0) {
                     <div class="table-scroll">
                         <table class="update-report">
-                            <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnLatestStatus</th><th scope="col">@UpdateText.ColumnEpbc</th></tr></thead>
+                            <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnLatestStatus</th><th scope="col">@other.Choice.Heading</th></tr></thead>
                             <tbody>
                                 @foreach (var t in listed) {
                                     <tr>
                                         <td><a href="/species/@t.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(t.ScientificName))</a></td>
                                         <td>@GroupList.StatusCode(t)</td>
-                                        <td>@UpdateText.Epbc(epbc[t.TaxonId])</td>
+                                        <td>@other.Cell(t.TaxonId)</td>
                                     </tr>
                                 }
                             </tbody>
@@ -255,7 +255,7 @@
     }
     @if (r.Region is { } region && r.NotInRegion.Count > 0) {
         <h4>@UpdateText.NotInRegionHeading(r.NotInRegion.Count, region)</h4>
-        @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.NotInRegion, Model.Epbc))
+        @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.NotInRegion, Model.OtherStatuses))
     }
     @if (r.OtherCategory.Count > 0) {
         <h4>@UpdateText.OtherCategoryHeading(r.OtherCategory.Count, r.Categories!)</h4>
@@ -266,14 +266,14 @@
                 <button type="submit" form="update-form" name="@UpdateModel.RemoveAllField" value="1" aria-describedby="scope-remove-help">@UpdateText.RemoveButton</button>
             </p>
             <p class="help" id="scope-remove-help">@UpdateText.RemoveHelp</p>
-            @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.Epbc))
+            @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.OtherStatuses))
         } else {
             <input type="hidden" name="@UpdateModel.RemoveShownField" value="@Model.TextKey" form="update-form">
             <p>@UpdateText.RemoveResult(rebuilt ? Model.Rebuild!.Removed.Count : placement?.Removed.Count ?? 0, r.OtherCategory.Count)</p>
             @if (placement?.RemovedHeadings is { Count: > 0 } removedHeadings) {
                 <p>@UpdateText.RemovedHeadings(removedHeadings)</p>
             }
-            @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.Epbc) {
+            @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.OtherStatuses) {
                 Removing = Model.Removing,
                 Kept = (rebuilt ? Model.Rebuild!.Kept : placement?.Kept)?.ToDictionary(k => k.Member.Taxon.TaxonId, k => k.Reason) ?? [],
             })
@@ -282,7 +282,7 @@
     }
     @if (r.Outside.Count > 0) {
         <h4>@UpdateText.OutsideHeading(r.Outside.Count, r.Scope)</h4>
-        @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.Outside, Model.Epbc))
+        @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.Outside, Model.OtherStatuses))
     }
     @if (Model.Rebuild is null && Model.Forms.ListLines && r.Missing is not null) {
         <h4>@UpdateText.RebuildHeading</h4>

@@ -48,6 +48,9 @@
         <p class="update-summary">@(result.NotChecked > 0
             ? UpdateText.SummaryCapped(StatusUpdater.DefaultMaxItems, result.Updated, result.Current, result.NotUpdated, result.NotChecked)
             : UpdateText.Summary(result.Updated, result.Current, result.NotUpdated, result.ListLinesWithoutStatus + result.TablesWithoutStatus > 0))</p>
+        @if (Model.StatusCounts is { Items: > 0 } counts) {
+            <partial name="_StatusCounts" model="@(new StatusCountsModel(counts, !Model.StatusBoxInText))" />
+        }
         @if (result.Updated == 0 && result.MissingAdded == 0 && result.TaxaRemoved == 0 && result.Findings.Count > 0) {
             <p class="note">@UpdateText.NoChanges</p>
         }
@@ -135,7 +138,7 @@
                             <th scope="col">@UpdateText.ColumnBefore</th>
                             <th scope="col">@UpdateText.ColumnAfter</th>
                             <th scope="col">@UpdateText.ColumnTaxon</th>
-                            @if (Model.ShowEpbc) {<th scope="col">@UpdateText.ColumnEpbc</th>}
+                            @if (Model.OtherStatuses is { } otherHeading) {<th scope="col">@otherHeading.Choice.Heading</th>}
                             <th scope="col">@UpdateText.ColumnNotes</th>
                         </tr>
                     </thead>
@@ -148,7 +151,7 @@
                                 <td><code class="update-code">@finding.Before</code></td>
                                 <td>@if (finding.After is not null) {<code class="update-code">@finding.After</code>}</td>
                                 <td>@if (finding.Taxon is { } taxon) {<a href="/species/@taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName))</a>}</td>
-                                @if (Model.ShowEpbc) {<td>@UpdateText.Epbc(finding.Taxon is { } t ? Model.Epbc.GetValueOrDefault(t.TaxonId) : null)</td>}
+                                @if (Model.OtherStatuses is { } otherCell) {<td>@(finding.Taxon is { } t ? otherCell.Cell(t.TaxonId) : null)</td>}
                                 <td>
                                     @foreach (var note in finding.Notes) {
                                         <p class="update-note">@UpdateText.Note(note, finding.Kind, Model.Region)</p>
@@ -197,7 +200,7 @@
         }
 
         @if (Model.Scope is { } scope) {
-            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories, Model.ShowEpbc ? Model.Epbc : null, Model.CategoriesFromTitle, Model.Areas) {
+            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories, Model.OtherStatuses, Model.CategoriesFromTitle, Model.Areas) {
                 Removing = Model.Removing,
                 Rebuild = Model.Rebuild,
                 RebuildChoices = Model.RebuildChoices,
@@ -226,6 +229,20 @@
         </select>
     </p>
     <p class="help" id="update-region-help">@UpdateText.RegionHelp</p>
+    <p class="update-region">
+        <label for="update-other">@UpdateText.OtherListLabel</label>
+        <select id="update-other" name="@UpdateModel.OtherListField" aria-describedby="update-other-help">
+            <option value="" selected="@(Model.OtherList is null)">@UpdateText.OtherListNoneOption</option>
+            @foreach (var (group, choices) in Model.StatusLists.Groups) {
+                <optgroup label="@SiteText.OtherStatusGroup(group)">
+                    @foreach (var choice in choices) {
+                        <option value="@choice.Key" selected="@(Model.OtherList?.Key == choice.Key)">@UpdateText.OtherListOption(choice.Name, choice.List.Taxa)</option>
+                    }
+                </optgroup>
+            }
+        </select>
+    </p>
+    <p class="help" id="update-other-help">@UpdateText.OtherListHelp</p>
     <fieldset class="update-options">
         <legend>@UpdateText.OptionsLegend</legend>
         <label><input type="checkbox" name="@UpdateModel.PossiblyExtinctField" value="1" checked="@Model.Options.PossiblyExtinctCodes"> @UpdateText.OptionPossiblyExtinct</label>
@@ -235,7 +252,6 @@
         <label><input type="checkbox" name="@UpdateModel.CiteQField" value="1" checked="@Model.Options.CiteQ"> @UpdateText.OptionCiteQ</label>
         <label><input type="checkbox" name="@UpdateModel.CommonNamesField" value="1" checked="@Model.Options.MatchCommonNames"> @UpdateText.OptionCommonNames</label>
         <label><input type="checkbox" name="@UpdateModel.AddSummaryField" value="1" checked="@Model.Options.AddStatusSummary"> @UpdateText.OptionAddSummary</label>
-        <label><input type="checkbox" name="@UpdateModel.EpbcField" value="1" checked="@Model.ShowEpbc"> @UpdateText.OptionEpbc</label>
     </fieldset>
     <fieldset class="update-options" aria-describedby="update-add-help">
         <legend>@UpdateText.AddOptionsLegend</legend>

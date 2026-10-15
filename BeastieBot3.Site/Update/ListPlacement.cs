@@ -73,7 +73,7 @@ public sealed record ListPlacementResult(IReadOnlyList<PlacedTaxon> Placed, IRea
 /// Forms: what the text lists its taxa in. TextKey: the key of the text, sent with the checkboxes.
 public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? Placement, bool AddMissing, bool ExtraSpecies = false,
     BeastieBot3.Shared.Wikitext.ListCategoryChoice? Categories = null,
-    IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc = null, bool CategoriesFromTitle = false,
+    BeastieBot3.Site.Display.OtherStatusColumn? OtherStatuses = null, bool CategoriesFromTitle = false,
     BeastieBot3.Shared.Wikitext.AreaNames? Areas = null) {
     public IReadOnlySet<long>? Removing { get; init; }
     /// The rebuilt list, when the reader asked for one (ListRebuild), and the rebuild's choices.
@@ -93,10 +93,10 @@ public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? P
     public string? AreaHeadingName => Scope.Area is { } code ? Areas?.ByCode(code)?.DisplayName ?? code : null;
 }
 
-/// A table of listed taxa in the comparison; Epbc: their EPBC Act listings, when they are shown.
+/// A table of listed taxa in the comparison; OtherStatuses: their statuses in the list the reader chose, if any.
 /// Removing: the taxa ticked to take out, when the table has a checkbox for each; Kept: why a ticked
 /// taxon stayed.
-public sealed record ListScopeMembersView(IReadOnlyList<ListScopeMember> Members, IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc) {
+public sealed record ListScopeMembersView(IReadOnlyList<ListScopeMember> Members, BeastieBot3.Site.Display.OtherStatusColumn? OtherStatuses) {
     public IReadOnlySet<long>? Removing { get; init; }
     public IReadOnlyDictionary<long, KeptReason> Kept { get; init; } = new Dictionary<long, KeptReason>();
 }

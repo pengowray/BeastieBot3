@@ -22,23 +22,28 @@ public static partial class IucnStatusesSummary {
 
     /// What the text gives to count. FromRows: counted from {{Species table/row}}, else from
     /// {{IUCN status}}. Items: the rows or templates counted. Uncounted: those with a code that has no
-    /// count parameter ("NA").
-    public sealed record Counts(IReadOnlyDictionary<string, int> ByKey, int Items, bool FromRows, int Uncounted);
+    /// count parameter ("NA"). PossiblyExtinct: the CR(PE) and CR(PEW) codes, counted in cr.
+    public sealed record Counts(IReadOnlyDictionary<string, int> ByKey, int Items, bool FromRows, int Uncounted, int PossiblyExtinct = 0) {
+        /// The {{IUCN statuses}} box with these counts, every parameter given.
+        public string Box => "{{IUCN statuses|" + string.Join("|", Keys.Select(k => $"{k}={ByKey[k]}")) + "}}";
+    }
 
     public static Counts Count(WikitextScanner scanner) {
         var byKey = Keys.ToDictionary(k => k, _ => 0);
         var rows = scanner.Templates.Where(t => t.Name == SpeciesTableRow).ToList();
         var uncounted = 0;
+        var possiblyExtinct = 0;
         if (rows.Count > 0) {
             foreach (var row in rows) {
                 var value = row.Named("iucn-status") is { } p ? scanner.Original(p.Value) : null;
                 if (KeyFor(value, missing: "ne") is { } key) {
                     byKey[key]++;
+                    possiblyExtinct += IsPossiblyExtinct(value) ? 1 : 0;
                 } else {
                     uncounted++;
                 }
             }
-            return new Counts(byKey, rows.Count - uncounted, true, uncounted);
+            return new Counts(byKey, rows.Count - uncounted, true, uncounted, possiblyExtinct);
         }
         var items = 0;
         foreach (var template in scanner.Templates.Where(t => t.Name == StatusTemplate)) {
@@ -46,12 +51,17 @@ public static partial class IucnStatusesSummary {
             if (KeyFor(code, missing: null) is { } key) {
                 byKey[key]++;
                 items++;
+                possiblyExtinct += IsPossiblyExtinct(code) ? 1 : 0;
             } else {
                 uncounted++;
             }
         }
-        return new Counts(byKey, items, false, uncounted);
+        return new Counts(byKey, items, false, uncounted, possiblyExtinct);
     }
+
+    // CR(PE), CR(PEW), PE or PEW, with any spacing or case.
+    private static bool IsPossiblyExtinct(string? code) =>
+        code is not null && CodeEnd().Replace(code, string.Empty).Replace(" ", "").Trim().ToUpperInvariant() is "CR(PE)" or "CR(PEW)" or "PE" or "PEW";
 
     /// The count parameter for a status code; `missing` for a blank code; null for a code with no
     /// count parameter.
@@ -165,7 +175,7 @@ public static partial class IucnStatusesSummary {
     // else after the heading above the first species table row, else on the line before that row's
     // outermost template.
     private static StatusUpdateResult Add(string input, StatusUpdateResult result, WikitextScanner scanner, Counts counts) {
-        var box = "{{IUCN statuses|" + string.Join("|", Keys.Select(k => $"{k}={counts.ByKey[k]}")) + "}}";
+        var box = counts.Box;
         var text = result.Text;
         var firstRow = scanner.Templates.First(t => t.Name == SpeciesTableRow).Span.Start;
         var outer = scanner.OuterTemplateAt(firstRow)?.Span.Start ?? firstRow;

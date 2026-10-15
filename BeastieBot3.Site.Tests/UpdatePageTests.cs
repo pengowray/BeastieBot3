@@ -88,17 +88,45 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
         Assert.DoesNotContain("Compared with the latest assessments for", Html.Text(html));
     }
 
-    [Fact]
-    public async Task TheEpbcActStatusIsShownWhenAskedFor() {
+    [Theory]
+    [InlineData("other", "au-epbc")]
+    [InlineData("epbc", "1")] // the checkbox the page had before the choice of list
+    public async Task TheChosenListsStatusesAreShownBesideIucns(string field, string value) {
         var text = "* ''Phascolarctos cinereus'' {{IUCN status|EN}}\n* ''Casuarius casuarius'' {{IUCN status|LC}}\n";
         var form = Form(text);
-        form.Add(new StringContent("1"), UpdateModel.EpbcField);
+        form.Add(new StringContent(value), field);
         var html = await (await _client.PostAsync("/update", form)).Content.ReadAsStringAsync();
         Assert.Contains("<th scope=\"col\">EPBC Act</th>", html);
-        Assert.Contains("<td>EN (combined populations of Qld, NSW and the ACT)</td>", html);
-        Assert.Contains("<td>EN</td>", html);
+        Assert.Contains("<td>Endangered (combined populations of Qld, NSW and the ACT)</td>", html);
+        Assert.Contains("<td>Endangered</td>", html);
+        Assert.Contains("<option value=\"au-epbc\" selected=\"selected\">", html);
         var (_, without) = await Post(text);
         Assert.DoesNotContain("EPBC Act</th>", without);
+    }
+
+    [Fact]
+    public async Task TheListsAreChoicesGroupedByCountry() {
+        var (_, html) = await Post("* ''Passer domesticus'' {{IUCN status|LC}}\n");
+        var select = html[html.IndexOf("<select id=\"update-other\"", StringComparison.Ordinal)..];
+        select = select[..select.IndexOf("</select>", StringComparison.Ordinal)];
+        Assert.Contains("<option value=\"\" selected=\"selected\">", select);
+        Assert.True(select.IndexOf("<optgroup label=\"Australia\">", StringComparison.Ordinal)
+            < select.IndexOf("<optgroup label=\"Brazil\">", StringComparison.Ordinal));
+        Assert.True(select.IndexOf("<optgroup label=\"United States\">", StringComparison.Ordinal)
+            < select.IndexOf("<optgroup label=\"Global\">", StringComparison.Ordinal));
+        Assert.Contains("<option value=\"au-qld\">Queensland (2 taxa)</option>", select);
+    }
+
+    [Fact]
+    public async Task TheResultCountsTheStatusesByCategory() {
+        var (_, html) = await Post("* ''Phascolarctos cinereus'' {{IUCN status|EN}}\n* ''Casuarius casuarius'' {{IUCN status|LC}}\n* {{IUCN status|CR(PE)}}\n* {{IUCN status|NA}}\n");
+        var start = html.IndexOf("<div class=\"update-counts\">", StringComparison.Ordinal);
+        var counts = Html.Text(html[start..html.IndexOf("</div>", start, StringComparison.Ordinal)]);
+        Assert.Contains("CR 1 (1 possibly extinct)", counts);
+        Assert.Contains("VU 1", counts);
+        Assert.Contains("LC 1", counts);
+        Assert.Contains("Total 3", counts);
+        Assert.Contains("{{IUCN statuses|ex=0|ew=0|cr=1|en=0|vu=1|nt=0|lc=1|dd=0|ne=0}}", counts);
     }
 
     [Theory]

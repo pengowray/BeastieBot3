@@ -19,4 +19,13 @@ public static class GroupLineText {
 
     public static string TooLongWithReferences(int taxa, int max) =>
         $"Too many taxa: {SiteFormat.Number(taxa)}. Lists with references have at most {SiteFormat.Number(max)} taxa, about the number of lines that fit on one Wikipedia page with room for the rest of the article. Choose “No references”, fewer Red List categories, or a smaller taxon from the table above.";
+
+    // The status in another list after each line (ListLineOptions.OtherList, OtherStatusLineEnd).
+    public const string OtherListLegend = "Status in another list";
+    public const string OtherListNone = "None";
+    public const string OtherListHelp = "Adds each taxon's status in the chosen list at the end of its line, after {{IUCN status}} and any reference. The EPBC Act and the US Endangered Species Act are written with their templates, {{EPBC status}} and {{ESA status}}; other lists as text. Bulleted lists only.";
+    public static string OtherListCount(int taxa, string heading) =>
+        $"{SiteFormat.Number(taxa)} {(taxa == 1 ? "taxon" : "taxa")} in this list {(taxa == 1 ? "has" : "have")} a status in {heading}.";
+    /// The end of a list line: " (EPBC Act: {{EPBC status|VU}})".
+    public static string OtherStatusLineEnd(string heading, string statuses) => $" ({heading}: {statuses})";
 }
