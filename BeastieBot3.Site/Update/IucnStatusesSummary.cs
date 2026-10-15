@@ -22,8 +22,11 @@ public static partial class IucnStatusesSummary {
 
     /// What the text gives to count. FromRows: counted from {{Species table/row}}, else from
     /// {{IUCN status}}. Items: the rows or templates counted. Uncounted: those with a code that has no
-    /// count parameter ("NA"). PossiblyExtinct: the CR(PE) and CR(PEW) codes, counted in cr.
-    public sealed record Counts(IReadOnlyDictionary<string, int> ByKey, int Items, bool FromRows, int Uncounted, int PossiblyExtinct = 0) {
+    /// count parameter ("NA"), and UncountedCodes those codes, each once, as the text writes them.
+    /// PossiblyExtinct and PossiblyExtinctInTheWild: the CR(PE) and CR(PEW) codes, counted in cr.
+    /// LowerRisk: some codes are LR/nt, LR/cd or LR/lc, counted in nt and lc.
+    public sealed record Counts(IReadOnlyDictionary<string, int> ByKey, int Items, bool FromRows, int Uncounted,
+        int PossiblyExtinct = 0, int PossiblyExtinctInTheWild = 0, IReadOnlyList<string>? UncountedCodes = null, bool LowerRisk = false) {
         /// The {{IUCN statuses}} box with these counts, every parameter given.
         public string Box => "{{IUCN statuses|" + string.Join("|", Keys.Select(k => $"{k}={ByKey[k]}")) + "}}";
     }
@@ -31,37 +34,32 @@ public static partial class IucnStatusesSummary {
     public static Counts Count(WikitextScanner scanner) {
         var byKey = Keys.ToDictionary(k => k, _ => 0);
         var rows = scanner.Templates.Where(t => t.Name == SpeciesTableRow).ToList();
-        var uncounted = 0;
-        var possiblyExtinct = 0;
-        if (rows.Count > 0) {
-            foreach (var row in rows) {
-                var value = row.Named("iucn-status") is { } p ? scanner.Original(p.Value) : null;
-                if (KeyFor(value, missing: "ne") is { } key) {
-                    byKey[key]++;
-                    possiblyExtinct += IsPossiblyExtinct(value) ? 1 : 0;
-                } else {
-                    uncounted++;
-                }
+        var fromRows = rows.Count > 0;
+        var codes = fromRows
+            ? rows.Select(row => row.Named("iucn-status") is { } p ? scanner.Original(p.Value) : null)
+            : scanner.Templates.Where(t => t.Name == StatusTemplate).Select(t => t.Positional(1) is { } p ? scanner.Original(p.Value) : null);
+        var (items, pe, pew, lowerRisk) = (0, 0, 0, false);
+        var uncounted = new List<string>();
+        foreach (var code in codes) {
+            if (KeyFor(code, missing: fromRows ? "ne" : null) is not { } key) {
+                uncounted.Add(Compact(code));
+                continue;
             }
-            return new Counts(byKey, rows.Count - uncounted, true, uncounted, possiblyExtinct);
-        }
-        var items = 0;
-        foreach (var template in scanner.Templates.Where(t => t.Name == StatusTemplate)) {
-            var code = template.Positional(1) is { } p ? scanner.Original(p.Value) : null;
-            if (KeyFor(code, missing: null) is { } key) {
-                byKey[key]++;
-                items++;
-                possiblyExtinct += IsPossiblyExtinct(code) ? 1 : 0;
-            } else {
-                uncounted++;
+            byKey[key]++;
+            items++;
+            switch (Compact(code)) {
+                case "CR(PE)" or "PE": pe++; break;
+                case "CR(PEW)" or "PEW": pew++; break;
+                case var c when c.StartsWith("LR/", StringComparison.Ordinal): lowerRisk = true; break;
             }
         }
-        return new Counts(byKey, items, false, uncounted, possiblyExtinct);
+        return new Counts(byKey, items, fromRows, uncounted.Count, pe, pew,
+            uncounted.Distinct(StringComparer.Ordinal).ToList(), lowerRisk);
     }
 
-    // CR(PE), CR(PEW), PE or PEW, with any spacing or case.
-    private static bool IsPossiblyExtinct(string? code) =>
-        code is not null && CodeEnd().Replace(code, string.Empty).Replace(" ", "").Trim().ToUpperInvariant() is "CR(PE)" or "CR(PEW)" or "PE" or "PEW";
+    // The code without references, comments or spaces, in capitals: "CR(PE)", "LR/NT"; "" for none.
+    private static string Compact(string? code) =>
+        code is null ? string.Empty : CodeEnd().Replace(code, string.Empty).Replace(" ", "").Trim().ToUpperInvariant();
 
     /// The count parameter for a status code; `missing` for a blank code; null for a code with no
     /// count parameter.

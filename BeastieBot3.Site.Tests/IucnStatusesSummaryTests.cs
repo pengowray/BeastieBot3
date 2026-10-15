@@ -29,6 +29,22 @@ public sealed class IucnStatusesSummaryTests {
         Assert.Equal(new Dictionary<string, int> {
             ["ex"] = 0, ["ew"] = 0, ["cr"] = 1, ["en"] = 1, ["vu"] = 0, ["nt"] = 1, ["lc"] = 2, ["dd"] = 1, ["ne"] = 2,
         }, counts.ByKey);
+        Assert.Equal((1, 0), (counts.PossiblyExtinct, counts.PossiblyExtinctInTheWild));
+        Assert.Equal(["NA"], counts.UncountedCodes);
+        Assert.True(counts.LowerRisk);
+    }
+
+    [Fact]
+    public void Counts_status_templates_when_there_are_no_species_table_rows() {
+        var counts = IucnStatusesSummary.Count(new WikitextScanner(
+            "* {{IUCN status|CR(PEW)}}\n* {{IUCN status|pe}}\n* {{IUCN status|LC|1/2|1}}\n* {{IUCN status|RE}}\n* {{IUCN status|RE}}\n* {{IUCN status}}\n"));
+        Assert.False(counts.FromRows);
+        Assert.Equal((3, 3), (counts.Items, counts.Uncounted));
+        Assert.Equal((2, 1), (counts.ByKey["cr"], counts.ByKey["lc"]));
+        Assert.Equal((1, 1), (counts.PossiblyExtinct, counts.PossiblyExtinctInTheWild));
+        Assert.Equal(["RE", ""], counts.UncountedCodes);
+        Assert.False(counts.LowerRisk);
+        Assert.Equal("{{IUCN statuses|ex=0|ew=0|cr=2|en=0|vu=0|nt=0|lc=1|dd=0|ne=0}}", counts.Box);
     }
 
     [Fact]

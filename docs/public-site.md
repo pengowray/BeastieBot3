@@ -726,8 +726,10 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   that list at the end of its line, after the `{{IUCN status}}` and any reference, as
   " (EPBC Act: {{EPBC status|VU}})". English Wikipedia has inline templates for two of the lists,
   `{{EPBC status}}` (EX, EW, CR, EN, VU, CD) and `{{ESA status}}` (E, T, XN, XE, E(S/A), T(S/A), PE,
-  PT, C); every other list's status is text, with its population or area in brackets unless the
-  whole list is of it. Bulleted lists only: `{{Species table/row}}` has no parameter for it.
+  PT, C); every other list's status is text. A population or area follows its status after a comma
+  (" (EPBC Act: {{EPBC status|EN}}, Western Australian population)") unless the whole list is of it,
+  and the list's name before the statuses has no brackets or leading "The"
+  (`OtherStatusChoice.LineLabel`: "Victoria, Australia", "Swedish Red List 2025"). Bulleted lists only: `{{Species table/row}}` has no parameter for it.
   Wikipedia's taxobox status systems (Module:Conservation status: NZTCS, COSEWIC, CITES,
   NatureServe, the Australian state acts and others) are for taxoboxes, not list lines.
 - Lists with references are capped at `ListReferences.MaxLines` (550). Measured with `action=parse`
@@ -2196,8 +2198,8 @@ chooses the EPBC Act.
 
 Under the result's summary, the page counts the updated wikitext's statuses by category, as
 `{{IUCN statuses}}` counts them (`IucnStatusesSummary.Count`: the `{{Species table/row}}` rows, else
-the `{{IUCN status}}` templates; CR(PE) and CR(PEW) in CR, with how many are possibly extinct), and
-gives the box's wikitext when the text has no box (`_StatusCounts`).
+the `{{IUCN status}}` templates; CR(PE) and CR(PEW) in CR, with how many of each), says which codes
+it did not count, and gives the box's wikitext when the text has no box (`_StatusCounts`).
 
 An editor pastes the wikitext of an article or list and gets the same text back with the IUCN
 statuses changed to match the latest global assessments, and a report with one row per item (line,

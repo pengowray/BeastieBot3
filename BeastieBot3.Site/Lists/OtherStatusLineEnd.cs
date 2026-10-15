@@ -3,8 +3,8 @@ using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Display;
 
 // The text after a bullet list line that gives the taxon's status in another list
-// (ListLineOptions.OtherList), such as " (EPBC Act: {{EPBC status|VU}})" or " (Great Britain Red List:
-// Near Threatened)".
+// (ListLineOptions.OtherList), such as " (EPBC Act: {{EPBC status|VU}})", " (Great Britain Red List:
+// Near Threatened)" or " (EPBC Act: {{EPBC status|EN}}, Western Australian population)".
 //
 // English Wikipedia has inline templates for two of the lists (checked 2026-10-16):
 // - {{EPBC status}} (Module:EPBC status): EX, EW, CR, EN, VU and CD, the EPBC Act's six categories.
@@ -23,7 +23,8 @@ public static class OtherStatusLineEnd {
             .Where(p => p.Text is not null)
             .ToDictionary(p => p.Key, p => p.Text!);
 
-    /// " (Heading: status; status (population))"; null when there are no statuses.
+    /// " (Label: status; status, population)": a population after a comma, so the line has no
+    /// brackets inside brackets. Null when there are no statuses.
     public static string? For(OtherStatusChoice choice, IReadOnlyList<ChosenStatus> statuses) {
         if (statuses.Count == 0) {
             return null;
@@ -31,10 +32,10 @@ public static class OtherStatusLineEnd {
         var parts = statuses
             .Select(s => {
                 var status = Template(choice.System, s.Status) ?? s.Status;
-                return s.Population is { Length: > 0 } p && p != choice.List.Area ? $"{status} ({p})" : status;
+                return s.Population is { Length: > 0 } p && p != choice.List.Area ? $"{status}, {p}" : status;
             })
             .Distinct(StringComparer.Ordinal);
-        return GroupLineText.OtherStatusLineEnd(choice.Heading, string.Join("; ", parts));
+        return GroupLineText.OtherStatusLineEnd(choice.LineLabel, string.Join("; ", parts));
     }
 
     /// The inline template for a status of a list that has one; null for any other list or status.

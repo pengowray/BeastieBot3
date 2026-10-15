@@ -8,8 +8,10 @@ namespace BeastieBot3.Site.Display;
 /// key, or the system key and the country for NatureServe's national ranks). Group: the code of the
 /// heading it is listed under (a country code, OtherStatusSystems.InternationalGroup or
 /// NatureServeGroup). Name: its name under that heading ("Victoria"); Heading: its name on its own,
-/// for a column heading or a sentence ("Victoria (Australia)").
-public sealed record OtherStatusChoice(string Key, OtherStatusListCount List, string Group, string Name, string Heading) {
+/// for a column heading or a sentence ("Victoria (Australia)"); LineLabel: its name before a status
+/// at the end of a list line, without brackets or a leading "The" ("Victoria, Australia", "Swedish
+/// Red List 2025").
+public sealed record OtherStatusChoice(string Key, OtherStatusListCount List, string Group, string Name, string Heading, string LineLabel) {
     public string System => List.System;
 
     /// The statuses of one taxon as one cell: "Endangered; Vulnerable (Victorian population)". A
@@ -24,7 +26,7 @@ public sealed record OtherStatusChoice(string Key, OtherStatusListCount List, st
 
 /// The lists of other_status that can be chosen, grouped and ordered as on the species page: CITES,
 /// then each country by name, then NatureServe's global ranks.
-public sealed class OtherStatusChoices {
+public sealed partial class OtherStatusChoices {
     public static readonly OtherStatusChoices None = new([]);
 
     // The list a page of a country's taxa is compared with by default. A country not here gets the
@@ -95,9 +97,16 @@ public sealed class OtherStatusChoices {
     private static OtherStatusChoice Choose(OtherStatusListCount list) {
         var group = OtherStatusSystems.Find(list.System)?.Group ?? list.ListCountry ?? list.Country ?? string.Empty;
         var name = list.ListName ?? SiteText.OtherStatusList(list.System, list.Country).Label;
-        var heading = NamedWithCountry.Contains(list.System) ? $"{name} ({SiteText.OtherStatusGroup(group)})" : name;
-        return new OtherStatusChoice(KeyOf(list), list, group, name, heading);
+        var withCountry = NamedWithCountry.Contains(list.System);
+        var heading = withCountry ? $"{name} ({SiteText.OtherStatusGroup(group)})" : name;
+        // A name's closing bracket becomes a comma: "... of Switzerland (2016)" is "... of Switzerland, 2016".
+        var label = withCountry ? $"{name}, {SiteText.OtherStatusGroup(group)}"
+            : TrailingBracket().Replace(name.StartsWith("The ", StringComparison.Ordinal) ? name[4..] : name, ", $1");
+        return new OtherStatusChoice(KeyOf(list), list, group, name, heading, label);
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@" \(([^()]+)\)$")]
+    private static partial System.Text.RegularExpressions.Regex TrailingBracket();
 }
 
 /// The statuses in the chosen list of the taxa on a page, for its column in the page's tables.

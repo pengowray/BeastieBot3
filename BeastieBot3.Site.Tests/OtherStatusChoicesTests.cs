@@ -84,12 +84,23 @@ public sealed class OtherStatusChoicesTests {
         Assert.Equal(template, OtherStatusLineEnd.Template(system, status));
 
     [Fact]
+    public void Line_labels_have_no_brackets_or_leading_the() {
+        Assert.Equal("Victoria, Australia", Choices.Find("au-vic")!.LineLabel);
+        Assert.Equal("Swedish Red List 2025", Choices.Find("redlist:se-redlist-2025")!.LineLabel);
+        Assert.Equal("Red List of the vascular plants of Switzerland, 2016", Choices.Find("redlist:ch-plants-2016")!.LineLabel);
+        Assert.Equal("EPBC Act", Choices.Find("au-epbc")!.LineLabel);
+    }
+
+    [Fact]
     public void Line_ends_use_the_template_or_the_text() {
         var epbc = Choices.Find("au-epbc")!;
         var gb = Choices.Find("jncc-redlist-gb")!;
-        Assert.Contains("{{EPBC status|EN}}", OtherStatusLineEnd.For(epbc, [new ChosenStatus(1, "Endangered", null, null, "1")]));
-        Assert.Contains("Great Britain Red List", OtherStatusLineEnd.For(gb, [new ChosenStatus(1, "Near Threatened", null, "Great Britain", "1")]));
-        Assert.DoesNotContain("(Great Britain)", OtherStatusLineEnd.For(gb, [new ChosenStatus(1, "Near Threatened", null, "Great Britain", "1")]));
+        Assert.Equal(" (EPBC Act: {{EPBC status|EN}}, Western Australian population; {{EPBC status|VU}})", OtherStatusLineEnd.For(epbc, [
+            new ChosenStatus(1, "Endangered", null, "Western Australian population", "1"),
+            new ChosenStatus(1, "Vulnerable", null, null, "2"),
+        ]));
+        Assert.Equal(" (Great Britain Red List: Near Threatened)",
+            OtherStatusLineEnd.For(gb, [new ChosenStatus(1, "Near Threatened", null, "Great Britain", "1")]));
         Assert.Null(OtherStatusLineEnd.For(gb, []));
     }
 }

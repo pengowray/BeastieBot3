@@ -1327,7 +1327,7 @@ th.num {
 /* The list: options beside the output on wide screens, above it on narrow ones. */
 .list-editor {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
 }
 
@@ -1648,6 +1648,15 @@ th.num {
 .update-summary {
     font-weight: 600;
     font-size: 1.05rem;
+}
+
+/* Long option text (the names of other status lists) must not widen the page on a phone. */
+.update-settings select,
+.list-options select {
+    max-width: 100%;
+}
+.list-options fieldset {
+    min-width: 0;
 }
 
 /* The counts by category of the updated wikitext: one row of badges and numbers, then the total. */

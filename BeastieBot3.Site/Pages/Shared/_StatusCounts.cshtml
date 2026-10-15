@@ -7,11 +7,11 @@
     <p class="update-counts-row">
         <span class="update-counts-label">@UpdateText.CountsLabel</span>
         @foreach (var key in IucnStatusesSummary.Keys.Where(k => counts.ByKey[k] > 0)) {
-            <span class="update-count"><partial name="_Badge" model="@BadgeModel.ForStatusCode(key.ToUpperInvariant(), showLabel: false)" /> @SiteFormat.Number(counts.ByKey[key])@if (key == "cr" && counts.PossiblyExtinct > 0) {<text> @UpdateText.CountsPossiblyExtinct(counts.PossiblyExtinct)</text>}</span>
+            <span class="update-count"><partial name="_Badge" model="@BadgeModel.ForStatusCode(key.ToUpperInvariant(), showLabel: false)" /> @SiteFormat.Number(counts.ByKey[key])@if (key == "cr" && UpdateText.CountsPossiblyExtinct(counts.PossiblyExtinct, counts.PossiblyExtinctInTheWild) is { } pe) {<text> @pe</text>}</span>
         }
         <span class="update-count update-count-total">@UpdateText.CountsTotal(counts.Items)</span>
     </p>
-    <p class="help">@UpdateText.CountsHelp(counts.FromRows, counts.Uncounted)</p>
+    <p class="help">@UpdateText.CountsHelp(counts)</p>
     @if (Model.ShowBox) {
         <p class="help">@UpdateText.CountsBoxLabel <code>@counts.Box</code></p>
     }
