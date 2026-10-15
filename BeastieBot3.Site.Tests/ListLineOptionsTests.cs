@@ -30,6 +30,25 @@ public sealed class ListLineOptionsTests(SiteFactory factory) : IClassFixture<Si
         Assert.Equal(SpeciesListAuthority.Plain, ListLineOptions.Read(Query(("auth", "plain"))).Authority);
     }
 
+    [Fact]
+    public void TheUseOfTheOtherList_RoundTripsAndNeedsAList() {
+        var only = ListLineOptions.Read(Query(("other", "us-esa"), ("otheruse", "only")));
+        Assert.Equal(OtherListUse.OnlyListed, only.OtherUse);
+        Assert.True(only.OnlyOtherListed);
+        Assert.False(only.OtherStatusOnLines);
+        Assert.Equal(["other=us-esa", "otheruse=only"], only.Write());
+
+        var both = ListLineOptions.Read(Query(("other", "us-esa"), ("otheruse", "both")));
+        Assert.True(both.OnlyOtherListed && both.OtherStatusOnLines);
+        Assert.Equal(["other=us-esa", "otheruse=both"], both.Write());
+
+        // The default use is not written, and a use without a list does nothing.
+        Assert.Equal(["other=us-esa"], ListLineOptions.Read(Query(("other", "us-esa"), ("otheruse", "line"))).Write());
+        var noList = ListLineOptions.Read(Query(("other", ""), ("otheruse", "only")));
+        Assert.False(noList.OnlyOtherListed);
+        Assert.Empty(noList.Write());
+    }
+
     // ------------------------------------------------------------ authority and the merge
 
     private static ListTaxonRow Iucn(long id, string name, string? authority) {

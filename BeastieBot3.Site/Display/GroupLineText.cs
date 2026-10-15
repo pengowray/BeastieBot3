@@ -1,3 +1,5 @@
+using BeastieBot3.Site.Lists;
+
 namespace BeastieBot3.Site.Display;
 
 // The words of the bullet list options for the taxon authority and the references after each line
@@ -23,7 +25,41 @@ public static class GroupLineText {
     // The status in another list after each line (ListLineOptions.OtherList, OtherStatusLineEnd).
     public const string OtherListLegend = "Other conservation status";
     public const string OtherListNone = "None";
-    public const string OtherListHelp = "Adds each taxon's status in the chosen list to the end of its line, after {{IUCN status}} and any reference. Statuses from the EPBC Act and the US Endangered Species Act use {{EPBC status}} and {{ESA status}}; statuses from other lists are plain text. No reference is added for these statuses. This option applies to bulleted lists, not to species tables.";
+    public const string OtherListHelp = """
+        “Add the status to each line” adds each taxon's status in the chosen list to the end of its line in a bulleted list, after {{IUCN status}} and any reference. Statuses from the EPBC Act and the US Endangered Species Act use {{EPBC status}} and {{ESA status}}; statuses from other lists are plain text, for example (Great Britain Red List: Near Threatened). No reference is added for statuses from the chosen list.
+
+        “Only taxa on this list” limits the wikitext to the taxa that have a status in the chosen list and are in a category ticked under “Red List categories”. The counts in “Red List categories” then include only taxa on the chosen list.
+
+        “Both” limits the wikitext to the same taxa as “Only taxa on this list”, and adds each taxon's status in the chosen list to the end of its line.
+
+        Only IUCN Red List taxa are matched to the chosen list. “Only taxa on this list” and “Both” leave out species from the Catalogue of Life and Wikidata (“Species sources”), and a taxon that is on the chosen list but not on the IUCN Red List is never in the wikitext.
+
+        Species tables never show statuses from the chosen list. With species tables, “Add the status to each line” gives the same tables as “None”, and “Both” gives the same tables as “Only taxa on this list”.
+        """;
+
+    // What the chosen list does (ListLineOptions.OtherUse).
+    public const string OtherUseLine = "Add the status to each line";
+    public const string OtherUseOnly = "Only taxa on this list";
+    public const string OtherUseBoth = "Both";
+    /// Under the choices, shown only for species tables.
+    public const string OtherListTablesNote = "Species tables never show statuses from the chosen list.";
+
+    /// The note above the wikitext for the chosen list's use.
+    public static string OtherListNote(OtherListUse use, int taxa, string heading) => use switch {
+        OtherListUse.OnlyListed => OnlyListedNote(taxa, heading),
+        OtherListUse.Both => BothNote(taxa, heading),
+        _ => OtherListCount(taxa, heading),
+    };
+
+    /// Above the wikitext with "Only taxa on this list" (taxa is at least 1: an empty list has no wikitext).
+    public static string OnlyListedNote(int taxa, string heading) => taxa == 1
+        ? $"{heading}: the 1 taxon in the wikitext has a status in this list."
+        : $"{heading}: all {SiteFormat.Number(taxa)} taxa in the wikitext have a status in this list.";
+
+    /// Above the wikitext with "Both" (taxa is at least 1).
+    public static string BothNote(int taxa, string heading) => taxa == 1
+        ? $"{heading}: the 1 taxon in the wikitext has a status in this list, added at the end of its line."
+        : $"{heading}: all {SiteFormat.Number(taxa)} taxa in the wikitext have a status in this list, added at the end of their lines.";
 
     /// Above the wikitext: "EPBC Act: 85 taxa in the wikitext have a status in this list, added at the end of their lines."
     public static string OtherListCount(int taxa, string heading) => taxa switch {

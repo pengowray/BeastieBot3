@@ -19,15 +19,18 @@ public static class GroupListSources {
             ? 0
             : counts.For(options.Sources);
 
+    /// iucnOnly: a list of IUCN's taxa only (only the taxa on another list, which has no statuses for
+    /// the species from CoL and Wikidata). Each IUCN taxon then still takes its name from the
+    /// preferred source, and no overlap with a species from CoL or Wikidata leaves it out.
     public static ListSourceMergeResult Merge(SiteQueries queries, GroupRow group, ExtraSpeciesCounts? counts,
-        IReadOnlyList<ListTaxonRow> taxa, GroupListOptions options) {
+        IReadOnlyList<ListTaxonRow> taxa, GroupListOptions options, bool iucnOnly = false) {
         var info = queries.GetIucnSourceInfo(group);
         var lastNode = counts?.LastNodeId ?? group.NodeId;
-        IReadOnlyList<ExtraSpeciesRow> extras = counts is not null && options.Sources.HasOtherSources
+        IReadOnlyList<ExtraSpeciesRow> extras = !iucnOnly && counts is not null && options.Sources.HasOtherSources
             && options.IncludedSections.Contains(StatusSection.NotEvaluated)
             ? queries.GetExtraSpecies(group.NodeId, counts.LastNodeId, underGenusOnly: !options.Sources.OtherGenera)
             : [];
-        var overlaps = options.Sources.HasOtherSources ? queries.GetExtraOverlaps(group, lastNode) : [];
+        var overlaps = !iucnOnly && options.Sources.HasOtherSources ? queries.GetExtraOverlaps(group, lastNode) : [];
         var extraIds = extras.Select(e => e.ExtraId).ToHashSet();
         var taxonIds = taxa.Select(t => t.TaxonId).ToHashSet();
         var outsideExtras = queries.GetExtraSpeciesByIds(overlaps

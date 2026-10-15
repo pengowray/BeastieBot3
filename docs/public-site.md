@@ -732,6 +732,27 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   (`OtherStatusChoice.LineLabel`: "Victoria, Australia", "Swedish Red List 2025"). Bulleted lists only: `{{Species table/row}}` has no parameter for it.
   Wikipedia's taxobox status systems (Module:Conservation status: NZTCS, COSEWIC, CITES,
   NatureServe, the Australian state acts and others) are for taxoboxes, not list lines.
+- **Only taxa on the other list** (`otheruse=line|only|both` with `other=`; `line` by default and not
+  written, so an older `other=` address keeps its meaning): radio buttons under the list choice
+  ("Add the status to each line", "Only taxa on this list", "Both"; `ListLineOptions.OtherUse`).
+  `only` and `both` list only the taxa with a row of that list in `other_status`, for a page such as
+  "List of mammals of Great Britain"; `both` also ends each line with the status. The filter applies
+  to species tables too (the list choice is shown for both list types), which never show the status,
+  so for tables `only` and `both` are the same. The taxa are those of the ticked Red List categories
+  that are on the list: a taxon with only a regional assessment is in NE. Only IUCN taxa are matched
+  to other lists, so the species from the Catalogue of Life and Wikidata are left out
+  (`GroupListSources.Merge(iucnOnly: true)`: an IUCN taxon still takes its name from the preferred
+  source, and no overlap with an extra species leaves it out). `higher_taxon_count` knows nothing of
+  other lists, so with the filter the page reads the group's taxa on the list first
+  (`SiteQueries.GetListTaxa(group, kinds, onList)`: `taxon_id IN (SELECT taxon_id FROM other_status
+  WHERE system = ... AND list_key/country ...)`, one scan of `other_status`, about 30 to 45 ms for
+  Animalia on site schema 31) and counts the lines per category and the headings per rank from them
+  (`GroupList.CountLinesBySection(taxa, options)`, `GroupList.CountHeadings(taxa, groups, options)`),
+  so every count beside an option is exact. The count beside "Only taxa on this list" is the number
+  of lines the list has with the filter: the line count when it is on, else the number of the list's
+  lines whose taxon has a status in the chosen list (none shown when the list is too long to read).
+  The list of NatureServe's national ranks is one country's (`natureserve-national:US`), so the
+  filter checks `other_status.country` too.
 - Lists with references are capped at `ListReferences.MaxLines` (550). Measured with `action=parse`
   (October 2026) on genus Pristimantis, 531 lines with authorities and `{{IUCN status}}`: post-expand
   include size 1,522,686 bytes with `{{cite iucn}}` references, list-defined or inline (2.9 KB a

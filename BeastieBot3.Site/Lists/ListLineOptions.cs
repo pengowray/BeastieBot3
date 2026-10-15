@@ -11,8 +11,11 @@ using BeastieBot3.Site.Pages;
 //                               end, or the full citation in the line (none when absent)
 //   lcite   q                   {{cite Q}} for an IUCN assessment that has a Wikidata item (IucnReference);
 //                               {{cite iucn}} when absent
-//   other   a list key          the taxon's status in another list after the line (OtherStatusChoices
-//                               key: "au-epbc", "jncc-redlist-gb"); none when absent
+//   other   a list key          another list (OtherStatusChoices key: "au-epbc", "jncc-redlist-gb");
+//                               none when absent
+//   otheruse line | only | both what the list in `other` does: the taxon's status after each line
+//                               (line, the default), only the taxa with a status in it (only), or both.
+//                               The species tables apply only the choice of taxa.
 
 namespace BeastieBot3.Site.Lists;
 
@@ -24,6 +27,16 @@ public enum ListReferenceMode {
     Inline,
 }
 
+/// What the list chosen in ListLineOptions.OtherList does.
+public enum OtherListUse {
+    /// The taxon's status in the list after each bulleted line.
+    StatusOnLine,
+    /// Only the taxa with a status in the list.
+    OnlyListed,
+    /// Both.
+    Both,
+}
+
 public sealed record ListLineOptions {
     public static readonly ListLineOptions Default = new();
 
@@ -32,10 +45,15 @@ public sealed record ListLineOptions {
     public ReferenceTemplate Template { get; init; } = ReferenceTemplate.CiteIucn;
     /// The OtherStatusChoices key of the list whose status goes after each line; null for none.
     public string? OtherList { get; init; }
+    public OtherListUse OtherUse { get; init; } = OtherListUse.StatusOnLine;
 
     public bool HasReferences => References != ListReferenceMode.None;
+    /// Whether a list is chosen and the list maker lists only the taxa with a status in it.
+    public bool OnlyOtherListed => OtherList is not null && OtherUse != OtherListUse.StatusOnLine;
+    /// Whether a list is chosen and each bulleted line ends with the taxon's status in it.
+    public bool OtherStatusOnLines => OtherList is not null && OtherUse != OtherListUse.OnlyListed;
 
-    public static readonly string[] Keys = ["auth", "lrefs", "lcite", "other"];
+    public static readonly string[] Keys = ["auth", "lrefs", "lcite", "other", "otheruse"];
 
     public static ListLineOptions Read(IQueryCollection query) => new() {
         Authority = Last(query, "auth") switch {
@@ -50,6 +68,11 @@ public sealed record ListLineOptions {
         },
         Template = IucnReference.FromQuery(Last(query, "lcite")),
         OtherList = Last(query, "other") is { Length: > 0 } other ? other : null,
+        OtherUse = Last(query, "otheruse") switch {
+            "only" => OtherListUse.OnlyListed,
+            "both" => OtherListUse.Both,
+            _ => OtherListUse.StatusOnLine,
+        },
     };
 
     /// The query string parts that differ from the defaults.
@@ -65,8 +88,17 @@ public sealed record ListLineOptions {
         }
         if (OtherList is not null) {
             yield return "other=" + Uri.EscapeDataString(OtherList);
+            if (OtherUse != OtherListUse.StatusOnLine) {
+                yield return "otheruse=" + OtherUseKey(OtherUse);
+            }
         }
     }
+
+    public static string OtherUseKey(OtherListUse value) => value switch {
+        OtherListUse.OnlyListed => "only",
+        OtherListUse.Both => "both",
+        _ => "line",
+    };
 
     public static string AuthorityKey(SpeciesListAuthority value) => value switch {
         SpeciesListAuthority.Small => "small",

@@ -877,6 +877,12 @@ public static class FixtureDb {
         w.Group(11, null, 0, "genus", "Hirtella", "iucn", "PLANTAE", 20, 21);
         w.Place(PlantSubspecies, 11, 20, null);
         w.Place(PlantSubspeciesSibling, 11, 21, null);
+        // Made up: NatureServe national ranks of the two subspecies in two countries, for the list
+        // maker's "Only taxa on this list" (a list of NatureServe's national ranks is one country's).
+        w.Run("""
+            INSERT INTO other_status(taxon_id, system, status, status_code, source, source_id, country)
+            VALUES (@a, 'natureserve-national', 'N1', 'N1', 'natureserve', 'ns1', 'US'), (@b, 'natureserve-national', 'N2', 'N2', 'natureserve', 'ns2', 'CA')
+            """, PlantSubspecies, PlantSubspeciesSibling);
         // Names from English Wikipedia (the article title and redirects). "Bear" is also a Catalogue
         // of Life name of the koala, which is not the koala's English name, so a search for "bear"
         // goes to Ursidae. "Baiji" is the baiji's own English name, so a search for it lists both.

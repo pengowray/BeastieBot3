@@ -168,21 +168,54 @@ public static class GroupList {
         return byRank;
     }
 
+    /// How many lines each status section would have, by section key, counted from the taxa
+    /// themselves: for a list whose taxa the counts of the groups cannot give (only the taxa on
+    /// another list). Every section has a key, whether or not the options include it.
+    public static Dictionary<string, int> CountLinesBySection(IReadOnlyList<ListTaxonRow> taxa, GroupListOptions options) {
+        var bySection = StatusSection.All.ToDictionary(s => s.Key, _ => 0);
+        foreach (var taxon in taxa.Where(t => IncludedKind(t, options))) {
+            if (StatusSection.For(StatusCode(taxon)) is { } section) {
+                bySection[section.Key]++;
+            }
+        }
+        return bySection;
+    }
+
+    /// How many headings each rank would add to the list, by rank, counted from the taxa themselves
+    /// (see CountHeadings): one for each group of the rank that has a line, or with status
+    /// sections, one in each section the group has lines in.
+    public static Dictionary<string, int> CountHeadings(IReadOnlyList<ListTaxonRow> taxa, IReadOnlyDictionary<int, GroupRow> groups,
+        GroupListOptions options) {
+        var headings = new HashSet<(int NodeId, string? Section)>();
+        foreach (var taxon in taxa.Where(t => Included(t, options))) {
+            var section = options.ByStatus ? StatusSection.For(StatusCode(taxon))?.Key : null;
+            for (var at = groups.GetValueOrDefault(taxon.NodeId); at is not null;
+                 at = at.ParentNodeId is { } parent ? groups.GetValueOrDefault(parent) : null) {
+                headings.Add((at.NodeId, section));
+            }
+        }
+        var byRank = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (nodeId, _) in headings) {
+            var rank = groups[nodeId].Rank;
+            byRank[rank] = byRank.GetValueOrDefault(rank) + 1;
+        }
+        return byRank;
+    }
+
     /// The {{IUCN status}} code of the taxon's latest global assessment; NE when it has none.
     public static string StatusCode(ListTaxonRow taxon) => taxon.Category is { } category
         ? IucnStatusTemplate.ToTemplateCode(category, taxon.PossiblyExtinct, taxon.PossiblyExtinctInTheWild)
         : StatusSection.NotEvaluated;
 
-    private static bool Included(ListTaxonRow taxon, GroupListOptions options) {
-        if (StatusSection.For(StatusCode(taxon)) is not { } section || !options.IncludedSections.Contains(section.Key)) {
-            return false;
-        }
-        return taxon.Kind switch {
+    private static bool Included(ListTaxonRow taxon, GroupListOptions options) =>
+        StatusSection.For(StatusCode(taxon)) is { } section && options.IncludedSections.Contains(section.Key) && IncludedKind(taxon, options);
+
+    private static bool IncludedKind(ListTaxonRow taxon, GroupListOptions options) =>
+        taxon.Kind switch {
             TaxonKinds.Species => true,
             TaxonKinds.Subpopulation => options.Subpopulations,
             _ => options.Infra != InfraMode.None,
         };
-    }
 
     // Groups the taxa under a heading for each value of the first rank in ranks, then the next rank
     // inside each, in tree order. A taxon with no group of a rank stays above that rank's headings.

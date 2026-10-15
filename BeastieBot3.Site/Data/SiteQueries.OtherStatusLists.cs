@@ -94,6 +94,19 @@ public sealed partial class SiteQueries {
     // through the system or the list.
     private const string CountryColumn = "CASE WHEN system = 'natureserve-national' THEN country END";
 
+    // The rows of other_status in one list (OtherStatusListCount): its system, and its list key or
+    // country when it has one. AddOtherStatusListParameters binds them. other_status has no index on
+    // system, so a query that filters a set of taxa by it scans the table once (200,000 rows in
+    // October 2026, about 30 ms) and looks the taxa up by primary key.
+    private const string OtherStatusListPredicate =
+        "system = @system AND (@list IS NULL OR list_key = @list) AND (@country IS NULL OR country = @country)";
+
+    private static void AddOtherStatusListParameters(SqliteCommand command, OtherStatusListCount list) {
+        command.Parameters.AddWithValue("@system", list.System);
+        command.Parameters.AddWithValue("@list", (object?)list.ListKey ?? DBNull.Value);
+        command.Parameters.AddWithValue("@country", (object?)list.Country ?? DBNull.Value);
+    }
+
     /// The statuses of these taxa in the list, by taxon id: the status of the whole taxon first, then
     /// those of populations by name. Taxa with no status in the list are left out.
     public IReadOnlyDictionary<long, IReadOnlyList<ChosenStatus>> GetStatusesIn(OtherStatusListCount list, IReadOnlyCollection<long> taxonIds) {
@@ -106,14 +119,11 @@ public sealed partial class SiteQueries {
         command.CommandText = $"""
             SELECT taxon_id, status, status_code, population, source_id
             FROM other_status
-            WHERE taxon_id IN (SELECT value FROM json_each(@ids)) AND system = @system
-              AND (@list IS NULL OR list_key = @list) AND (@country IS NULL OR country = @country)
+            WHERE taxon_id IN (SELECT value FROM json_each(@ids)) AND {OtherStatusListPredicate}
             ORDER BY taxon_id, population IS NOT NULL, population, source_id
             """;
         command.Parameters.AddWithValue("@ids", "[" + string.Join(',', taxonIds.Distinct()) + "]");
-        command.Parameters.AddWithValue("@system", list.System);
-        command.Parameters.AddWithValue("@list", (object?)list.ListKey ?? DBNull.Value);
-        command.Parameters.AddWithValue("@country", (object?)list.Country ?? DBNull.Value);
+        AddOtherStatusListParameters(command, list);
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             var id = reader.GetInt64(0);

@@ -8,10 +8,11 @@ using static BeastieBot3.Site.Data.ReaderValues;
 namespace BeastieBot3.Site.Data;
 
 public sealed partial class SiteQueries {
-    /// The taxa of a group that have a latest global assessment, in tree order, of the given kinds. A
-    /// subpopulation with no English name of its own has its species' name.
-    public IReadOnlyList<ListTaxonRow> GetListTaxa(GroupRow group, IReadOnlyCollection<string> kinds) =>
-        [.. ListTaxa(group, kinds, area: null).Select(t => t.Row)];
+    /// The taxa of a group, in tree order, of the given kinds, with their latest global assessment
+    /// when they have one. A subpopulation with no English name of its own has its species' name.
+    /// onList: only the taxa with a status in that list of other_status.
+    public IReadOnlyList<ListTaxonRow> GetListTaxa(GroupRow group, IReadOnlyCollection<string> kinds, OtherStatusListCount? onList = null) =>
+        [.. ListTaxa(group, kinds, area: null, onList: onList).Select(t => t.Row)];
 
     /// The group's taxa of these kinds whose latest global assessment codes the area, with the record.
     public IReadOnlyList<(ListTaxonRow Row, AreaRecord Record)> GetListTaxaInArea(GroupRow group, IReadOnlyCollection<string> kinds, string area) =>
@@ -100,7 +101,8 @@ public sealed partial class SiteQueries {
         return areas;
     }
 
-    private List<(ListTaxonRow Row, AreaRecord? Record)> ListTaxa(GroupRow group, IReadOnlyCollection<string> kinds, string? area, string? region = null) {
+    private List<(ListTaxonRow Row, AreaRecord? Record)> ListTaxa(GroupRow group, IReadOnlyCollection<string> kinds, string? area, string? region = null,
+        OtherStatusListCount? onList = null) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         var kindNames = new List<string>();
@@ -125,6 +127,7 @@ public sealed partial class SiteQueries {
             LEFT JOIN taxon p ON p.taxon_id = t.parent_taxon_id AND t.kind = 'subpopulation'
             {(area is null ? "" : "JOIN taxon_area x ON x.taxon_id = t.taxon_id AND x.area = @area")}
             WHERE t.tree_pos BETWEEN @first AND @last AND t.kind IN ({string.Join(", ", kindNames)})
+            {(onList is null ? "" : $"AND t.taxon_id IN (SELECT o.taxon_id FROM other_status o WHERE {OtherStatusListPredicate})")}
             ORDER BY t.tree_pos
             """;
         command.Parameters.AddWithValue("@first", group.FirstPos);
@@ -134,6 +137,9 @@ public sealed partial class SiteQueries {
         }
         if (region is not null) {
             command.Parameters.AddWithValue("@region", region);
+        }
+        if (onList is not null) {
+            AddOtherStatusListParameters(command, onList);
         }
         using var reader = command.ExecuteReader();
         var rows = new List<(ListTaxonRow, AreaRecord?)>();

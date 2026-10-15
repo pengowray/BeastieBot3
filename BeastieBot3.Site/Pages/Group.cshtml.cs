@@ -193,8 +193,13 @@ public sealed class GroupListModel : GroupPageModel {
     public OtherStatusChoices StatusLists => _statusLists ??= new OtherStatusChoices(_queries.GetOtherStatusListCounts());
     private OtherStatusChoices? _statusLists;
     public OtherStatusChoice? OtherList { get; private set; }
+    /// Whether the list has only the taxa with a status in OtherList.
+    public bool OnlyOtherListed => OtherList is not null && Options.Line.OnlyOtherListed;
     /// How many of the list's taxa have a status in OtherList.
     public int OtherListTaxa { get; private set; }
+    /// How many lines the list has with only the taxa on OtherList: null when not known (no list
+    /// chosen, or a list too long to read).
+    public int? OnlyListedLines => OtherList is null ? null : OnlyOtherListed ? LineCount : List is null ? null : OtherListTaxa;
 
     /// This page's address with the current options, for the address bar after a live update.
     public string CurrentOptionsUrl =>
@@ -217,60 +222,82 @@ public sealed class GroupListModel : GroupPageModel {
         }
         Options = GroupListQuery.Read(Request.Query, DefaultOptions, ranks.Select(r => r.Rank).ToList());
         OtherList = StatusLists.Find(Options.Line.OtherList);
-        // Species from CoL and Wikidata go in the bulleted list only; the species tables list IUCN's taxa.
-        var extraCounts = !Table.IsTable && Options.Sources.HasOtherSources ? _queries.GetExtraSpeciesCounts(group.NodeId) : null;
         var countOptions = Table.IsTable ? SpeciesTable.ListOptions(Options) : Options;
-        LineCount = GroupList.CountLines(group, Counts, countOptions) + GroupListSources.ExtraLines(extraCounts, Options);
-        SectionLines = GroupList.CountLinesBySection(group, Counts, countOptions, extraCounts?.For(Options.Sources) ?? 0);
         var groupsWithin = _queries.GetGroupsWithin(group);
-        var headings = GroupList.CountHeadings(groupsWithin, _queries.GetGroupCountsWithin(group),
-            extraCounts is null ? new Dictionary<int, int>() : _queries.GetExtraSpeciesCountsWithin(group, Options.Sources), countOptions);
+        var groups = groupsWithin.Append(group).ToDictionary(g => g.NodeId);
+        ExtraSpeciesCounts? extraCounts = null;
+        IReadOnlyList<ListTaxonRow>? taxa = null;
+        Dictionary<string, int> headings;
+        if (OnlyOtherListed) {
+            // The counts of the groups know nothing of other lists, so the taxa on the list are read
+            // first and counted. The species from CoL and Wikidata have no status in other lists.
+            taxa = _queries.GetListTaxa(group, Kinds(countOptions), OtherList!.List);
+            if (!Table.IsTable && GroupListSources.Active(Options)) {
+                Sources = GroupListSources.Merge(_queries, group, null, taxa, Options, iucnOnly: true);
+                NoticeGroups = ListNoticeGroups.Build(Sources);
+                taxa = Sources.Rows;
+            }
+            SectionLines = GroupList.CountLinesBySection(taxa, countOptions);
+            LineCount = SectionLines.Where(s => countOptions.IncludedSections.Contains(s.Key)).Sum(s => s.Value);
+            headings = GroupList.CountHeadings(taxa, groups, countOptions);
+        } else {
+            // Species from CoL and Wikidata go in the bulleted list only; the species tables list IUCN's taxa.
+            extraCounts = !Table.IsTable && Options.Sources.HasOtherSources ? _queries.GetExtraSpeciesCounts(group.NodeId) : null;
+            LineCount = GroupList.CountLines(group, Counts, countOptions) + GroupListSources.ExtraLines(extraCounts, Options);
+            SectionLines = GroupList.CountLinesBySection(group, Counts, countOptions, extraCounts?.For(Options.Sources) ?? 0);
+            headings = GroupList.CountHeadings(groupsWithin, _queries.GetGroupCountsWithin(group),
+                extraCounts is null ? new Dictionary<int, int>() : _queries.GetExtraSpeciesCountsWithin(group, Options.Sources), countOptions);
+        }
         HeadingChoices = ranks
             .OrderBy(r => GroupListQuery.RankIndex(r.Rank)).ThenBy(r => r.MinDepth)
             .Select(r => new HeadingChoice(r.Rank, r.OnlyFromCol, Options.HeadingRanks.Contains(r.Rank),
                 Table.IsTable && r.Rank == "genus" ? null : headings.GetValueOrDefault(r.Rank)))
             .ToList();
-        if (!TooLong && LineCount > 0 && Table.IsTable) {
-            BuildTables(group, groupsWithin);
-        } else if (!TooLong && LineCount > 0) {
-            var kinds = new List<string> { TaxonKinds.Species };
-            if (Options.Infra != InfraMode.None) {
-                kinds.Add(TaxonKinds.Subspecies);
-                kinds.Add(TaxonKinds.Variety);
-            }
-            if (Options.Subpopulations) {
-                kinds.Add(TaxonKinds.Subpopulation);
-            }
-            var taxa = _queries.GetListTaxa(group, kinds);
-            if (GroupListSources.Active(Options)) {
+        if (TooLong || LineCount == 0) {
+            return Page();
+        }
+        if (taxa is null) {
+            taxa = _queries.GetListTaxa(group, Kinds(countOptions));
+            if (!Table.IsTable && GroupListSources.Active(Options)) {
                 Sources = GroupListSources.Merge(_queries, group, extraCounts, taxa, Options);
                 NoticeGroups = ListNoticeGroups.Build(Sources);
                 taxa = Sources.Rows;
             }
-            var groups = groupsWithin.Append(group).ToDictionary(g => g.NodeId);
-            List = GroupList.Build(taxa, groups, Options);
-            var references = Options.Line.HasReferences
-                ? ListReferences.Build(List, new ListReferenceQueries(_db).GetCitations(group), Sources, Options.Line.Template,
-                    DateOnly.FromDateTime(DateTime.UtcNow))
-                : null;
-            IReadOnlyDictionary<long, string>? lineEnds = null;
-            if (OtherList is { } other) {
-                var statuses = _queries.GetStatusesIn(other.List, taxa.Select(t => t.TaxonId).Where(id => id > 0).ToHashSet());
-                OtherListTaxa = statuses.Count;
-                lineEnds = OtherStatusLineEnd.Build(other, statuses);
-            }
-            Wikitext = GroupList.ToWikitext(List, Options, references, lineEnds);
         }
+        List = GroupList.Build(taxa, groups, countOptions);
+        IReadOnlyDictionary<long, IReadOnlyList<ChosenStatus>>? statuses = null;
+        if (OtherList is { } other) {
+            statuses = _queries.GetStatusesIn(other.List,
+                List.Blocks.OfType<LineBlock>().Select(l => l.Taxon.TaxonId).Where(id => id > 0).ToHashSet());
+            OtherListTaxa = statuses.Count;
+        }
+        if (Table.IsTable) {
+            Tables = SpeciesTable.Build(List, groups, new SpeciesTableQueries(_db).GetExtras(group), Table);
+            Wikitext = SpeciesTable.ToWikitext(Tables, Table);
+            return Page();
+        }
+        var references = Options.Line.HasReferences
+            ? ListReferences.Build(List, new ListReferenceQueries(_db).GetCitations(group), Sources, Options.Line.Template,
+                DateOnly.FromDateTime(DateTime.UtcNow))
+            : null;
+        var lineEnds = OtherList is { } chosen && statuses is not null && Options.Line.OtherStatusOnLines
+            ? OtherStatusLineEnd.Build(chosen, statuses)
+            : null;
+        Wikitext = GroupList.ToWikitext(List, Options, references, lineEnds);
         return Page();
     }
 
-    private void BuildTables(GroupRow group, IReadOnlyList<GroupRow> groupsWithin) {
-        var listOptions = SpeciesTable.ListOptions(Options);
-        var taxa = _queries.GetListTaxa(group, [TaxonKinds.Species]);
-        var groups = groupsWithin.Append(group).ToDictionary(g => g.NodeId);
-        List = GroupList.Build(taxa, groups, listOptions);
-        Tables = SpeciesTable.Build(List, groups, new SpeciesTableQueries(_db).GetExtras(group), Table);
-        Wikitext = SpeciesTable.ToWikitext(Tables, Table);
+    // The kinds of taxa the options list: species, and subspecies and varieties, and subpopulations.
+    private static List<string> Kinds(GroupListOptions options) {
+        var kinds = new List<string> { TaxonKinds.Species };
+        if (options.Infra != InfraMode.None) {
+            kinds.Add(TaxonKinds.Subspecies);
+            kinds.Add(TaxonKinds.Variety);
+        }
+        if (options.Subpopulations) {
+            kinds.Add(TaxonKinds.Subpopulation);
+        }
+        return kinds;
     }
 }
 

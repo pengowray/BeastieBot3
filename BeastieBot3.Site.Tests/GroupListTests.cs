@@ -67,6 +67,27 @@ public sealed class GroupListTests {
     }
 
     [Fact]
+    public void Counts_from_the_taxa_match_the_lines_and_headings_of_the_list() {
+        var options = new GroupListOptions { HeadingRanks = ["family"], ByStatus = true, Infra = InfraMode.Separate,
+            Sections = new HashSet<string> { "CR", "EN", "VU" } };
+        var bySection = GroupList.CountLinesBySection(Taxa, options);
+        Assert.Equal(2, bySection["CR"]);
+        Assert.Equal(2, bySection["EN"]);
+        Assert.Equal(1, bySection["LC"]);
+        Assert.Equal(0, bySection["NE"]);
+        Assert.Equal(GroupList.Build(Taxa, Groups, options).LineCount,
+            bySection.Where(s => options.IncludedSections.Contains(s.Key)).Sum(s => s.Value));
+
+        // One family heading in each section a family has lines in: Canidae under CR, Felidae under
+        // EN and VU. LC is not ticked.
+        var headings = GroupList.CountHeadings(Taxa, Groups, options);
+        Assert.Equal(3, headings["family"]);
+        Assert.Equal(3, headings["genus"]);
+        Assert.Equal(2, GroupList.CountHeadings(Taxa, Groups, options with { ByStatus = false })["family"]);
+        Assert.Equal(1, GroupList.CountLinesBySection(Taxa, options with { Infra = InfraMode.None })["EN"]);
+    }
+
+    [Fact]
     public void Without_status_sections_shows_the_possibly_extinct_label_and_nests_subspecies() {
         var options = new GroupListOptions {
             ByStatus = false, HeadingRanks = [], Infra = InfraMode.UnderSpecies, Sort = ListSort.ScientificName,

@@ -123,6 +123,70 @@ public sealed class OtherStatusListPageTests : IClassFixture<SiteFactory> {
     }
 
     [Fact]
+    public async Task OnlyTaxaOnTheListLeavesTheOthersOutAndAddsNoStatus() {
+        var us = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only");
+        var wikitext = Html.Textarea(us, "list-wikitext")!;
+        Assert.Contains("megacarpa", wikitext);
+        Assert.DoesNotContain("cryptadenia", wikitext);
+        Assert.DoesNotContain("NatureServe", wikitext);
+        Assert.Contains("data-live-count=\"other:only\">(1)</span>", us);
+        Assert.Contains("<input type=\"radio\" name=\"otheruse\" value=\"only\" checked=\"checked\">", us);
+
+        // NatureServe's national ranks are one list per country. cryptadenia has no global assessment,
+        // so it is listed when NE is ticked.
+        var canada = Html.Textarea(await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&cat=NE&other=natureserve-national:CA&otheruse=only"), "list-wikitext")!;
+        Assert.Contains("cryptadenia", canada);
+        Assert.DoesNotContain("megacarpa", canada);
+    }
+
+    [Fact]
+    public async Task BothListsOnlyTheTaxaOnTheListWithTheirStatus() {
+        var html = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=both");
+        var wikitext = Html.Textarea(html, "list-wikitext")!;
+        Assert.Contains("megacarpa", wikitext);
+        Assert.Contains("(NatureServe national rank, United States: N1)", wikitext);
+        Assert.DoesNotContain("cryptadenia", wikitext);
+    }
+
+    [Fact]
+    public async Task TheCategoryCountsAreOfTheTaxaOnTheList() {
+        // megacarpa (NT) is on the US list, cryptadenia (no global assessment) on the Canadian one.
+        var us = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only");
+        Assert.Contains(CategoryCount("NT", 1), us);
+        Assert.Contains(CategoryCount("NE", 0), us);
+        var canada = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:CA&otheruse=only");
+        Assert.Contains(CategoryCount("NT", 0), canada);
+        Assert.Contains(CategoryCount("NE", 1), canada);
+    }
+
+    private static string CategoryCount(string category, int count) =>
+        $"data-live-count=\"cat:{category}\">({count})</span>";
+
+    [Fact]
+    public async Task SpeciesFromCatalogueOfLifeAndWikidataAreLeftOut() {
+        var html = await _client.GetStringAsync("/taxa/genus/ursus/list?src=iucn&src=col&src=wd&style=sci&sort=sci&other=us-esa&otheruse=only");
+        Assert.Equal("* [[Polar bear|''Ursus maritimus'']], Polar bear {{IUCN status|VU|22823/14871490|1|year=2015}}",
+            Html.Textarea(html, "list-wikitext"));
+    }
+
+    [Fact]
+    public async Task ATaxonNotOnTheListLeavesTheListEmpty() {
+        var html = await _client.GetStringAsync("/taxa/family/ursidae/list?other=au-epbc&otheruse=only");
+        Assert.Null(Html.Textarea(html, "list-wikitext"));
+        Assert.Contains("No taxa in Ursidae match these options.", html);
+        Assert.Contains("data-live-count=\"other:only\">(0)</span>", html);
+    }
+
+    [Fact]
+    public async Task SpeciesTablesListOnlyTheTaxaOnTheList() {
+        var onList = await _client.GetStringAsync("/taxa/family/ursidae/list?type=table&other=us-esa&otheruse=only");
+        Assert.Contains("|name=[[Polar bear]]", Html.Textarea(onList, "list-wikitext"));
+        Assert.DoesNotContain("ESA status", Html.Textarea(onList, "list-wikitext"));
+        var notOnList = await _client.GetStringAsync("/taxa/family/ursidae/list?type=table&other=au-epbc&otheruse=both");
+        Assert.Null(Html.Textarea(notOnList, "list-wikitext"));
+    }
+
+    [Fact]
     public async Task AnUnknownListAddsNothing() {
         var html = await _client.GetStringAsync("/taxa/family/ursidae/list?other=xx-none");
         Assert.Equal("* [[Polar bear]] {{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(html, "list-wikitext"));
