@@ -48,8 +48,11 @@
         <p class="update-summary">@(result.NotChecked > 0
             ? UpdateText.SummaryCapped(StatusUpdater.DefaultMaxItems, result.Updated, result.Current, result.NotUpdated, result.NotChecked)
             : UpdateText.Summary(result.Updated, result.Current, result.NotUpdated, result.ListLinesWithoutStatus + result.TablesWithoutStatus > 0))</p>
-        @if (Model.StatusCounts is { Items: > 0 } counts) {
-            <partial name="_StatusCounts" model="@(new StatusCountsModel(counts, !Model.StatusBoxInText))" />
+        @if (Model.CountTable is { } countTable && Model.StatusCounts is { } counts && (countTable.Rows.Count > 0 || counts.Items > 0)) {
+            <partial name="_StatusCounts" model="@(new StatusCountsModel(countTable,
+                Model.Scope is { } compared ? UpdateText.CountsIucnHeading(compared, Model.Areas) : null,
+                Model.Scope is { } helped ? UpdateText.CountsTableHelpCompared(helped, Model.Areas) : null,
+                counts, !Model.StatusBoxInText))" />
         }
         @if (result.Updated == 0 && result.MissingAdded == 0 && result.TaxaRemoved == 0 && result.Findings.Count > 0) {
             <p class="note">@UpdateText.NoChanges</p>

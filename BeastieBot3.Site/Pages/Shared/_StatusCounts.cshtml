@@ -1,18 +1,64 @@
 @model BeastieBot3.Site.Pages.StatusCountsModel
 @using BeastieBot3.Site.Update
-@* How many statuses of each category the updated wikitext has, as the {{IUCN statuses}} box counts
-   them (IucnStatusesSummary.Count). Categories with none are left out of the row. *@
-@{ var counts = Model.Counts; }
+@* The taxa the wikitext lists by the code of their latest assessment, beside the compared group's
+   taxa (StatusCountTable), then the {{IUCN statuses}} box's counts, which count templates instead
+   (IucnStatusesSummary.Count). *@
+@{
+    var table = Model.Table;
+    var counts = Model.Counts;
+    var kinds = table.ShowInfra ? 2 : 1;
+    var total = table.Total;
+}
 <div class="update-counts">
-    <p class="update-counts-row">
-        <span class="update-counts-label">@UpdateText.CountsLabel</span>
-        @foreach (var key in IucnStatusesSummary.Keys.Where(k => counts.ByKey[k] > 0)) {
-            <span class="update-count"><partial name="_Badge" model="@BadgeModel.ForStatusCode(key.ToUpperInvariant(), showLabel: false)" /> @SiteFormat.Number(counts.ByKey[key])@if (key == "cr" && UpdateText.CountsPossiblyExtinct(counts.PossiblyExtinct, counts.PossiblyExtinctInTheWild) is { } pe) {<text> @pe</text>}</span>
-        }
-        <span class="update-count update-count-total">@UpdateText.CountsTotal(counts.Items)</span>
-    </p>
-    <p class="help">@UpdateText.CountsHelp(counts)</p>
-    @if (Model.ShowBox) {
-        <p class="help">@UpdateText.CountsBoxLabel <code>@counts.Box</code></p>
+    @if (table.Rows.Count > 0) {
+        <div class="table-scroll">
+            <table class="data-table update-counts-table">
+                <caption>@UpdateText.CountsCaption</caption>
+                <thead>
+                    <tr>
+                        <th scope="col" rowspan="2">@GroupText.ColumnCategory</th>
+                        <th scope="colgroup" colspan="@kinds">@UpdateText.CountsWikitextHeading</th>
+                        @if (Model.IucnHeading is { } iucnHeading) {
+                            <th scope="colgroup" colspan="@kinds">@iucnHeading</th>
+                        }
+                    </tr>
+                    <tr>
+                        @for (var group = 0; group < (Model.IucnHeading is null ? 1 : 2); group++) {
+                            <th scope="col" class="num">@GroupText.ColumnSpecies</th>
+                            @if (table.ShowInfra) {
+                                <th scope="col" class="num">@GroupText.ColumnInfra</th>
+                            }
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in table.Rows) {
+                        <tr>
+                            <th scope="row"><partial name="_Badge" model="@BadgeModel.ForStatusCode(row.Code, showLabel: true)" /></th>
+                            <td class="num">@SiteFormat.Number(row.Species)</td>
+                            @if (table.ShowInfra) {<td class="num">@SiteFormat.Number(row.Infra)</td>}
+                            @if (Model.IucnHeading is not null) {
+                                <td class="num">@SiteFormat.Number(row.IucnSpecies)</td>
+                                @if (table.ShowInfra) {<td class="num">@SiteFormat.Number(row.IucnInfra)</td>}
+                            }
+                        </tr>
+                    }
+                    <tr class="update-counts-total">
+                        <th scope="row">@UpdateText.CountsTotalLabel</th>
+                        <td class="num">@SiteFormat.Number(total.Species)</td>
+                        @if (table.ShowInfra) {<td class="num">@SiteFormat.Number(total.Infra)</td>}
+                        @if (Model.IucnHeading is not null) {
+                            <td class="num">@SiteFormat.Number(total.IucnSpecies)</td>
+                            @if (table.ShowInfra) {<td class="num">@SiteFormat.Number(total.IucnInfra)</td>}
+                        }
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="help">@(Model.TableHelp ?? UpdateText.CountsTableHelp)</p>
+    }
+    @if (Model.ShowBox && counts.Items > 0) {
+        <p class="update-counts-box">@UpdateText.CountsBoxLabel <code>@counts.Box</code></p>
+        <p class="help">@UpdateText.CountsHelp(counts)</p>
     }
 </div>

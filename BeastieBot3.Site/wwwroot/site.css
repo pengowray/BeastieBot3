@@ -1659,26 +1659,36 @@ th.num {
     min-width: 0;
 }
 
-/* The counts by category of the updated wikitext: one row of badges and numbers, then the total. */
+/* The taxa of the wikitext by category, then the {{IUCN statuses}} box's wikitext. */
 .update-counts {
     margin: 0.25rem 0 1rem;
 }
-.update-counts-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem 1rem;
-    margin: 0;
-}
-.update-counts-label,
-.update-count-total {
-    font-weight: 600;
-}
-.update-count {
-    white-space: nowrap;
-}
 .update-counts .help {
     margin: 0.25rem 0 0;
+}
+/* The taxa by category: as wide as its numbers, the category names on one line, each column group
+   headed over its columns. */
+.update-counts-table {
+    width: auto;
+}
+.update-counts-table caption {
+    text-align: left;
+    font-weight: 600;
+    padding-bottom: 0.25rem;
+}
+.update-counts-table th[scope="row"] {
+    white-space: nowrap;
+    font-weight: normal;
+}
+.update-counts-table .category {
+    flex-wrap: nowrap;
+}
+.update-counts-table th[scope="colgroup"] {
+    text-align: center;
+}
+.update-counts-table .update-counts-total th,
+.update-counts-table .update-counts-total td {
+    font-weight: 600;
 }
 .update-counts code {
     overflow-wrap: anywhere;

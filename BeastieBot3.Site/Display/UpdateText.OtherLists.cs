@@ -1,3 +1,5 @@
+using BeastieBot3.Shared.Wikitext;
+using BeastieBot3.Site.Lists;
 using BeastieBot3.Site.Update;
 
 namespace BeastieBot3.Site.Display;
@@ -6,29 +8,47 @@ namespace BeastieBot3.Site.Display;
 // whose statuses are shown beside IUCN's (OtherStatusChoices).
 
 public static partial class UpdateText {
-    // Counts by category (IucnStatusesSummary.Counts), under the result's summary.
-    public const string CountsLabel = "Statuses in the updated wikitext:";
-    public static string CountsTotal(int items) => $"Total {SiteFormat.Number(items)}";
+    // The table of the wikitext's taxa by category (StatusCountTable), under the result's summary.
+    public const string CountsCaption = "Taxa by the category of their latest IUCN assessment";
+    public const string CountsWikitextHeading = "In the wikitext";
+    public const string CountsTotalLabel = "Total";
 
-    /// After the CR count: "(including 1 possibly extinct)", or with both kinds "(including 1 possibly
-    /// extinct, 2 possibly extinct in the wild)"; null when there are none.
-    public static string? CountsPossiblyExtinct(int possiblyExtinct, int inTheWild) {
-        var parts = new List<string>();
-        if (possiblyExtinct > 0) {
-            parts.Add($"{SiteFormat.Number(possiblyExtinct)} possibly extinct");
-        }
-        if (inTheWild > 0) {
-            parts.Add($"{SiteFormat.Number(inTheWild)} possibly extinct in the wild");
-        }
-        return parts.Count == 0 ? null : $"(including {string.Join(", ", parts)})";
+    /// The heading of the compared group's columns: "IUCN Red List: Subclass Theria, native or
+    /// reintroduced in the United Kingdom"; "IUCN Red List (Europe): Subclass Theria".
+    public static string CountsIucnHeading(ListScopeResult r, AreaNames areas) {
+        var group = GroupList.HeadingText(r.Scope);
+        return r.Region is { } region ? $"IUCN Red List ({region}): {group}"
+            : r.Area is { } code ? $"IUCN Red List: {group}, {WithoutAs(AreaPhrase(r.AreaMode, areas.ByCode(code)?.SentenceName ?? code))}"
+            : $"IUCN Red List: {group}";
     }
 
-    /// The help line under the counts: what was counted, the codes not counted, and how the LR codes count.
+    // "native or reintroduced in Brazil" for "as native or reintroduced in Brazil".
+    private static string WithoutAs(string phrase) => phrase.StartsWith("as ", StringComparison.Ordinal) ? phrase[3..] : phrase;
+
+    /// The help line under the table with a comparison: which taxa the wikitext columns include, where
+    /// the others are, and how each is counted.
+    public static string CountsTableHelpCompared(ListScopeResult r, AreaNames areas) {
+        var group = GroupList.HeadingText(r.Scope);
+        var taxa = r.Region is { } region ? $"the taxa in {group} that IUCN has assessed for {region}"
+            : r.Area is { } code ? $"the taxa in {group} that IUCN records {AreaPhrase(r.AreaMode, areas.ByCode(code)?.SentenceName ?? code)}"
+            : $"the taxa in {group}";
+        var latest = r.Region is { } inRegion ? $"its latest assessment for {inRegion}" : "its latest IUCN assessment";
+        var text = $"The wikitext columns include only {taxa}. The other taxa in the wikitext are listed under “{ScopeHeading(r.Scope)}”. "
+            + $"Each taxon is counted once, by the category of {latest}, and subpopulations are left out.";
+        return r.Categories is null ? text
+            : text + " The IUCN Red List columns include every category, even when the comparison covers only some categories.";
+    }
+
+    public const string CountsTableHelp =
+        "Each taxon found in the wikitext is counted once, by the category of its latest IUCN assessment. Subpopulations are left out.";
+
+    /// The help line under the {{IUCN statuses}} box: what was counted, the codes not counted, and how
+    /// the LR codes count.
     public static string CountsHelp(IucnStatusesSummary.Counts counts) {
         var item = counts.FromRows ? "row" : "template";
         var text = counts.FromRows
-            ? "Counted from the iucn-status of each {{Species table/row}}, once per row, so a species with two rows is counted twice. A row with no iucn-status is counted as NE."
-            : "Counted from the code of each {{IUCN status}} template, once per template, so a species with two templates is counted twice.";
+            ? "Counted from the iucn-status of each {{Species table/row}}, once per row: a species with two rows is counted twice, and a row with no iucn-status is counted as NE. Rows of taxa left out of the table above, such as subpopulations, are counted too."
+            : "Counted from the code of each {{IUCN status}} template, once per template: a species with two templates is counted twice, and a taxon with no template is not counted. Templates of taxa left out of the table above, such as subpopulations, are counted too.";
         if (counts.Uncounted > 0) {
             var codes = string.Join(" or ", (counts.UncountedCodes ?? []).Select(c => c.Length == 0 ? "blank" : c));
             text += counts.Uncounted == 1

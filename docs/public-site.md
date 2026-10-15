@@ -2196,10 +2196,19 @@ NZTCS, US the Endangered Species Act; any other country the one of its national 
 that has the most of the text's taxa (`OtherStatusChoices.DefaultFor`). The old `epbc=1` field still
 chooses the EPBC Act.
 
-Under the result's summary, the page counts the updated wikitext's statuses by category, as
-`{{IUCN statuses}}` counts them (`IucnStatusesSummary.Count`: the `{{Species table/row}}` rows, else
-the `{{IUCN status}}` templates; CR(PE) and CR(PEW) in CR, with how many of each), says which codes
-it did not count, and gives the box's wikitext when the text has no box (`_StatusCounts`).
+Under the result's summary, a table counts the taxa the wikitext lists by the `{{IUCN status}}` code
+of their latest assessment, species apart from subspecies and varieties (`Update/StatusCountTable.cs`,
+`_StatusCounts`). With a comparison (`ListScope`), it counts exactly the taxa the comparison counts
+(`ListScopeResult.ListedCompared`: listed species, subspecies and varieties in the group and of the
+area or region, each once, in any category) beside the group's taxa (`ListScopeResult.ScopeCounts`, the
+counts the comparison is made from, of the area or region when there is one), so its species totals
+are the comparison's "70 of the 75 species" when every category is compared. Without one, it counts
+every listed taxon in the release, each once. Subpopulations are left out. One row per code either side
+has, in the order of the list sections, so CR(PE), CR(PEW) and the LR codes have rows of their own;
+the subspecies columns only when either side has any. Below the table, for a text with no
+`{{IUCN statuses}}` box, the box's wikitext with its counts made as the box's are
+(`IucnStatusesSummary.Count`: one per `{{Species table/row}}`, else one per `{{IUCN status}}`; CR(PE)
+and CR(PEW) in cr), and the codes it did not count.
 
 An editor pastes the wikitext of an article or list and gets the same text back with the IUCN
 statuses changed to match the latest global assessments, and a report with one row per item (line,

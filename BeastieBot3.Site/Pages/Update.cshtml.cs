@@ -179,6 +179,9 @@ public sealed class UpdateModel : PageModel {
     /// The updated text has an {{IUCN statuses}} box.
     public bool StatusBoxInText { get; private set; }
 
+    /// The taxa the text lists by category, beside the compared group's when there is a comparison.
+    public StatusCountTable? CountTable { get; private set; }
+
     /// "List of reptiles of Australia", "List of Australian birds", "Fauna of Australia".
     public static bool IsAustralianTitle(string title) =>
         System.Text.RegularExpressions.Regex.IsMatch(title, @"\bAustral(ia|ian|asia|asian)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -447,6 +450,7 @@ public sealed class UpdateModel : PageModel {
         var counted = new WikitextScanner(Result.Text);
         StatusCounts = IucnStatusesSummary.Count(counted);
         StatusBoxInText = counted.Templates.Any(t => t.Name == IucnStatusesSummary.TemplateName);
+        CountTable = Scope is { } compared ? StatusCountTable.For(compared) : StatusCountTable.For(Result.Members ?? []);
         if (otherListFromTitle is not null && OtherList is null) {
             var area = Areas.FromTitle(otherListFromTitle);
             var country = area is null ? IsAustralianTitle(otherListFromTitle) ? "AU" : null : area.IsCountry ? area.Code : area.Country;

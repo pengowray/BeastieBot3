@@ -149,6 +149,15 @@ public sealed record ListScopeResult(
     /// The area's records of the missing taxa that need a word beside them (introduced, vagrant,
     /// extirpated ...), by taxon id.
     public IReadOnlyDictionary<long, AreaRecord> MissingAreaRecords { get; init; } = new Dictionary<long, AreaRecord>();
+
+    /// The listed taxa the comparison counts, each once: the species, subspecies and varieties in the
+    /// group (and of the area or region), in any category. Subpopulations and taxa outside the group
+    /// are left out.
+    public IReadOnlyList<StatusTaxon> ListedCompared { get; init; } = [];
+
+    /// How many of the group's taxa (of the area or region) have each {{IUCN status}} code, in any
+    /// category: the counts the comparison is made from.
+    public IReadOnlyList<GroupCategoryCount> ScopeCounts { get; init; } = [];
 }
 
 /// Compares the taxa a text lists (StatusUpdateResult.Members) with the IUCN group they are in, and
@@ -357,6 +366,8 @@ public static partial class ListScope {
             Region = region,
             NotInRegion = notInRegion,
             MissingAreaRecords = missingRecords,
+            ListedCompared = [.. species.Concat(infra).Select(t => t.First().Taxon)],
+            ScopeCounts = counts,
             ListedIn = path.ToDictionary(g => g.NodeId, g => listed.Count(t => t.First().Taxon.Kind == TaxonKinds.Species
                 && PathOf(t.First().Taxon.NodeId!.Value).Any(p => p.NodeId == g.NodeId))),
             MissingExtra = extras?

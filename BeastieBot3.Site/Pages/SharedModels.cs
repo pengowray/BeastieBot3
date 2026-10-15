@@ -104,6 +104,9 @@ public sealed record TaxonListItem(TaxonSummary Taxon, string? MatchNoteLabel = 
     }
 }
 
-/// The counts by category of the updated wikitext on the status update page (_StatusCounts). ShowBox:
-/// also give the {{IUCN statuses}} box's wikitext, for a text that has none.
-public sealed record StatusCountsModel(BeastieBot3.Site.Update.IucnStatusesSummary.Counts Counts, bool ShowBox);
+/// The status update page's table of the wikitext's taxa by category beside the compared group's
+/// (_StatusCounts), and the {{IUCN statuses}} box's counts. IucnHeading and TableHelp: the heading of
+/// the group's columns and the help under the table, null without a comparison. ShowBox: also give the
+/// box's wikitext, for a text that has none.
+public sealed record StatusCountsModel(BeastieBot3.Site.Update.StatusCountTable Table, string? IucnHeading, string? TableHelp,
+    BeastieBot3.Site.Update.IucnStatusesSummary.Counts Counts, bool ShowBox);

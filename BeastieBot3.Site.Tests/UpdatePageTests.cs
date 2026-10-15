@@ -118,16 +118,23 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
     }
 
     [Fact]
-    public async Task TheResultCountsTheStatusesByCategory() {
+    public async Task TheResultCountsTheTaxaByCategory() {
         var (_, html) = await Post("* ''Phascolarctos cinereus'' {{IUCN status|EN}}\n* ''Casuarius casuarius'' {{IUCN status|LC}}\n* {{IUCN status|CR(PE)}}\n* {{IUCN status|NA}}\n");
         var start = html.IndexOf("<div class=\"update-counts\">", StringComparison.Ordinal);
-        var counts = Html.Text(html[start..html.IndexOf("</div>", start, StringComparison.Ordinal)]);
-        Assert.Contains("CR 1 (including 1 possibly extinct)", counts);
-        Assert.Contains("VU 1", counts);
-        Assert.Contains("LC 1", counts);
-        Assert.Contains("Total 3", counts);
-        Assert.Contains("{{IUCN statuses|ex=0|ew=0|cr=1|en=0|vu=1|nt=0|lc=1|dd=0|ne=0}}", counts);
-        Assert.Contains("1 template is not counted: its code is NA, and the {{IUCN statuses}} box has no parameter for it.", counts);
+        var section = html[start..html.IndexOf("<div class=\"wikitext-box\">", start, StringComparison.Ordinal)];
+        // Two taxa found: too few to compare with a group, so the table has the wikitext's columns only.
+        Assert.Equal(new[] {
+            new[] { "Category", "In the wikitext" },
+            new[] { "Species" },
+            new[] { "VU Vulnerable", "1" },
+            new[] { "LC Least Concern", "1" },
+            new[] { "Total", "2" },
+        }, Html.TableRows(section));
+        var text = Html.Text(section);
+        // The box counts the templates, the one with no taxon included.
+        Assert.Contains("{{IUCN statuses|ex=0|ew=0|cr=1|en=0|vu=1|nt=0|lc=1|dd=0|ne=0}}", text);
+        Assert.Contains("1 template is not counted: its code is NA, and the {{IUCN statuses}} box has no parameter for it.", text);
+        Assert.Contains("Each taxon found in the wikitext is counted once, by the category of its latest IUCN assessment.", text);
     }
 
     [Theory]
