@@ -13,10 +13,10 @@ using BeastieBot3.Site.Pages;
 //                               {{cite iucn}} when absent
 //   other   a list key          another list (OtherStatusChoices key: "au-epbc", "jncc-redlist-gb");
 //                               none when absent
-//   otheruse line | only | both what the list in `other` does: the taxon's status after each line
-//                               (line, the default), only the taxa with a status in it (only), or both.
-//                               The species tables apply only the choice of taxa.
-//   oskip   a status            a status in the list whose taxa "only" and "both" leave out
+//   oline   0                   no status from the list in `other` after each line (the status is added
+//                               when absent; species tables never show it)
+//   oonly   1                   only the taxa with a status in the list in `other` (all taxa when absent)
+//   oskip   a status            a status in the list whose taxa oonly leaves out
 //                               (OtherStatusFilter.Key: the status as the list writes it, NatureServe's
 //                               rounded global rank); repeated. Only the left-out statuses are kept, so a
 //                               status left out stays left out on another group's page, and every
@@ -34,16 +34,6 @@ public enum ListReferenceMode {
     Inline,
 }
 
-/// What the list chosen in ListLineOptions.OtherList does.
-public enum OtherListUse {
-    /// The taxon's status in the list after each bulleted line.
-    StatusOnLine,
-    /// Only the taxa with a status in the list.
-    OnlyListed,
-    /// Both.
-    Both,
-}
-
 public sealed record ListLineOptions {
     public static readonly ListLineOptions Default = new();
 
@@ -52,17 +42,20 @@ public sealed record ListLineOptions {
     public ReferenceTemplate Template { get; init; } = ReferenceTemplate.CiteIucn;
     /// The OtherStatusChoices key of the list whose status goes after each line; null for none.
     public string? OtherList { get; init; }
-    public OtherListUse OtherUse { get; init; } = OtherListUse.StatusOnLine;
-    /// The statuses (OtherStatusFilter.Key) whose taxa "only" and "both" leave out.
+    /// Whether each bulleted line ends with the taxon's status in OtherList.
+    public bool OtherOnLines { get; init; } = true;
+    /// Whether the list has only the taxa with a status in OtherList.
+    public bool OtherOnly { get; init; }
+    /// The statuses (OtherStatusFilter.Key) whose taxa OtherOnly leaves out.
     public IReadOnlySet<string> OtherSkip { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 
     public bool HasReferences => References != ListReferenceMode.None;
     /// Whether a list is chosen and the list maker lists only the taxa with a status in it.
-    public bool OnlyOtherListed => OtherList is not null && OtherUse != OtherListUse.StatusOnLine;
+    public bool OnlyOtherListed => OtherList is not null && OtherOnly;
     /// Whether a list is chosen and each bulleted line ends with the taxon's status in it.
-    public bool OtherStatusOnLines => OtherList is not null && OtherUse != OtherListUse.OnlyListed;
+    public bool OtherStatusOnLines => OtherList is not null && OtherOnLines;
 
-    public static readonly string[] Keys = ["auth", "lrefs", "lcite", "other", "otheruse", "oskip", "ostatus", "oshown"];
+    public static readonly string[] Keys = ["auth", "lrefs", "lcite", "other", "oline", "oonly", "oskip", "ostatus", "oshown"];
 
     public static ListLineOptions Read(IQueryCollection query) => new() {
         Authority = Last(query, "auth") switch {
@@ -77,11 +70,8 @@ public sealed record ListLineOptions {
         },
         Template = IucnReference.FromQuery(Last(query, "lcite")),
         OtherList = Last(query, "other") is { Length: > 0 } other ? other : null,
-        OtherUse = Last(query, "otheruse") switch {
-            "only" => OtherListUse.OnlyListed,
-            "both" => OtherListUse.Both,
-            _ => OtherListUse.StatusOnLine,
-        },
+        OtherOnLines = Last(query, "oline") != "0",
+        OtherOnly = Last(query, "oonly") == "1",
         OtherSkip = ReadSkip(query),
     };
 
@@ -112,8 +102,11 @@ public sealed record ListLineOptions {
         }
         if (OtherList is not null) {
             yield return "other=" + Uri.EscapeDataString(OtherList);
-            if (OtherUse != OtherListUse.StatusOnLine) {
-                yield return "otheruse=" + OtherUseKey(OtherUse);
+            if (!OtherOnLines) {
+                yield return "oline=0";
+            }
+            if (OtherOnly) {
+                yield return "oonly=1";
             }
             foreach (var status in OtherSkip.Order(StringComparer.Ordinal)) {
                 yield return "oskip=" + Uri.EscapeDataString(status);
@@ -121,11 +114,6 @@ public sealed record ListLineOptions {
         }
     }
 
-    public static string OtherUseKey(OtherListUse value) => value switch {
-        OtherListUse.OnlyListed => "only",
-        OtherListUse.Both => "both",
-        _ => "line",
-    };
 
     public static string AuthorityKey(SpeciesListAuthority value) => value switch {
         SpeciesListAuthority.Small => "small",

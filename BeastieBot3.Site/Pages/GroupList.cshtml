@@ -132,8 +132,10 @@
                     <partial name="_ListSourceOptions" model="@options.Sources" />
                     <partial name="_ListLineOptions" model="@options.Line" />
                 </div>
-                @* Both list types: species tables apply only the choice of taxa (OtherListUse). *@
-                <fieldset class="option-group" aria-labelledby="legend-other-list">
+                @* Both list types; species tables never show the status, so its box is for bulleted lists only.
+                   site.css hides the boxes while no list is chosen, and the statuses while "Only taxa on this
+                   list" is not ticked. *@
+                <fieldset class="option-group other-list-options" aria-labelledby="legend-other-list">
                     <legend><span id="legend-other-list">@GroupLineText.OtherListLegend</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-other-list", GroupText.InfoTipLabel(GroupLineText.OtherListLegend), GroupLineText.OtherListHelp))" /></legend>
                     <select name="other" aria-labelledby="legend-other-list">
                         <option value="" selected="@(Model.OtherList is null)">@GroupLineText.OtherListNone</option>
@@ -145,29 +147,25 @@
                             </optgroup>
                         }
                     </select>
-                    @foreach (var (use, label) in new[] { (OtherListUse.StatusOnLine, GroupLineText.OtherUseLine), (OtherListUse.OnlyListed, GroupLineText.OtherUseOnly), (OtherListUse.Both, GroupLineText.OtherUseBoth) }) {
-                        <label>
-                            <input type="radio" name="otheruse" value="@ListLineOptions.OtherUseKey(use)" checked="@(options.Line.OtherUse == use)">
-                            @label
-                            @if (use == OtherListUse.OnlyListed) {
-                                <partial name="_OptionCount" model="@(new OptionCountModel("other:only", Model.OnlyListedLines))" />
+                    <div class="other-list-uses">
+                        <label data-list-type="bullets" hidden="@Model.Table.IsTable"><input type="hidden" name="oline" value="0"><input type="checkbox" name="oline" value="1" checked="@options.Line.OtherOnLines"> @GroupLineText.OtherOnLines</label>
+                        <label><input type="hidden" name="oonly" value="0"><input type="checkbox" name="oonly" value="1" checked="@options.Line.OtherOnly"> @GroupLineText.OtherOnly <partial name="_OptionCount" model="@(new OptionCountModel("other:only", Model.OnlyListedLines))" /></label>
+                        @* The statuses depend on the chosen list, so site.js replaces this part after a live
+                           update (data-live-replace). A left-out status not shown here is sent on in a hidden oskip. *@
+                        <div data-live-replace="other-statuses">
+                            @foreach (var skipped in Model.HiddenSkips) {
+                                <input type="hidden" name="oskip" value="@skipped">
                             }
-                        </label>
-                    }
-                    @* The statuses depend on the chosen list, so site.js replaces this part after a live update
-                       (data-live-replace). A left-out status not shown here is sent on in a hidden oskip. *@
-                    <div data-live-replace="other-statuses">
-                        @foreach (var skipped in Model.HiddenSkips) {
-                            <input type="hidden" name="oskip" value="@skipped">
-                        }
-                        @if (Model.StatusChoices.Count > 0) {
-                            <p class="option-sublabel">@GroupLineText.OtherStatusesLabel</p>
-                            @foreach (var statusChoice in Model.StatusChoices) {
-                                <label><input type="hidden" name="oshown" value="@statusChoice.Key"><input type="checkbox" name="ostatus" value="@statusChoice.Key" checked="@statusChoice.Ticked"> @statusChoice.Key <partial name="_OptionCount" model="@(new OptionCountModel("ostatus:" + statusChoice.Key, statusChoice.Lines))" /></label>
+                            @if (Model.StatusChoices.Count > 0) {
+                                <fieldset class="nested-options">
+                                    <legend class="visually-hidden">@GroupLineText.OtherStatusesLabel</legend>
+                                    @foreach (var statusChoice in Model.StatusChoices) {
+                                        <label><input type="hidden" name="oshown" value="@statusChoice.Key"><input type="checkbox" name="ostatus" value="@statusChoice.Key" checked="@statusChoice.Ticked"> @statusChoice.Key <partial name="_OptionCount" model="@(new OptionCountModel("ostatus:" + statusChoice.Key, statusChoice.Lines))" /></label>
+                                    }
+                                </fieldset>
                             }
-                        }
+                        </div>
                     </div>
-                    <p class="help" data-list-type="tables" hidden="@(!Model.Table.IsTable)">@GroupLineText.OtherListTablesNote</p>
                 </fieldset>
                 <fieldset class="option-group">
                     <legend>@GroupText.OptionSort</legend>
@@ -191,16 +189,13 @@
                     <p class="note">@GroupSourceText.TooLongNote</p>
                 }
             } else if (Model.Tables is { RowCount: > 0 }) {
-                @if (Model.OnlyOtherListed) {
-                    <p class="note">@GroupLineText.OnlyListedNote(Model.OtherListTaxa, Model.OtherList!.Heading)</p>
-                }
                 <partial name="_SpeciesTableOutput" model="Model" />
             } else if (Model.List is not { LineCount: > 0 } list) {
                 <p class="note">@GroupText.EmptyList(group.Name)</p>
             } else {
                 <p class="list-size">@GroupText.ListSize(list.LineCount)@GroupSourceText.ExtraCountSuffix(GroupListSources.ExtraLineCount(list))</p>
-                @if (Model.OtherList is { } otherList) {
-                    <p class="note">@GroupLineText.OtherListNote(options.Line.OtherUse, Model.OtherListTaxa, otherList.Heading)</p>
+                @if (Model.OtherList is { } otherList && options.Line.OtherStatusOnLines && !Model.OnlyOtherListed) {
+                    <p class="note">@GroupLineText.OtherListCount(Model.OtherListTaxa, otherList.Heading)</p>
                 }
                 @if (Model.NoticeGroups is { IsEmpty: false } duplicates) {
                     <p class="notices-summary"><a href="#list-notices">@GroupSourceText.NoticesHeading</a>: @GroupSourceText.SummaryCounts(duplicates.LeftOut.EntryCount, duplicates.Kept.PairCount)</p>

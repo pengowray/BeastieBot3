@@ -32,19 +32,19 @@ public sealed class ListLineOptionsTests(SiteFactory factory) : IClassFixture<Si
 
     [Fact]
     public void TheUseOfTheOtherList_RoundTripsAndNeedsAList() {
-        var only = ListLineOptions.Read(Query(("other", "us-esa"), ("otheruse", "only")));
-        Assert.Equal(OtherListUse.OnlyListed, only.OtherUse);
+        var only = ListLineOptions.Read(Query(("other", "us-esa"), ("oline", "0"), ("oonly", "0"), ("oonly", "1")));
         Assert.True(only.OnlyOtherListed);
         Assert.False(only.OtherStatusOnLines);
-        Assert.Equal(["other=us-esa", "otheruse=only"], only.Write());
+        Assert.Equal(["other=us-esa", "oline=0", "oonly=1"], only.Write());
 
-        var both = ListLineOptions.Read(Query(("other", "us-esa"), ("otheruse", "both")));
+        // The form sends a hidden 0 before each box; the status after each line is the default.
+        var both = ListLineOptions.Read(Query(("other", "us-esa"), ("oline", "0"), ("oline", "1"), ("oonly", "0"), ("oonly", "1")));
         Assert.True(both.OnlyOtherListed && both.OtherStatusOnLines);
-        Assert.Equal(["other=us-esa", "otheruse=both"], both.Write());
+        Assert.Equal(["other=us-esa", "oonly=1"], both.Write());
+        Assert.Equal(["other=us-esa"], ListLineOptions.Read(Query(("other", "us-esa"), ("oonly", "0"))).Write());
 
-        // The default use is not written, and a use without a list does nothing.
-        Assert.Equal(["other=us-esa"], ListLineOptions.Read(Query(("other", "us-esa"), ("otheruse", "line"))).Write());
-        var noList = ListLineOptions.Read(Query(("other", ""), ("otheruse", "only")));
+        // Without a list the boxes do nothing.
+        var noList = ListLineOptions.Read(Query(("other", ""), ("oonly", "1")));
         Assert.False(noList.OnlyOtherListed);
         Assert.Empty(noList.Write());
     }
@@ -52,16 +52,16 @@ public sealed class ListLineOptionsTests(SiteFactory factory) : IClassFixture<Si
     [Fact]
     public void LeftOutStatuses_AreTheShownOnesNotTickedAndTheOthersSentOn() {
         // From the address: the left-out statuses as they are.
-        var fromAddress = ListLineOptions.Read(Query(("other", "jncc-redlist-gb"), ("otheruse", "only"), ("oskip", "Not Evaluated")));
+        var fromAddress = ListLineOptions.Read(Query(("other", "jncc-redlist-gb"), ("oonly", "1"), ("oskip", "Not Evaluated")));
         Assert.Equal(["Not Evaluated"], fromAddress.OtherSkip);
 
         // From the form: the shown statuses not ticked, and a left-out status the form did not show.
-        var fromForm = ListLineOptions.Read(Query(("other", "jncc-redlist-gb"), ("otheruse", "only"),
+        var fromForm = ListLineOptions.Read(Query(("other", "jncc-redlist-gb"), ("oonly", "1"),
             ("oskip", "Not Applicable"), ("oskip", "Vulnerable"),
             ("oshown", "Vulnerable"), ("oshown", "Least Concern"), ("oshown", "Not Evaluated"),
             ("ostatus", "Vulnerable"), ("ostatus", "Least Concern")));
         Assert.Equal(["Not Applicable", "Not Evaluated"], fromForm.OtherSkip.Order(StringComparer.Ordinal));
-        Assert.Equal(["other=jncc-redlist-gb", "otheruse=only", "oskip=Not%20Applicable", "oskip=Not%20Evaluated"], fromForm.Write());
+        Assert.Equal(["other=jncc-redlist-gb", "oonly=1", "oskip=Not%20Applicable", "oskip=Not%20Evaluated"], fromForm.Write());
 
         // No list, no left-out statuses in the address.
         Assert.Empty(ListLineOptions.Read(Query(("oskip", "Not Evaluated"))).Write());

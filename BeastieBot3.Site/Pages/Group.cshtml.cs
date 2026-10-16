@@ -240,13 +240,8 @@ public sealed class GroupListModel : GroupPageModel {
             // The counts of the groups know nothing of other lists, so the taxa on the list are read
             // first and counted. The species from CoL and Wikidata have no status in other lists.
             var other = OtherList!;
-            taxa = _queries.GetListTaxa(group, Kinds(countOptions), other.List);
-            if (!Table.IsTable && GroupListSources.Active(Options)) {
-                Sources = GroupListSources.Merge(_queries, group, null, taxa, Options, iucnOnly: true);
-                NoticeGroups = ListNoticeGroups.Build(Sources);
-                taxa = Sources.Rows;
-            }
-            statuses = _queries.GetStatusesIn(other.List, taxa.Select(t => t.TaxonId).Where(id => id > 0).ToHashSet());
+            (taxa, statuses, Sources) = ReadTaxaOnList(group, countOptions, other);
+            NoticeGroups = Sources is null ? null : ListNoticeGroups.Build(Sources);
             StatusChoices = OtherStatusFilter.Choices(other.System,
                 taxa.Where(t => GroupList.Included(t, countOptions)).Select(t => t.TaxonId), statuses, Options.Line.OtherSkip);
             taxa = taxa.Where(t => OtherStatusFilter.Keeps(other.System, statuses.GetValueOrDefault(t.TaxonId), Options.Line.OtherSkip)).ToList();
@@ -266,6 +261,12 @@ public sealed class GroupListModel : GroupPageModel {
             .Select(r => new HeadingChoice(r.Rank, r.OnlyFromCol, Options.HeadingRanks.Contains(r.Rank),
                 Table.IsTable && r.Rank == "genus" ? null : headings.GetValueOrDefault(r.Rank)))
             .ToList();
+        if (TooLong && OtherList is { } tooLongList) {
+            // Too long to list, so the number beside "Only taxa on this list" comes from the taxa on the list.
+            var (onList, onListStatuses, _) = ReadTaxaOnList(group, countOptions, tooLongList);
+            ListedLines = onList.Count(t => GroupList.Included(t, countOptions)
+                && OtherStatusFilter.Keeps(tooLongList.System, onListStatuses.GetValueOrDefault(t.TaxonId), Options.Line.OtherSkip));
+        }
         if (TooLong || LineCount == 0) {
             return Page();
         }
@@ -298,6 +299,19 @@ public sealed class GroupListModel : GroupPageModel {
             : null;
         Wikitext = GroupList.ToWikitext(List, Options, references, lineEnds);
         return Page();
+    }
+
+    // The group's taxa with a status in the list, and their statuses in it; with the merge of the
+    // sources when the bulleted list has sources other than IUCN's, which then only name the taxa.
+    private (IReadOnlyList<ListTaxonRow> Taxa, IReadOnlyDictionary<long, IReadOnlyList<ChosenStatus>> Statuses, ListSourceMergeResult? Sources)
+        ReadTaxaOnList(GroupRow group, GroupListOptions countOptions, OtherStatusChoice list) {
+        var taxa = _queries.GetListTaxa(group, Kinds(countOptions), list.List);
+        ListSourceMergeResult? sources = null;
+        if (!Table.IsTable && GroupListSources.Active(Options)) {
+            sources = GroupListSources.Merge(_queries, group, null, taxa, Options, iucnOnly: true);
+            taxa = sources.Rows;
+        }
+        return (taxa, _queries.GetStatusesIn(list.List, taxa.Select(t => t.TaxonId).Where(id => id > 0).ToHashSet()), sources);
     }
 
     // The kinds of taxa the options list: species, and subspecies and varieties, and subpopulations.

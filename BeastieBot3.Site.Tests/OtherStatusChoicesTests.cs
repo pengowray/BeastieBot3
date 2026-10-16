@@ -155,41 +155,42 @@ public sealed class OtherStatusListPageTests : IClassFixture<SiteFactory> {
 
     [Fact]
     public async Task OnlyTaxaOnTheListLeavesTheOthersOutAndAddsNoStatus() {
-        var us = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only");
+        var us = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&oonly=1&oline=0");
         var wikitext = Html.Textarea(us, "list-wikitext")!;
         Assert.Contains("megacarpa", wikitext);
         Assert.DoesNotContain("cryptadenia", wikitext);
         Assert.DoesNotContain("NatureServe", wikitext);
         Assert.Contains("data-live-count=\"other:only\">(1)</span>", us);
-        Assert.Contains("<input type=\"radio\" name=\"otheruse\" value=\"only\" checked=\"checked\">", us);
+        Assert.Contains("<input type=\"checkbox\" name=\"oonly\" value=\"1\" checked=\"checked\">", us);
+        Assert.Contains("<input type=\"checkbox\" name=\"oline\" value=\"1\">", us);
 
         // NatureServe's national ranks are one list per country. cryptadenia has no global assessment,
         // so it is listed when NE is ticked.
-        var canada = Html.Textarea(await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&cat=NE&other=natureserve-national:CA&otheruse=only"), "list-wikitext")!;
+        var canada = Html.Textarea(await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&cat=NE&other=natureserve-national:CA&oonly=1&oline=0"), "list-wikitext")!;
         Assert.Contains("cryptadenia", canada);
         Assert.DoesNotContain("megacarpa", canada);
     }
 
     [Fact]
     public async Task ALeftOutStatusLeavesOutItsTaxaAndStaysOffered() {
-        var html = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only&oskip=N1");
+        var html = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&oonly=1&oline=0&oskip=N1");
         Assert.Null(Html.Textarea(html, "list-wikitext"));
         Assert.Contains("<input type=\"hidden\" name=\"oshown\" value=\"N1\"><input type=\"checkbox\" name=\"ostatus\" value=\"N1\"> N1", html);
         Assert.Contains("data-live-count=\"ostatus:N1\">(1)</span>", html);
 
         // The form sends the shown statuses and the ticked ones.
-        var ticked = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only&oskip=N1&oshown=N1&ostatus=N1");
+        var ticked = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&oonly=1&oline=0&oskip=N1&oshown=N1&ostatus=N1");
         Assert.Contains("megacarpa", Html.Textarea(ticked, "list-wikitext"));
 
         // A left-out status that the group's taxa do not have is sent on in a hidden field.
-        var other = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only&oskip=NNA");
+        var other = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&oonly=1&oline=0&oskip=NNA");
         Assert.Contains("<input type=\"hidden\" name=\"oskip\" value=\"NNA\">", other);
         Assert.Contains("megacarpa", Html.Textarea(other, "list-wikitext"));
     }
 
     [Fact]
     public async Task BothListsOnlyTheTaxaOnTheListWithTheirStatus() {
-        var html = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=both");
+        var html = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&oonly=1");
         var wikitext = Html.Textarea(html, "list-wikitext")!;
         Assert.Contains("megacarpa", wikitext);
         Assert.Contains("(NatureServe national rank, United States: N1)", wikitext);
@@ -199,10 +200,10 @@ public sealed class OtherStatusListPageTests : IClassFixture<SiteFactory> {
     [Fact]
     public async Task TheCategoryCountsAreOfTheTaxaOnTheList() {
         // megacarpa (NT) is on the US list, cryptadenia (no global assessment) on the Canadian one.
-        var us = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only");
+        var us = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&oonly=1&oline=0");
         Assert.Contains(CategoryCount("NT", 1), us);
         Assert.Contains(CategoryCount("NE", 0), us);
-        var canada = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:CA&otheruse=only");
+        var canada = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:CA&oonly=1&oline=0");
         Assert.Contains(CategoryCount("NT", 0), canada);
         Assert.Contains(CategoryCount("NE", 1), canada);
     }
@@ -212,14 +213,14 @@ public sealed class OtherStatusListPageTests : IClassFixture<SiteFactory> {
 
     [Fact]
     public async Task SpeciesFromCatalogueOfLifeAndWikidataAreLeftOut() {
-        var html = await _client.GetStringAsync("/taxa/genus/ursus/list?src=iucn&src=col&src=wd&style=sci&sort=sci&other=us-esa&otheruse=only");
+        var html = await _client.GetStringAsync("/taxa/genus/ursus/list?src=iucn&src=col&src=wd&style=sci&sort=sci&other=us-esa&oonly=1&oline=0");
         Assert.Equal("* [[Polar bear|''Ursus maritimus'']], Polar bear {{IUCN status|VU|22823/14871490|1|year=2015}}",
             Html.Textarea(html, "list-wikitext"));
     }
 
     [Fact]
     public async Task ATaxonNotOnTheListLeavesTheListEmpty() {
-        var html = await _client.GetStringAsync("/taxa/family/ursidae/list?other=au-epbc&otheruse=only");
+        var html = await _client.GetStringAsync("/taxa/family/ursidae/list?other=au-epbc&oonly=1&oline=0");
         Assert.Null(Html.Textarea(html, "list-wikitext"));
         Assert.Contains("No taxa in Ursidae match these options.", html);
         Assert.Contains("data-live-count=\"other:only\">(0)</span>", html);
@@ -227,10 +228,10 @@ public sealed class OtherStatusListPageTests : IClassFixture<SiteFactory> {
 
     [Fact]
     public async Task SpeciesTablesListOnlyTheTaxaOnTheList() {
-        var onList = await _client.GetStringAsync("/taxa/family/ursidae/list?type=table&other=us-esa&otheruse=only");
+        var onList = await _client.GetStringAsync("/taxa/family/ursidae/list?type=table&other=us-esa&oonly=1&oline=0");
         Assert.Contains("|name=[[Polar bear]]", Html.Textarea(onList, "list-wikitext"));
         Assert.DoesNotContain("ESA status", Html.Textarea(onList, "list-wikitext"));
-        var notOnList = await _client.GetStringAsync("/taxa/family/ursidae/list?type=table&other=au-epbc&otheruse=both");
+        var notOnList = await _client.GetStringAsync("/taxa/family/ursidae/list?type=table&other=au-epbc&oonly=1");
         Assert.Null(Html.Textarea(notOnList, "list-wikitext"));
     }
 

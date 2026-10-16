@@ -732,18 +732,17 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   (`OtherStatusChoice.LineLabel`: "Victoria, Australia", "Swedish Red List 2025"). Bulleted lists only: `{{Species table/row}}` has no parameter for it.
   Wikipedia's taxobox status systems (Module:Conservation status: NZTCS, COSEWIC, CITES,
   NatureServe, the Australian state acts and others) are for taxoboxes, not list lines.
-- **Only taxa on the other list** (`otheruse=line|only|both` with `other=`; `line` by default and not
-  written, so an older `other=` address keeps its meaning): radio buttons under the list choice
-  ("Add the status to each line", "Only taxa on this list", "Both"; `ListLineOptions.OtherUse`).
-  `only` and `both` list only the taxa with a row of that list in `other_status`, for a page such as
-  "List of mammals of Great Britain"; `both` also ends each line with the status. The filter applies
-  to species tables too (the list choice is shown for both list types), which never show the status,
-  so for tables `only` and `both` are the same. The taxa are those of the ticked Red List categories
-  that are on the list: a taxon with only a regional assessment is in NE. Only IUCN taxa are matched
-  to other lists, so the species from the Catalogue of Life and Wikidata are left out
-  (`GroupListSources.Merge(iucnOnly: true)`: an IUCN taxon still takes its name from the preferred
-  source, and no overlap with an extra species leaves it out). `higher_taxon_count` knows nothing of
-  other lists, so with the filter the page reads the group's taxa on the list first
+- **Only taxa on the other list** (two checkboxes under the list choice, hidden while "None" is
+  chosen: "Add the status to each line", `oline=0` when unticked, ticked by default so an older
+  `other=` address keeps its meaning, and shown for bulleted lists only; "Only taxa on this list",
+  `oonly=1`; `ListLineOptions.OtherOnLines` and `OtherOnly`). "Only taxa on this list" lists only the
+  taxa with a row of that list in `other_status`, for a page such as "List of mammals of Great
+  Britain", in bulleted lists and species tables, which never show the status. The taxa are those of
+  the ticked Red List categories that are on the list: a taxon with only a regional assessment is in
+  NE. Only IUCN taxa are matched to other lists, so the species from the Catalogue of Life and
+  Wikidata are left out (`GroupListSources.Merge(iucnOnly: true)`: an IUCN taxon still takes its name
+  from the preferred source, and no overlap with an extra species leaves it out). `higher_taxon_count`
+  knows nothing of other lists, so with the filter the page reads the group's taxa on the list first
   (`SiteQueries.GetListTaxa(group, kinds, onList)`: `taxon_id IN (SELECT taxon_id FROM other_status
   WHERE system = ... AND list_key/country ...)`, one scan of `other_status`, about 30 to 45 ms for
   Animalia on site schema 31) and counts the lines per category and the headings per rank from them
@@ -754,7 +753,7 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   The list of NatureServe's national ranks is one country's (`natureserve-national:US`), so the
   filter checks `other_status.country` too.
 - **Statuses in the other list** (`oskip=<status>`, repeated; `Lists/OtherStatusFilter.cs`): with
-  `only` or `both`, a checkbox for each status that the listed taxa have in the chosen list, with the
+  "Only taxa on this list" ticked, a checkbox under it for each status that the listed taxa have in the chosen list, with the
   number of lines of each, ordered by IUCN's categories where a status starts with one ("Vulnerable
   (breeding)" after "Vulnerable"), then by name. Unticking a status leaves out the taxa none of whose
   statuses in the list is ticked: "Not Evaluated" and "Not Applicable", which national red lists give

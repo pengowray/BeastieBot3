@@ -1370,6 +1370,19 @@ th.num {
     gap: 0.4em;
 }
 
+/* The other list's options: none while no list is chosen, and the statuses of the list only while
+   "Only taxa on this list" is ticked (the server leaves them out otherwise; this hides them at once). */
+.other-list-options:has(select[name="other"] option[value=""]:checked) .other-list-uses,
+.other-list-options:has(input[name="oonly"][type="checkbox"]:not(:checked)) .nested-options {
+    display: none;
+}
+
+.list-options .nested-options {
+    border: 0;
+    margin: 0;
+    padding: 0 0 0 1.6em;
+}
+
 .list-options .option-sublabel {
     margin: 0.4rem 0 0.1rem;
 }
