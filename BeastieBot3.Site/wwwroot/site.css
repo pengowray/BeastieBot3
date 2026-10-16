@@ -1699,6 +1699,19 @@ th.num {
 .update-counts-table th[scope="colgroup"] {
     text-align: center;
 }
+.update-counts-missing-heading {
+    margin: 0.75rem 0 0.25rem;
+    font-weight: 600;
+}
+.update-counts-missing {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0;
+    padding-left: 1.1rem;
+}
+.update-counts-missing-label {
+    color: var(--muted);
+}
 .update-counts-table .update-counts-total th,
 .update-counts-table .update-counts-total td {
     font-weight: 600;

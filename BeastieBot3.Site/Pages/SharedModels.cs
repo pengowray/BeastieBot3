@@ -105,8 +105,8 @@ public sealed record TaxonListItem(TaxonSummary Taxon, string? MatchNoteLabel = 
 }
 
 /// The status update page's table of the wikitext's taxa by category beside the compared group's
-/// (_StatusCounts), and the {{IUCN statuses}} box's counts. IucnHeading and TableHelp: the heading of
-/// the group's columns and the help under the table, null without a comparison. ShowBox: also give the
-/// box's wikitext, for a text that has none.
+/// (_StatusCounts), and the {{IUCN statuses}} box's counts. IucnHeading, TableHelp and Group: the
+/// heading of the group's columns, the help under the table and the group's name ("Family Felidae"),
+/// null without a comparison. ShowBox: also give the box's wikitext, for a text that has none.
 public sealed record StatusCountsModel(BeastieBot3.Site.Update.StatusCountTable Table, string? IucnHeading, string? TableHelp,
-    BeastieBot3.Site.Update.IucnStatusesSummary.Counts Counts, bool ShowBox);
+    string? Group, BeastieBot3.Site.Update.IucnStatusesSummary.Counts Counts, bool ShowBox);

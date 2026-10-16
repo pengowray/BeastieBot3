@@ -427,6 +427,10 @@ public static partial class ListScope {
 
     // Whether a taxon's code is one of the categories: by the code itself ("CR(PE)" for a list of
     // possibly extinct taxa), or by its category ("CR(PE)" is in CR).
+    /// Whether a taxon with the code is in the list's categories (ListScopeResult.Categories): by the
+    /// code itself, or by its category (CR(PE) is in CR).
+    public static bool InCategories(string code, IReadOnlySet<string> categories) => IsIn(code, categories);
+
     private static bool IsIn(string? code, IReadOnlySet<string> categories) =>
         code is not null && (categories.Contains(code.Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant())
             || (Normalize(code) is { } c && categories.Contains(c)));

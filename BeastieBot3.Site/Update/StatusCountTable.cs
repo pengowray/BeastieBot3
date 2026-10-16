@@ -6,22 +6,71 @@ using BeastieBot3.Site.Lists;
 namespace BeastieBot3.Site.Update;
 
 /// One row of the status update page's table of taxa by category: how many species and how many
-/// subspecies and varieties the wikitext lists with the code, and how many the group compared with has.
-public sealed record StatusCountRow(string Code, int Species, int Infra, int IucnSpecies, int IucnInfra);
+/// subspecies and varieties the wikitext lists with the code, how many the group compared with has,
+/// and how many of those the wikitext leaves out (MissingSpecies, MissingInfra: null when the
+/// comparison leaves such taxa out, so none of them is missing).
+public sealed record StatusCountRow(string Code, int Species, int Infra, int IucnSpecies, int IucnInfra) {
+    public int? MissingSpecies { get; init; }
+    public int? MissingInfra { get; init; }
+}
+
+/// The missing taxa with one code, for the list under the table, in tree order: species, then
+/// subspecies and varieties. SpeciesTotal and InfraTotal: how many there are, which can be more than
+/// the rows here (ListScope lists at most ListScope.MaxMissing missing taxa).
+public sealed record MissingCategory(string Code, IReadOnlyList<ListTaxonRow> Species, IReadOnlyList<ListTaxonRow> Infra,
+    int SpeciesTotal, int InfraTotal);
 
 /// The status update page's table of the taxa the wikitext lists, by the {{IUCN status}} code of
 /// their latest assessment, beside the group's taxa when there is a comparison (ListScope). One row per
 /// code that either side has, in the order of the list sections, so CR(PE) and LR/nt have rows of their
-/// own. HasIucn: the table has the group's columns.
+/// own. HasIucn: the table has the group's columns. ShowMissing: it also has the missing taxa's columns,
+/// which a comparison has when it lists the missing taxa (not for a list of part of the group), and
+/// Missing names them. Style: how the group's lists name a taxon, for the names of the missing taxa.
 public sealed record StatusCountTable(IReadOnlyList<StatusCountRow> Rows, bool HasIucn) {
+    /// The most names of missing taxa given for one code; the rest are counted.
+    public const int MaxNames = 50;
+
+    public bool ShowMissing { get; init; }
+    public IReadOnlyList<MissingCategory> Missing { get; init; } = [];
+    public SpeciesListStyle Style { get; init; } = SpeciesListStyle.CommonNameFirst;
+
     /// Subspecies and varieties get columns of their own only when either side has some.
     public bool ShowInfra => Rows.Any(r => r.Infra > 0 || r.IucnInfra > 0);
 
-    public StatusCountRow Total => new(string.Empty, Rows.Sum(r => r.Species), Rows.Sum(r => r.Infra),
-        Rows.Sum(r => r.IucnSpecies), Rows.Sum(r => r.IucnInfra));
+    /// Some missing cells have no count: the comparison leaves out some categories, or subspecies and varieties.
+    public bool MissingCategoriesLeftOut => ShowMissing && Rows.Any(r => r.MissingSpecies is null);
+    public bool MissingInfraLeftOut => ShowMissing && ShowInfra && Rows.Any(r => r.MissingSpecies is not null && r.MissingInfra is null);
 
-    /// The table for a comparison: its listed taxa beside its group's counts.
-    public static StatusCountTable For(ListScopeResult scope) => Build(scope.ListedCompared, scope.ScopeCounts);
+    public StatusCountRow Total => new(string.Empty, Rows.Sum(r => r.Species), Rows.Sum(r => r.Infra),
+        Rows.Sum(r => r.IucnSpecies), Rows.Sum(r => r.IucnInfra)) {
+        MissingSpecies = SumOrNull(Rows.Select(r => r.MissingSpecies)),
+        MissingInfra = SumOrNull(Rows.Select(r => r.MissingInfra)),
+    };
+
+    /// The table for a comparison: its listed taxa beside its group's counts, and the taxa it finds
+    /// missing in the categories (and of the kinds) it compares.
+    public static StatusCountTable For(ListScopeResult scope) {
+        var table = Build(scope.ListedCompared, scope.ScopeCounts) with { Style = scope.Style };
+        if (scope.Missing is not { } missing) {
+            return table;
+        }
+        bool Compared(string code) => scope.Categories is null || ListScope.InCategories(code, scope.Categories);
+        var rows = table.Rows.Select(r => Compared(r.Code)
+            ? r with {
+                MissingSpecies = Math.Max(0, r.IucnSpecies - r.Species),
+                MissingInfra = scope.InfraChecked ? Math.Max(0, r.IucnInfra - r.Infra) : null,
+            }
+            : r).ToList();
+        var byCode = missing.GroupBy(GroupList.StatusCode).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+        var named = rows
+            .Where(r => byCode.ContainsKey(r.Code))
+            .Select(r => new MissingCategory(r.Code,
+                [.. byCode[r.Code].Where(t => t.Kind == TaxonKinds.Species)],
+                [.. byCode[r.Code].Where(t => t.Kind != TaxonKinds.Species)],
+                r.MissingSpecies ?? 0, r.MissingInfra ?? 0))
+            .ToList();
+        return table with { Rows = rows, ShowMissing = true, Missing = named };
+    }
 
     /// The table with no comparison: every taxon the text lists that is in the release, each once,
     /// subpopulations left out, as ListScope counts them.
@@ -46,6 +95,15 @@ public sealed record StatusCountTable(IReadOnlyList<StatusCountRow> Rows, bool H
             .ThenBy(r => r.Key, StringComparer.Ordinal)
             .Select(r => new StatusCountRow(r.Key, r.Value.Species, r.Value.Infra, r.Value.IucnSpecies, r.Value.IucnInfra))],
             iucn is not null);
+    }
+
+    /// The id of a code's line in the list of missing taxa: "missing-CR-PE" for CR(PE).
+    public static string AnchorOf(string code) =>
+        "missing-" + System.Text.RegularExpressions.Regex.Replace(code, "[^A-Za-z0-9]+", "-").Trim('-');
+
+    private static int? SumOrNull(IEnumerable<int?> values) {
+        var known = values.OfType<int>().ToList();
+        return known.Count == 0 ? null : known.Sum();
     }
 
     // The code of the taxon's latest assessment ("CR(PE)", "LR/nt"); NE for a taxon IUCN has assessed only regionally.

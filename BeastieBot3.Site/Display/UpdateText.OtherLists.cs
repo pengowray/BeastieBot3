@@ -27,6 +27,9 @@ public static partial class UpdateText {
 
     /// The help line under the table with a comparison: which taxa the wikitext columns include, where
     /// the others are, and how each is counted.
+    public static string CountsTableHelpCompared(ListScopeResult r, AreaNames areas, StatusCountTable table) =>
+        CountsDashHelp(r, table) is { } dashes ? CountsTableHelpCompared(r, areas) + " " + dashes : CountsTableHelpCompared(r, areas);
+
     public static string CountsTableHelpCompared(ListScopeResult r, AreaNames areas) {
         var group = GroupList.HeadingText(r.Scope);
         var taxa = r.Region is { } region ? $"the taxa in {group} that IUCN has assessed for {region}"
@@ -37,6 +40,33 @@ public static partial class UpdateText {
             + $"Each taxon is counted once, by the category of {latest}, and subpopulations are left out.";
         return r.Categories is null ? text
             : text + " The IUCN Red List columns include every category, even when the comparison covers only some categories.";
+    }
+
+    // The missing taxa: a column group in the table and a list under it (StatusCountTable.Missing).
+    public const string CountsMissingHeading = "Missing from the wikitext";
+    public const string CountsMissingListHeading = "Missing from the wikitext, by category";
+    public static string CountsMoreNames(int n) => n == 1 ? "and 1 more taxon" : $"and {SiteFormat.Number(n)} more taxa";
+    public const string CountsMissingInfraLabel = "Subspecies and varieties:";
+
+    /// The hover title of a dash in a row whose category the comparison leaves out: "Least Concern
+    /// taxa are left out of the comparison with Family Felidae."
+    public static string CountsNotComparedCategoryTitle(string category, string group) =>
+        $"{category} taxa are left out of the comparison with {group}.";
+
+    /// The hover title of a dash for subspecies and varieties the comparison leaves out.
+    public static string CountsNotComparedInfraTitle(string group) =>
+        $"Subspecies and varieties are left out of the comparison with {group}, because the wikitext lists fewer than half of them.";
+
+    /// After the help under the table, when a missing cell has a dash; null when none has.
+    public static string? CountsDashHelp(ListScopeResult r, StatusCountTable table) {
+        var group = GroupList.HeadingText(r.Scope);
+        var categories = r.Categories is { } cats ? CategoryList(cats, "and") : null;
+        return (table.MissingCategoriesLeftOut && categories is not null, table.MissingInfraLeftOut) switch {
+            (true, true) => $"The comparison with {group} includes only {categories} species, because the wikitext lists fewer than half of the group's subspecies and varieties, so every other cell under “{CountsMissingHeading}” has a dash.",
+            (true, false) => $"The comparison with {group} includes only {categories} taxa, so the rows for other categories have a dash under “{CountsMissingHeading}”.",
+            (false, true) => $"A dash under “{CountsMissingHeading}” means subspecies and varieties are left out of the comparison with {group}, because the wikitext lists fewer than half of them.",
+            _ => null,
+        };
     }
 
     public const string CountsTableHelp =

@@ -2241,7 +2241,15 @@ counts the comparison is made from, of the area or region when there is one), so
 are the comparison's "70 of the 75 species" when every category is compared. Without one, it counts
 every listed taxon in the release, each once. Subpopulations are left out. One row per code either side
 has, in the order of the list sections, so CR(PE), CR(PEW) and the LR codes have rows of their own;
-the subspecies columns only when either side has any. Below the table, for a text with no
+the subspecies columns only when either side has any. When the comparison lists missing taxa (not
+for a list of part of the group), a third column group, "Missing from the wikitext", gives each row's
+IUCN count less the wikitext's count, which is the number of the group's taxa with that code that the
+text does not list; a dash (with its reason as a hover title and in the help) marks a category the
+comparison leaves out (a list of CR taxa) and subspecies and varieties when the text lists fewer than
+half of them (`ListScopeResult.InfraChecked`). Under the table, "Missing from the wikitext, by
+category" names them from `ListScopeResult.Missing`, each linked to its page, common names for groups
+whose lists use them, at most `StatusCountTable.MaxNames` (50) per code and the rest counted; each
+count in the column links to its code's line. Below that, for a text with no
 `{{IUCN statuses}}` box, the box's wikitext with its counts made as the box's are
 (`IucnStatusesSummary.Count`: one per `{{Species table/row}}`, else one per `{{IUCN status}}`; CR(PE)
 and CR(PEW) in cr), and the codes it did not count.

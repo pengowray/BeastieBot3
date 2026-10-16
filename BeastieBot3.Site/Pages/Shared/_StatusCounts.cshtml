@@ -1,13 +1,37 @@
 @model BeastieBot3.Site.Pages.StatusCountsModel
 @using BeastieBot3.Site.Update
 @* The taxa the wikitext lists by the code of their latest assessment, beside the compared group's
-   taxa (StatusCountTable), then the {{IUCN statuses}} box's counts, which count templates instead
-   (IucnStatusesSummary.Count). *@
+   taxa and the group's taxa the wikitext leaves out (StatusCountTable), the missing taxa by code,
+   then the {{IUCN statuses}} box's counts, which count templates instead (IucnStatusesSummary.Count). *@
 @{
     var table = Model.Table;
     var counts = Model.Counts;
     var kinds = table.ShowInfra ? 2 : 1;
     var total = table.Total;
+    var groups = Model.IucnHeading is null ? 1 : table.ShowMissing ? 3 : 2;
+    var named = table.Missing.Select(m => m.Code).ToHashSet();
+}
+@functions {
+    // A missing count: a dash, with why, when the comparison leaves the taxa out (title); a link to
+    // the names when they are listed.
+    private static Microsoft.AspNetCore.Html.IHtmlContent MissingCell(int? n, string code, bool linked, string? title) {
+        if (n is not { } count) {
+            return new Microsoft.AspNetCore.Html.HtmlString(
+                $"<td class=\"num\" title=\"{System.Net.WebUtility.HtmlEncode(title ?? "")}\">\u2013</td>");
+        }
+        var text = SiteFormat.Number(count);
+        return new Microsoft.AspNetCore.Html.HtmlString(count > 0 && linked
+            ? $"<td class=\"num\"><a href=\"#{StatusCountTable.AnchorOf(code)}\">{text}</a></td>"
+            : $"<td class=\"num\">{text}</td>");
+    }
+
+    // A missing taxon's name as the group's lists name it, linked to its page.
+    private static Microsoft.AspNetCore.Html.IHtmlContent TaxonLink(BeastieBot3.Site.Data.ListTaxonRow t, BeastieBot3.Shared.Wikitext.SpeciesListStyle style) {
+        var name = style != BeastieBot3.Shared.Wikitext.SpeciesListStyle.ScientificNameFirst && t.CommonNameEn is { Length: > 0 } common
+            ? System.Net.WebUtility.HtmlEncode(common)
+            : ScientificNameMarkup.ToHtml(t.ScientificName);
+        return new Microsoft.AspNetCore.Html.HtmlString($"<a href=\"/species/{t.TaxonId}\">{name}</a>");
+    }
 }
 <div class="update-counts">
     @if (table.Rows.Count > 0) {
@@ -21,9 +45,12 @@
                         @if (Model.IucnHeading is { } iucnHeading) {
                             <th scope="colgroup" colspan="@kinds">@iucnHeading</th>
                         }
+                        @if (groups == 3) {
+                            <th scope="colgroup" colspan="@kinds">@UpdateText.CountsMissingHeading</th>
+                        }
                     </tr>
                     <tr>
-                        @for (var group = 0; group < (Model.IucnHeading is null ? 1 : 2); group++) {
+                        @for (var group = 0; group < groups; group++) {
                             <th scope="col" class="num">@GroupText.ColumnSpecies</th>
                             @if (table.ShowInfra) {
                                 <th scope="col" class="num">@GroupText.ColumnInfra</th>
@@ -41,6 +68,12 @@
                                 <td class="num">@SiteFormat.Number(row.IucnSpecies)</td>
                                 @if (table.ShowInfra) {<td class="num">@SiteFormat.Number(row.IucnInfra)</td>}
                             }
+                            @if (groups == 3) {
+                                var categoryTitle = UpdateText.CountsNotComparedCategoryTitle(BadgeModel.ForStatusCode(row.Code).Category.Label, Model.Group ?? "");
+                                @MissingCell(row.MissingSpecies, row.Code, named.Contains(row.Code), categoryTitle)
+                                @if (table.ShowInfra) {@MissingCell(row.MissingInfra, row.Code, named.Contains(row.Code),
+                                    row.MissingSpecies is null ? categoryTitle : UpdateText.CountsNotComparedInfraTitle(Model.Group ?? ""))}
+                            }
                         </tr>
                     }
                     <tr class="update-counts-total">
@@ -51,10 +84,39 @@
                             <td class="num">@SiteFormat.Number(total.IucnSpecies)</td>
                             @if (table.ShowInfra) {<td class="num">@SiteFormat.Number(total.IucnInfra)</td>}
                         }
+                        @if (groups == 3) {
+                            @MissingCell(total.MissingSpecies, "", false, null)
+                            @if (table.ShowInfra) {@MissingCell(total.MissingInfra, "", false, UpdateText.CountsNotComparedInfraTitle(Model.Group ?? ""))}
+                        }
                     </tr>
                 </tbody>
             </table>
         </div>
+        @if (table.Missing.Count > 0) {
+            <p class="update-counts-missing-heading">@UpdateText.CountsMissingListHeading</p>
+            <ul class="update-counts-missing">
+                @foreach (var category in table.Missing) {
+                    <li id="@StatusCountTable.AnchorOf(category.Code)">
+                        <partial name="_Badge" model="@BadgeModel.ForStatusCode(category.Code, showLabel: false)" />
+                        @for (var i = 0; i < Math.Min(category.Species.Count, StatusCountTable.MaxNames); i++) {
+                            @(i > 0 ? ", " : "")@TaxonLink(category.Species[i], table.Style)
+                        }
+                        @if (category.SpeciesTotal > Math.Min(category.Species.Count, StatusCountTable.MaxNames)) {
+                            @(" " + UpdateText.CountsMoreNames(category.SpeciesTotal - Math.Min(category.Species.Count, StatusCountTable.MaxNames)))
+                        }
+                        @if (category.Infra.Count > 0) {
+                            @(category.Species.Count > 0 ? "; " : "")<span class="update-counts-missing-label">@UpdateText.CountsMissingInfraLabel</span>
+                            @for (var i = 0; i < Math.Min(category.Infra.Count, StatusCountTable.MaxNames); i++) {
+                                @(i > 0 ? ", " : " ")@TaxonLink(category.Infra[i], table.Style)
+                            }
+                            @if (category.InfraTotal > Math.Min(category.Infra.Count, StatusCountTable.MaxNames)) {
+                                @(" " + UpdateText.CountsMoreNames(category.InfraTotal - Math.Min(category.Infra.Count, StatusCountTable.MaxNames)))
+                            }
+                        }
+                    </li>
+                }
+            </ul>
+        }
         <p class="help">@(Model.TableHelp ?? UpdateText.CountsTableHelp)</p>
     }
     @if (Model.ShowBox && counts.Items > 0) {
