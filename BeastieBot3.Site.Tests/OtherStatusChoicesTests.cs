@@ -92,6 +92,37 @@ public sealed class OtherStatusChoicesTests {
     }
 
     [Fact]
+    public void Status_choices_follow_the_categories_and_count_each_taxon_once() {
+        ChosenStatus Status(long taxon, string status, string? code = null) => new(taxon, status, code, null, "x");
+        var statuses = new Dictionary<long, IReadOnlyList<ChosenStatus>> {
+            [1] = [Status(1, "Vulnerable (breeding)"), Status(1, "Least Concern (non-breeding)")],
+            [2] = [Status(2, "Not Evaluated")],
+            [3] = [Status(3, "Vulnerable"), Status(3, "Vulnerable")],
+            [4] = [Status(4, "Extinct in the Wild")],
+            [5] = [Status(5, "Waiting List")],
+            [6] = [Status(6, "Extinct")],
+        };
+        var skip = new HashSet<string> { "Not Evaluated" };
+        var choices = OtherStatusFilter.Choices("gb-jncc", [1, 2, 3, 4, 5, 6, 7], statuses, skip);
+        Assert.Equal(["Extinct", "Extinct in the Wild", "Vulnerable", "Vulnerable (breeding)", "Least Concern (non-breeding)", "Not Evaluated", "Waiting List"],
+            choices.Select(c => c.Key));
+        Assert.Equal(1, choices.Single(c => c.Key == "Vulnerable").Lines);
+        Assert.False(choices.Single(c => c.Key == "Not Evaluated").Ticked);
+
+        // A taxon stays when any of its statuses is ticked.
+        Assert.True(OtherStatusFilter.Keeps("gb-jncc", statuses[1], new HashSet<string> { "Vulnerable (breeding)" }));
+        Assert.False(OtherStatusFilter.Keeps("gb-jncc", statuses[2], skip));
+        Assert.False(OtherStatusFilter.Keeps("gb-jncc", null, skip));
+    }
+
+    [Fact]
+    public void NatureServe_global_ranks_are_chosen_by_their_rounded_rank() {
+        var g2g3 = new ChosenStatus(1, "G2G3", "G2", null, "x");
+        Assert.Equal("G2", OtherStatusFilter.Key("natureserve-global", g2g3));
+        Assert.Equal("G2G3", OtherStatusFilter.Key("natureserve-national", g2g3));
+    }
+
+    [Fact]
     public void Line_ends_use_the_template_or_the_text() {
         var epbc = Choices.Find("au-epbc")!;
         var gb = Choices.Find("jncc-redlist-gb")!;
@@ -137,6 +168,23 @@ public sealed class OtherStatusListPageTests : IClassFixture<SiteFactory> {
         var canada = Html.Textarea(await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&cat=NE&other=natureserve-national:CA&otheruse=only"), "list-wikitext")!;
         Assert.Contains("cryptadenia", canada);
         Assert.DoesNotContain("megacarpa", canada);
+    }
+
+    [Fact]
+    public async Task ALeftOutStatusLeavesOutItsTaxaAndStaysOffered() {
+        var html = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only&oskip=N1");
+        Assert.Null(Html.Textarea(html, "list-wikitext"));
+        Assert.Contains("<input type=\"hidden\" name=\"oshown\" value=\"N1\"><input type=\"checkbox\" name=\"ostatus\" value=\"N1\"> N1", html);
+        Assert.Contains("data-live-count=\"ostatus:N1\">(1)</span>", html);
+
+        // The form sends the shown statuses and the ticked ones.
+        var ticked = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only&oskip=N1&oshown=N1&ostatus=N1");
+        Assert.Contains("megacarpa", Html.Textarea(ticked, "list-wikitext"));
+
+        // A left-out status that the group's taxa do not have is sent on in a hidden field.
+        var other = await _client.GetStringAsync("/taxa/genus/hirtella/list?infra=separate&other=natureserve-national:US&otheruse=only&oskip=NNA");
+        Assert.Contains("<input type=\"hidden\" name=\"oskip\" value=\"NNA\">", other);
+        Assert.Contains("megacarpa", Html.Textarea(other, "list-wikitext"));
     }
 
     [Fact]

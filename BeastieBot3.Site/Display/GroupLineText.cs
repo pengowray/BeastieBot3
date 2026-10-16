@@ -32,6 +32,8 @@ public static class GroupLineText {
 
         “Both” limits the wikitext to the same taxa as “Only taxa on this list”, and adds each taxon's status in the chosen list to the end of its line.
 
+        Under “Statuses in this list”, a taxon stays in the wikitext while at least one of its statuses in the chosen list is ticked, so a bird with “Vulnerable (breeding)” and “Least Concern (non-breeding)” on the Great Britain Red List stays while either status is ticked. National red lists give “Not Evaluated” or “Not Applicable” to introduced species such as fallow deer and American mink; untick those statuses under “Statuses in this list” to leave those species out. The number after each status counts the taxa with that status in the ticked Red List categories, whether or not the status itself is ticked. A status you untick stays unticked on other groups' list pages with the same options, and when you choose another list that has the same status.
+
         Only IUCN Red List taxa are matched to the chosen list. “Only taxa on this list” and “Both” leave out species from the Catalogue of Life and Wikidata (“Species sources”), and a taxon that is on the chosen list but not on the IUCN Red List is never in the wikitext.
 
         Species tables never show statuses from the chosen list. With species tables, “Add the status to each line” gives the same tables as “None”, and “Both” gives the same tables as “Only taxa on this list”.
@@ -41,6 +43,8 @@ public static class GroupLineText {
     public const string OtherUseLine = "Add the status to each line";
     public const string OtherUseOnly = "Only taxa on this list";
     public const string OtherUseBoth = "Both";
+    /// Above the checkboxes of the chosen list's statuses (OtherStatusFilter).
+    public const string OtherStatusesLabel = "Statuses in this list";
     /// Under the choices, shown only for species tables.
     public const string OtherListTablesNote = "Species tables never show statuses from the chosen list.";
 

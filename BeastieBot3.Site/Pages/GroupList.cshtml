@@ -154,6 +154,19 @@
                             }
                         </label>
                     }
+                    @* The statuses depend on the chosen list, so site.js replaces this part after a live update
+                       (data-live-replace). A left-out status not shown here is sent on in a hidden oskip. *@
+                    <div data-live-replace="other-statuses">
+                        @foreach (var skipped in Model.HiddenSkips) {
+                            <input type="hidden" name="oskip" value="@skipped">
+                        }
+                        @if (Model.StatusChoices.Count > 0) {
+                            <p class="option-sublabel">@GroupLineText.OtherStatusesLabel</p>
+                            @foreach (var statusChoice in Model.StatusChoices) {
+                                <label><input type="hidden" name="oshown" value="@statusChoice.Key"><input type="checkbox" name="ostatus" value="@statusChoice.Key" checked="@statusChoice.Ticked"> @statusChoice.Key <partial name="_OptionCount" model="@(new OptionCountModel("ostatus:" + statusChoice.Key, statusChoice.Lines))" /></label>
+                            }
+                        }
+                    </div>
                     <p class="help" data-list-type="tables" hidden="@(!Model.Table.IsTable)">@GroupLineText.OtherListTablesNote</p>
                 </fieldset>
                 <fieldset class="option-group">

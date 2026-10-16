@@ -298,13 +298,22 @@
     // when CoL or Wikidata is ticked). Each takes the state its copy has in the new page's form, but
     // only when the form still sends the query the new page was made for, so a change the visitor
     // made meanwhile is never undone. The numbers after options (data-live-count: headings per rank,
-    // lines per category) take their copies' text and class. Returns true when it ran.
+    // lines per category) take their copies' text and class. A part of the form whose options the
+    // server chooses (data-live-replace: the statuses of the chosen other list) takes its copy's
+    // contents when its inputs differ, so a box the visitor just ticked keeps its focus otherwise.
+    // Returns true when it ran.
     function syncOptions(form, next, query) {
         var fresh = next.querySelector("form.options-form");
         if (!fresh || formQuery(form) !== query) {
             return false;
         }
         var escape = window.CSS && window.CSS.escape ? window.CSS.escape : function (text) { return text; };
+        form.querySelectorAll("[data-live-replace]").forEach(function (part) {
+            var copy = fresh.querySelector("[data-live-replace=\"" + escape(part.getAttribute("data-live-replace")) + "\"]");
+            if (copy && inputsOf(part) !== inputsOf(copy)) {
+                part.parentNode.replaceChild(document.importNode(copy, true), part);
+            }
+        });
         form.querySelectorAll("input[data-live-sync]").forEach(function (input) {
             var copy = fresh.querySelector("input[name=\"" + escape(input.name) + "\"][value=\"" + escape(input.value) + "\"]");
             if (copy) {
@@ -320,6 +329,13 @@
             }
         });
         return true;
+    }
+
+    // The names and values of a part's inputs, to tell whether a fresh copy offers other options.
+    function inputsOf(part) {
+        return Array.prototype.map.call(part.querySelectorAll("input"), function (input) {
+            return input.type + " " + input.name + "=" + input.value;
+        }).join("\n");
     }
 
     // The "Show wikitext" links in the assessment tables carry the options; each takes the address

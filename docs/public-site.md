@@ -753,6 +753,22 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   lines whose taxon has a status in the chosen list (none shown when the list is too long to read).
   The list of NatureServe's national ranks is one country's (`natureserve-national:US`), so the
   filter checks `other_status.country` too.
+- **Statuses in the other list** (`oskip=<status>`, repeated; `Lists/OtherStatusFilter.cs`): with
+  `only` or `both`, a checkbox for each status that the listed taxa have in the chosen list, with the
+  number of lines of each, ordered by IUCN's categories where a status starts with one ("Vulnerable
+  (breeding)" after "Vulnerable"), then by name. Unticking a status leaves out the taxa none of whose
+  statuses in the list is ticked: "Not Evaluated" and "Not Applicable", which national red lists give
+  to introduced species (fallow deer, sika and American mink on the Great Britain Red List), are the
+  usual ones. A taxon with two statuses (breeding, non-breeding) stays while either is ticked, and its
+  line shows both. NatureServe's global ranks are grouped by their rounded rank (`status_code`: G2G3
+  is G2); every other list by the status as written. The address keeps only the left-out statuses,
+  so a status left out stays left out on another group's page and for another list with the same
+  status. The form sends each status it shows (`oshown`, hidden) and the ticked ones (`ostatus`),
+  plus a hidden `oskip` for each left-out status it does not show; `ListLineOptions.Read` works out
+  the left-out set from them. The statuses depend on the chosen list, so `site.js` replaces the
+  form's `data-live-replace` part with the new page's copy after a live update, when its inputs
+  differ. The statuses are read with the taxa (`GetStatusesIn` over the taxa on the list), and the
+  counts of the categories, headings and lines leave out the taxa the unticked statuses leave out.
 - Lists with references are capped at `ListReferences.MaxLines` (550). Measured with `action=parse`
   (October 2026) on genus Pristimantis, 531 lines with authorities and `{{IUCN status}}`: post-expand
   include size 1,522,686 bytes with `{{cite iucn}}` references, list-defined or inline (2.9 KB a

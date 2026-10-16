@@ -199,7 +199,14 @@ public sealed class GroupListModel : GroupPageModel {
     public int OtherListTaxa { get; private set; }
     /// How many lines the list has with only the taxa on OtherList: null when not known (no list
     /// chosen, or a list too long to read).
-    public int? OnlyListedLines => OtherList is null ? null : OnlyOtherListed ? LineCount : List is null ? null : OtherListTaxa;
+    public int? OnlyListedLines => OtherList is null ? null : OnlyOtherListed ? LineCount : ListedLines;
+    private int? ListedLines { get; set; }
+    /// The statuses of OtherList that the taxa of the list have, to tick (with "Only taxa on this
+    /// list" or "Both"); empty otherwise.
+    public IReadOnlyList<OtherStatusFilterChoice> StatusChoices { get; private set; } = [];
+    /// The left-out statuses that StatusChoices does not show, which the form sends on unchanged.
+    public IEnumerable<string> HiddenSkips => Options.Line.OtherSkip
+        .Where(s => StatusChoices.All(c => c.Key != s)).Order(StringComparer.Ordinal);
 
     /// This page's address with the current options, for the address bar after a live update.
     public string CurrentOptionsUrl =>
@@ -228,15 +235,21 @@ public sealed class GroupListModel : GroupPageModel {
         ExtraSpeciesCounts? extraCounts = null;
         IReadOnlyList<ListTaxonRow>? taxa = null;
         Dictionary<string, int> headings;
+        IReadOnlyDictionary<long, IReadOnlyList<ChosenStatus>>? statuses = null;
         if (OnlyOtherListed) {
             // The counts of the groups know nothing of other lists, so the taxa on the list are read
             // first and counted. The species from CoL and Wikidata have no status in other lists.
-            taxa = _queries.GetListTaxa(group, Kinds(countOptions), OtherList!.List);
+            var other = OtherList!;
+            taxa = _queries.GetListTaxa(group, Kinds(countOptions), other.List);
             if (!Table.IsTable && GroupListSources.Active(Options)) {
                 Sources = GroupListSources.Merge(_queries, group, null, taxa, Options, iucnOnly: true);
                 NoticeGroups = ListNoticeGroups.Build(Sources);
                 taxa = Sources.Rows;
             }
+            statuses = _queries.GetStatusesIn(other.List, taxa.Select(t => t.TaxonId).Where(id => id > 0).ToHashSet());
+            StatusChoices = OtherStatusFilter.Choices(other.System,
+                taxa.Where(t => GroupList.Included(t, countOptions)).Select(t => t.TaxonId), statuses, Options.Line.OtherSkip);
+            taxa = taxa.Where(t => OtherStatusFilter.Keeps(other.System, statuses.GetValueOrDefault(t.TaxonId), Options.Line.OtherSkip)).ToList();
             SectionLines = GroupList.CountLinesBySection(taxa, countOptions);
             LineCount = SectionLines.Where(s => countOptions.IncludedSections.Contains(s.Key)).Sum(s => s.Value);
             headings = GroupList.CountHeadings(taxa, groups, countOptions);
@@ -265,11 +278,11 @@ public sealed class GroupListModel : GroupPageModel {
             }
         }
         List = GroupList.Build(taxa, groups, countOptions);
-        IReadOnlyDictionary<long, IReadOnlyList<ChosenStatus>>? statuses = null;
-        if (OtherList is { } other) {
-            statuses = _queries.GetStatusesIn(other.List,
-                List.Blocks.OfType<LineBlock>().Select(l => l.Taxon.TaxonId).Where(id => id > 0).ToHashSet());
-            OtherListTaxa = statuses.Count;
+        if (OtherList is { } chosenList) {
+            var lineTaxa = List.Blocks.OfType<LineBlock>().Select(l => l.Taxon.TaxonId).Where(id => id > 0).ToList();
+            statuses ??= _queries.GetStatusesIn(chosenList.List, lineTaxa.ToHashSet());
+            OtherListTaxa = lineTaxa.Count(statuses.ContainsKey);
+            ListedLines = lineTaxa.Count(id => OtherStatusFilter.Keeps(chosenList.System, statuses.GetValueOrDefault(id), Options.Line.OtherSkip));
         }
         if (Table.IsTable) {
             Tables = SpeciesTable.Build(List, groups, new SpeciesTableQueries(_db).GetExtras(group), Table);

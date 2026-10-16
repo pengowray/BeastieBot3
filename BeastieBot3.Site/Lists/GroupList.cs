@@ -207,7 +207,8 @@ public static class GroupList {
         ? IucnStatusTemplate.ToTemplateCode(category, taxon.PossiblyExtinct, taxon.PossiblyExtinctInTheWild)
         : StatusSection.NotEvaluated;
 
-    private static bool Included(ListTaxonRow taxon, GroupListOptions options) =>
+    /// Whether the taxon has a line in the list: its category's section is included, and its kind.
+    public static bool Included(ListTaxonRow taxon, GroupListOptions options) =>
         StatusSection.For(StatusCode(taxon)) is { } section && options.IncludedSections.Contains(section.Key) && IncludedKind(taxon, options);
 
     private static bool IncludedKind(ListTaxonRow taxon, GroupListOptions options) =>

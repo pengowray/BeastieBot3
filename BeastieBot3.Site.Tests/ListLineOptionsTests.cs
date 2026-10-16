@@ -49,6 +49,24 @@ public sealed class ListLineOptionsTests(SiteFactory factory) : IClassFixture<Si
         Assert.Empty(noList.Write());
     }
 
+    [Fact]
+    public void LeftOutStatuses_AreTheShownOnesNotTickedAndTheOthersSentOn() {
+        // From the address: the left-out statuses as they are.
+        var fromAddress = ListLineOptions.Read(Query(("other", "jncc-redlist-gb"), ("otheruse", "only"), ("oskip", "Not Evaluated")));
+        Assert.Equal(["Not Evaluated"], fromAddress.OtherSkip);
+
+        // From the form: the shown statuses not ticked, and a left-out status the form did not show.
+        var fromForm = ListLineOptions.Read(Query(("other", "jncc-redlist-gb"), ("otheruse", "only"),
+            ("oskip", "Not Applicable"), ("oskip", "Vulnerable"),
+            ("oshown", "Vulnerable"), ("oshown", "Least Concern"), ("oshown", "Not Evaluated"),
+            ("ostatus", "Vulnerable"), ("ostatus", "Least Concern")));
+        Assert.Equal(["Not Applicable", "Not Evaluated"], fromForm.OtherSkip.Order(StringComparer.Ordinal));
+        Assert.Equal(["other=jncc-redlist-gb", "otheruse=only", "oskip=Not%20Applicable", "oskip=Not%20Evaluated"], fromForm.Write());
+
+        // No list, no left-out statuses in the address.
+        Assert.Empty(ListLineOptions.Read(Query(("oskip", "Not Evaluated"))).Write());
+    }
+
     // ------------------------------------------------------------ authority and the merge
 
     private static ListTaxonRow Iucn(long id, string name, string? authority) {
