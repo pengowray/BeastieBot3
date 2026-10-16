@@ -28,6 +28,7 @@ public sealed class StatusCountTableTests {
 
         Assert.True(table.HasIucn);
         Assert.True(table.ShowInfra);
+        Assert.True(table.ShowMissingInfra);
         Assert.Equal(["CR(PE)", "EN", "LC"], table.Rows.Select(r => r.Code));
         Assert.Equal(new StatusCountRow("CR(PE)", 1, 0, 1, 0) { MissingSpecies = 0, MissingInfra = 0 }, table.Rows[0]);
         Assert.Equal(new StatusCountRow("EN", 3, 0, 3, 0) { MissingSpecies = 0, MissingInfra = 0 }, table.Rows[1]);
@@ -76,6 +77,7 @@ public sealed class StatusCountTableTests {
         var table = StatusCountTable.For(result);
 
         Assert.True(table.ShowMissing);
+        Assert.False(table.ShowMissingInfra);
         Assert.Equal([("CR(PE)", 1), ("EN", 0), ("LC", 1)], table.Rows.Select(r => (r.Code, r.MissingSpecies ?? -1)));
         Assert.Equal(2, table.Total.MissingSpecies);
         Assert.Equal(["CR(PE)", "LC"], table.Missing.Select(m => m.Code));
@@ -94,13 +96,13 @@ public sealed class StatusCountTableTests {
 
         Assert.Equal(1, table.Rows.Single(r => r.Code == "CR").MissingSpecies);
         Assert.Null(table.Rows.Single(r => r.Code == "LC").MissingSpecies);
-        // One subspecies in the group and none listed: subspecies are not compared.
+        // One subspecies in the group and none listed: subspecies are not compared, so they have no missing column.
+        Assert.True(table.ShowInfra);
+        Assert.False(table.ShowMissingInfra);
         Assert.Null(table.Rows.Single(r => r.Code == "CR").MissingInfra);
         Assert.True(table.MissingCategoriesLeftOut);
-        Assert.True(table.MissingInfraLeftOut);
-        Assert.Equal("The comparison with Family Felidae includes only CR species, because the wikitext lists fewer than half of the group's "
-            + "subspecies and varieties, so every other cell under \u201cMissing from the wikitext\u201d has a dash.",
-            BeastieBot3.Site.Display.UpdateText.CountsDashHelp(result, table));
+        Assert.Equal("The comparison with Family Felidae includes only CR taxa, so the rows for other categories have a dash under "
+            + "\u201cMissing from the wikitext\u201d.", BeastieBot3.Site.Display.UpdateText.CountsDashHelp(result, table));
     }
 
     [Fact]

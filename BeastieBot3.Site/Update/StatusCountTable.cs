@@ -31,15 +31,17 @@ public sealed record StatusCountTable(IReadOnlyList<StatusCountRow> Rows, bool H
     public const int MaxNames = 50;
 
     public bool ShowMissing { get; init; }
+    /// The missing taxa's columns include subspecies and varieties: only when the comparison compares
+    /// them (ListScopeResult.InfraChecked), so the table has no column of counts it leaves out.
+    public bool ShowMissingInfra { get; init; }
     public IReadOnlyList<MissingCategory> Missing { get; init; } = [];
     public SpeciesListStyle Style { get; init; } = SpeciesListStyle.CommonNameFirst;
 
     /// Subspecies and varieties get columns of their own only when either side has some.
     public bool ShowInfra => Rows.Any(r => r.Infra > 0 || r.IucnInfra > 0);
 
-    /// Some missing cells have no count: the comparison leaves out some categories, or subspecies and varieties.
+    /// Some missing cells have no count: the comparison leaves out some categories.
     public bool MissingCategoriesLeftOut => ShowMissing && Rows.Any(r => r.MissingSpecies is null);
-    public bool MissingInfraLeftOut => ShowMissing && ShowInfra && Rows.Any(r => r.MissingSpecies is not null && r.MissingInfra is null);
 
     public StatusCountRow Total => new(string.Empty, Rows.Sum(r => r.Species), Rows.Sum(r => r.Infra),
         Rows.Sum(r => r.IucnSpecies), Rows.Sum(r => r.IucnInfra)) {
@@ -69,7 +71,7 @@ public sealed record StatusCountTable(IReadOnlyList<StatusCountRow> Rows, bool H
                 [.. byCode[r.Code].Where(t => t.Kind != TaxonKinds.Species)],
                 r.MissingSpecies ?? 0, r.MissingInfra ?? 0))
             .ToList();
-        return table with { Rows = rows, ShowMissing = true, Missing = named };
+        return table with { Rows = rows, ShowMissing = true, ShowMissingInfra = table.ShowInfra && scope.InfraChecked, Missing = named };
     }
 
     /// The table with no comparison: every taxon the text lists that is in the release, each once,

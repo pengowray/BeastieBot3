@@ -2245,8 +2245,9 @@ the subspecies columns only when either side has any. When the comparison lists 
 for a list of part of the group), a third column group, "Missing from the wikitext", gives each row's
 IUCN count less the wikitext's count, which is the number of the group's taxa with that code that the
 text does not list; a dash (with its reason as a hover title and in the help) marks a category the
-comparison leaves out (a list of CR taxa) and subspecies and varieties when the text lists fewer than
-half of them (`ListScopeResult.InfraChecked`). Under the table, "Missing from the wikitext, by
+comparison leaves out (a list of CR taxa). The group has a subspecies and varieties column only when
+the comparison compares them (`ListScopeResult.InfraChecked`: the text lists at least half of them),
+so it has no column of counts it leaves out. Under the table, "Missing from the wikitext, by
 category" names them from `ListScopeResult.Missing`, each linked to its page, common names for groups
 whose lists use them, at most `StatusCountTable.MaxNames` (50) per code and the rest counted; each
 count in the column links to its code's line. Below that, for a text with no

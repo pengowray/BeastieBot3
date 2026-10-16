@@ -9,6 +9,7 @@
     var kinds = table.ShowInfra ? 2 : 1;
     var total = table.Total;
     var groups = Model.IucnHeading is null ? 1 : table.ShowMissing ? 3 : 2;
+    var missingKinds = table.ShowMissingInfra ? 2 : 1;
     var named = table.Missing.Select(m => m.Code).ToHashSet();
 }
 @functions {
@@ -46,13 +47,13 @@
                             <th scope="colgroup" colspan="@kinds">@iucnHeading</th>
                         }
                         @if (groups == 3) {
-                            <th scope="colgroup" colspan="@kinds">@UpdateText.CountsMissingHeading</th>
+                            <th scope="colgroup" colspan="@missingKinds">@UpdateText.CountsMissingHeading</th>
                         }
                     </tr>
                     <tr>
                         @for (var group = 0; group < groups; group++) {
                             <th scope="col" class="num">@GroupText.ColumnSpecies</th>
-                            @if (table.ShowInfra) {
+                            @if (group < 2 ? table.ShowInfra : table.ShowMissingInfra) {
                                 <th scope="col" class="num">@GroupText.ColumnInfra</th>
                             }
                         }
@@ -71,8 +72,7 @@
                             @if (groups == 3) {
                                 var categoryTitle = UpdateText.CountsNotComparedCategoryTitle(BadgeModel.ForStatusCode(row.Code).Category.Label, Model.Group ?? "");
                                 @MissingCell(row.MissingSpecies, row.Code, named.Contains(row.Code), categoryTitle)
-                                @if (table.ShowInfra) {@MissingCell(row.MissingInfra, row.Code, named.Contains(row.Code),
-                                    row.MissingSpecies is null ? categoryTitle : UpdateText.CountsNotComparedInfraTitle(Model.Group ?? ""))}
+                                @if (table.ShowMissingInfra) {@MissingCell(row.MissingInfra, row.Code, named.Contains(row.Code), categoryTitle)}
                             }
                         </tr>
                     }
@@ -86,7 +86,7 @@
                         }
                         @if (groups == 3) {
                             @MissingCell(total.MissingSpecies, "", false, null)
-                            @if (table.ShowInfra) {@MissingCell(total.MissingInfra, "", false, UpdateText.CountsNotComparedInfraTitle(Model.Group ?? ""))}
+                            @if (table.ShowMissingInfra) {@MissingCell(total.MissingInfra, "", false, null)}
                         }
                     </tr>
                 </tbody>

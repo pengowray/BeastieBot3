@@ -124,7 +124,7 @@ public static partial class UpdateText {
         : "Every taxon in this table is in the rebuilt list, in the updated wikitext.";
     /// speciesOnly: the missing taxa are all species (for the name of the AddMissingButton).
     public static string RebuildRefused(RebuildRefusal refusal, int taxa, GroupRow group, bool speciesOnly) => refusal switch {
-        RebuildRefusal.NotLineList => $"List not rebuilt: fewer than half of the Red List taxa in the wikitext are on list lines; the rest are in tables. Only lists made of list lines can be rebuilt. To add the missing taxa without rebuilding, use \"{AddMissingButton(speciesOnly)}\".",
+        RebuildRefusal.NotLineList => $"List not rebuilt: less than half of the Red List taxa in the wikitext are on list lines; the rest are in tables. Only lists made of list lines can be rebuilt. To add the missing taxa without rebuilding, use \"{AddMissingButton(speciesOnly)}\".",
         RebuildRefusal.Partial => $"List not rebuilt: the wikitext may be a regional list or a list of part of {GroupList.HeadingText(group)}, and a rebuild would add every missing taxon in the whole group. To rebuild it anyway, click \"{ScopeListAnywayButton}\".",
         RebuildRefusal.TooLong => $"List not rebuilt: it would have {Count(taxa)} taxa. Lists have at most {Count(GroupList.MaxLines)} taxa, about the number of {{{{IUCN status}}}} templates one Wikipedia page can hold.",
         _ => string.Empty,

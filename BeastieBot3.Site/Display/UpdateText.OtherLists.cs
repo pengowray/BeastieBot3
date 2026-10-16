@@ -53,21 +53,12 @@ public static partial class UpdateText {
     public static string CountsNotComparedCategoryTitle(string category, string group) =>
         $"{category} taxa are left out of the comparison with {group}.";
 
-    /// The hover title of a dash for subspecies and varieties the comparison leaves out.
-    public static string CountsNotComparedInfraTitle(string group) =>
-        $"Subspecies and varieties are left out of the comparison with {group}, because the wikitext lists fewer than half of them.";
-
-    /// After the help under the table, when a missing cell has a dash; null when none has.
-    public static string? CountsDashHelp(ListScopeResult r, StatusCountTable table) {
-        var group = GroupList.HeadingText(r.Scope);
-        var categories = r.Categories is { } cats ? CategoryList(cats, "and") : null;
-        return (table.MissingCategoriesLeftOut && categories is not null, table.MissingInfraLeftOut) switch {
-            (true, true) => $"The comparison with {group} includes only {categories} species, because the wikitext lists fewer than half of the group's subspecies and varieties, so every other cell under “{CountsMissingHeading}” has a dash.",
-            (true, false) => $"The comparison with {group} includes only {categories} taxa, so the rows for other categories have a dash under “{CountsMissingHeading}”.",
-            (false, true) => $"A dash under “{CountsMissingHeading}” means subspecies and varieties are left out of the comparison with {group}, because the wikitext lists fewer than half of them.",
-            _ => null,
-        };
-    }
+    /// After the help under the table, when a row has a dash under "Missing from the wikitext"
+    /// because its category is outside the comparison; null when none has.
+    public static string? CountsDashHelp(ListScopeResult r, StatusCountTable table) =>
+        table.MissingCategoriesLeftOut && r.Categories is { } categories
+            ? $"The comparison with {GroupList.HeadingText(r.Scope)} includes only {CategoryList(categories, "and")} taxa, so the rows for other categories have a dash under “{CountsMissingHeading}”."
+            : null;
 
     public const string CountsTableHelp =
         "Each taxon found in the wikitext is counted once, by the category of its latest IUCN assessment. Subpopulations are left out.";
