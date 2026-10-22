@@ -45,7 +45,7 @@ All stores (`CommonNameStore`, `IucnApiCacheStore`, `WikidataCacheStore`, `Wikip
 - Raw SQL with **parameterized queries** (`@param`) via `SqliteCommand`. No ORM.
 - HTTP-calling stores embed `ApiImportMetadataStore` for request tracking and retry queue management.
 - Commands that only read a store open it with `OpenReadOnly` (`CommonNameStore`, `WikipediaCacheStore`): no folder creation, no WAL pragma, no schema work, and any write fails. `WikipediaCacheStore.OpenReadOnly` returns null when the file is missing.
-- Microsoft.Data.Sqlite 10.0.12 bundles SQLite 3.53.3, built with `SQLITE_DQS=0`. Write string values in single quotes or as parameters: a double-quoted word must be a column, a select alias or a table, or the statement (including `CREATE INDEX`) fails with "no such column" (`SqliteQuotingTests`). When a column exists only in some datasets, check it with `PRAGMA table_info` first (`SpratTableColumns` in `BeastieBot3/Sprat`: `Has` tests a column and `Select` gives `NULL` for a missing one; `SpratListQueryService` and `site build-db` use it).
+- Microsoft.Data.Sqlite 10.0.13 bundles SQLite 3.53.3, built with `SQLITE_DQS=0`. Write string values in single quotes or as parameters: a double-quoted word must be a column, a select alias or a table, or the statement (including `CREATE INDEX`) fails with "no such column" (`SqliteQuotingTests`). When a column exists only in some datasets, check it with `PRAGMA table_info` first (`SpratTableColumns` in `BeastieBot3/Sprat`: `Has` tests a column and `Select` gives `NULL` for a missing one; `SpratListQueryService` and `site build-db` use it).
 
 ### Adding a New Command
 

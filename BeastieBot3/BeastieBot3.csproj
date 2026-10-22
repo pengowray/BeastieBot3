@@ -33,7 +33,7 @@
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="Stubble.Core" Version="1.10.8" />
     <PackageReference Include="YamlDotNet" Version="15.1.6" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1" />
     <PackageReference Include="SpeciesDatabaseApi" Version="1.2.2" />
     <PackageReference Include="Spectre.Console.Cli" Version="0.53.0" />
