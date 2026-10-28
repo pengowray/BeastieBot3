@@ -520,6 +520,24 @@ public static class FixtureDb {
         w.Assessment(RegionalOnlyMediterranean, RegionalOnly, "Mediterranean", true, "DD", criteriaVersion: "3.1", year: 2010, date: "2010-01-01");
         w.Assessment(RegionalOnlyEurope2006, RegionalOnly, "Europe", false, "VU", criteriaVersion: "3.1", year: 2006, date: "2006-01-01");
         w.Name(RegionalOnly, "Gobio kovatschevi", "scientific", null, "iucn");
+        // Seafood guides' ratings (made up for the fish): a GoodFish page with two ratings and a note,
+        // and Seafood Watch ratings with a place and a body of water, a Certified rating whose fishery
+        // starts with its certification, a farmed one, and one with no place and a scientific name of
+        // its own.
+        w.SeafoodRating(RegionalOnly, SeafoodGuides.GoodFish, "1658", "Better Choice|Say No", null, "Kovachev Gudgeon", region: "WA",
+            method: "Wild Caught", production: "wild", fishery: "WA Northern Demersal Scalefish Fishery (284t in 2021)|Pilbara Trawl Fishery",
+            note: "Choose line and trap caught gudgeon if available.", modified: "2024-07-18");
+        w.SeafoodRating(RegionalOnly, SeafoodGuides.SeafoodWatch, "40838", "Good Alternative", "Yellow", "Gudgeon", region: "United States",
+            waterBody: "Gulf of Mexico", method: "Drifting longlines", production: "wild", fishery: "Western Atlantic stock");
+        w.SeafoodRating(RegionalOnly, SeafoodGuides.SeafoodWatch, "46138", "Certified", "Blue", "Gudgeon", region: "Australia",
+            method: "Otter trawls|Danish seines", production: "wild",
+            fishery: "Marine Stewardship Council (MSC) Certified|Great Australian Bight trawl fishery");
+        w.SeafoodRating(RegionalOnly, SeafoodGuides.SeafoodWatch, "70001", "Avoid", "Red", "Gudgeon", region: "China",
+            method: "Ponds", production: "farmed");
+        w.SeafoodRating(RegionalOnly, SeafoodGuides.SeafoodWatch, "70002", "Best Choice", "Green", "Bulgarian gudgeon", listedName: "Gobio bulgaricus",
+            method: "Handlines", production: "wild");
+        w.Meta(SiteDbSchema.MetaKeys.GoodFishFetched, "2026-10-28");
+        w.Meta(SiteDbSchema.MetaKeys.SeafoodWatchFetched, "2026-10-27");
 
         // Micropyropsis tuberosa: a plant whose latest global and Europe assessments are errata versions
         // of assessments published the same year.
@@ -1058,6 +1076,17 @@ public static class FixtureDb {
                 VALUES (@a, @b, @c, @d, @e, @f)
                 """,
                 taxonId, spratId, listedName, status, appliesTo, population);
+
+        public void SeafoodRating(long taxonId, string guide, string ratingId, string ratings, string? color, string commonName,
+            string? listedName = null, string? region = null, string? waterBody = null, string? method = null, string? production = null,
+            string? fishery = null, string? note = null, string? modified = null) =>
+            Run("""
+                INSERT INTO seafood_rating(taxon_id, guide, rating_id, ratings, color, common_name, listed_name, region, water_body, method,
+                    production, fishery, note, url, modified)
+                VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i, @j, @k, @l, @m, @n, @o)
+                """,
+                taxonId, guide, ratingId, ratings, color, commonName, listedName, region, waterBody, method, production, fishery, note,
+                $"https://example.org/{guide}/{ratingId}", modified);
 
         public void OtherStatus(long taxonId, string system, string status, string? listedName, string? population, string source,
             string sourceId, string? listedOn, string? statusCode = null, string? url = null, string? report = null) =>

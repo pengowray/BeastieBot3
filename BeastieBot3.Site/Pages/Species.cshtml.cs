@@ -121,6 +121,20 @@ public sealed class SpeciesModel : TaxonPageModel {
     /// The "Other conservation statuses" section built from OtherStatuses; null when there are none.
     public OtherStatusSection? OtherStatusSection { get; private set; }
 
+    /// The "Seafood guide ratings" section (seafood_rating); null when no guide rates the taxon,
+    /// which is always so when the site database was built without `--seafood-guides`.
+    public SeafoodGuideSection? SeafoodGuides { get; private set; }
+
+    /// The date the site database's copy of a seafood guide was downloaded ("28 October 2026"); null when unknown.
+    private string? SeafoodGuideDate(string guide) {
+        var key = guide switch {
+            BeastieBot3.Shared.SiteData.SeafoodGuides.GoodFish => SiteDbSchema.MetaKeys.GoodFishFetched,
+            BeastieBot3.Shared.SiteData.SeafoodGuides.SeafoodWatch => SiteDbSchema.MetaKeys.SeafoodWatchFetched,
+            _ => null,
+        };
+        return key is not null && SiteFormat.TryParseDate(_db.Snapshot?.Get(key), out var date) ? SiteFormat.Date(date) : null;
+    }
+
     /// The date the site database's copy of a source of the other statuses was downloaded
     /// ("25 June 2026"); null when unknown.
     private string? OtherStatusSourceDate(string source) {
@@ -222,6 +236,7 @@ public sealed class SpeciesModel : TaxonPageModel {
         EpbcListings = _queries.GetEpbcListings(taxon.TaxonId);
         OtherStatuses = _queries.GetOtherStatuses(taxon.TaxonId);
         OtherStatusSection = OtherStatuses.Count == 0 ? null : Display.OtherStatusSection.Build(OtherStatuses, taxon.Kind, OtherStatusSourceDate);
+        SeafoodGuides = SeafoodGuideSection.Build(_queries.GetSeafoodRatings(taxon.TaxonId), SeafoodGuideDate);
         ExtraPairs = _queries.GetExtraOverlapsOfTaxon(taxon.TaxonId);
         WorkingNameBase = SiteFormat.WorkingNameBase(taxon.ScientificName);
         WorkingNameExtra = WorkingNameOf is null

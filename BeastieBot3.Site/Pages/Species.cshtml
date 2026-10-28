@@ -235,6 +235,7 @@
 }
 
 @if (Model.OtherStatusSection is { } otherStatuses) {<partial name="_OtherStatuses" model="otherStatuses" />}
+@if (Model.SeafoodGuides is { } seafoodGuides) {<partial name="_SeafoodGuides" model="seafoodGuides" />}
 
 <partial name="_TaxonNames" model="Model.Names" />
 @if (Model.SubspeciesList is { } subspeciesList) {<partial name="_Subspecies" model="subspeciesList" />}

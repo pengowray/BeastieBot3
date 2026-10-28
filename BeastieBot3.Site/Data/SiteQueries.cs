@@ -276,6 +276,28 @@ public sealed partial class SiteQueries {
             Text(reader, 25), Text(reader, 26), Text(reader, 27), Text(reader, 28), Text(reader, 29), reader.GetString(30));
     }
 
+    /// The seafood guides' ratings of the taxon (seafood_rating), in no particular order: the
+    /// species page's section orders them (SeafoodGuideSection). Empty when the site database was
+    /// built without `--seafood-guides`.
+    public IReadOnlyList<SeafoodRatingRow> GetSeafoodRatings(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT guide, rating_id, ratings, color, common_name, listed_name, region, water_body, method, production, fishery, note, url, modified
+            FROM seafood_rating
+            WHERE taxon_id = @id
+            """;
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        var rows = new List<SeafoodRatingRow>();
+        while (reader.Read()) {
+            rows.Add(new SeafoodRatingRow(reader.GetString(0), reader.GetString(1), reader.GetString(2), Text(reader, 3), reader.GetString(4),
+                Text(reader, 5), Text(reader, 6), Text(reader, 7), Text(reader, 8), Text(reader, 9), Text(reader, 10), Text(reader, 11),
+                reader.GetString(12), Text(reader, 13)));
+        }
+        return rows;
+    }
+
     /// The taxon's statuses in lists other than the IUCN Red List, in the order of
     /// OtherStatusSystems.All, then of the lists of a system (other_status_list.sort_order); within a
     /// list, the listing of the whole taxon first, then those of populations by name.

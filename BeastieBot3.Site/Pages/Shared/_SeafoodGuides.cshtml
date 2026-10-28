@@ -1,0 +1,24 @@
+@model SeafoodGuideSection
+@* The species page's "Seafood guide ratings": one table per guide, each with the guide's note under it.
+   SeafoodGuideSection.Build decides the columns, the order and the text of every cell; this only shows
+   them. A table with more than SeafoodGuideSection.OpenRows rows starts closed under the count of each
+   rating. Each cell and note is written on one line so no space gets into its text. *@
+<section class="seafood-guides" id="seafood-guides" aria-labelledby="seafood-guides-heading">
+    <h2 id="seafood-guides-heading">@SiteText.HeadingSeafoodGuides</h2>
+    <p>@SiteText.SeafoodGuidesIntro</p>
+    @foreach (var table in Model.Tables) {
+        <h3>@table.Heading</h3>
+        if (table.Collapsed) {
+            <details class="seafood-all">
+                <summary>@table.TotalText @for (var i = 0; i < table.Counts.Count; i++) {var count = table.Counts[i];<span class="seafood-count">@count.Count <span class="@count.Label.CssClass">@count.Label.Text</span>@if (i < table.Counts.Count - 1) {<span class="seafood-count-comma">,</span>}</span> }</summary>
+                <partial name="_SeafoodGuideTable" model="table" />
+            </details>
+        } else {
+            <partial name="_SeafoodGuideTable" model="table" />
+        }
+        @* The guide's note goes under its own table, outside a closed table, so it is always seen. *@
+        if (table.Note.Count > 0) {
+            <p class="help seafood-guide-note">@foreach (var segment in table.Note) {if (segment.Href is { } href) {<a href="@href">@segment.Text</a>} else {@segment.Text}}</p>
+        }
+    }
+</section>

@@ -361,6 +361,33 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   one taxon whose IUCN synonyms include it; one assessment per taxon. `status` is the category and
   the status within it as NZTCS writes them ("Threatened - Nationally Vulnerable"), `report` the
   report it was published in, shown in the New Zealand table's "Published in" column.
+- `seafood_rating` (schema 32) has one row per taxon and rating of a seafood buying guide: GoodFish,
+  Australia's Sustainable Seafood Guide (Australian Marine Conservation Society) and Seafood Watch
+  (Monterey Bay Aquarium), from the status lists store (`docs/status-lists.md`, "Seafood guides").
+  `site build-db` writes it only with `--seafood-guides`: neither guide has given permission to
+  republish its ratings, so the public database has no rows and no page shows the section. A
+  rating is advice about buying the species from one place, caught or farmed one way, and judges
+  the fishery or farm (stock, bycatch, habitat, management), not the species: GoodFish rates gummy
+  shark from Western Australia Say No because the gillnets drown endangered Australian sea lions.
+  So the ratings are never in `other_status`, the status update page or the list maker.
+  - The species page's "Seafood guide ratings" section comes after "Other conservation statuses"
+    (`Display/SeafoodGuideSection.cs` builds it; `Pages/Shared/_SeafoodGuides.cshtml` and
+    `_SeafoodGuideTable.cshtml` show it; strings in `Display/SiteText.SeafoodGuides.cs`). It has one
+    table per guide, GoodFish first, each followed by the guide's note with its download date (meta
+    `goodfish_fetched`, `seafoodwatch_fetched`). Rows go from the guide's green rating to its red
+    one, then Seafood Watch's blue Certified, then by place.
+  - Columns: the rating as a label in the guide's colour (`--rating-*` tokens in `site.css`; two
+    labels for a GoodFish page with two ratings, whose note usually says which to choose); where
+    caught or farmed (Seafood Watch's country and body of water on two lines; "not given" when it
+    has neither); method (Seafood Watch's methods with "(wild)", "(farmed)" or "(wild and farmed)");
+    fishery or stock (a Certified rating's certifier goes under its label instead); the guide's
+    name, linked to its page, with its scientific name when that is not the taxon's own; and
+    GoodFish's page change date, headed "Page last changed", which is not the date of an
+    assessment. A column shows only when a row has a value for it. GoodFish's note is a line of its
+    own under its row.
+  - Most taxa have 1 to 5 ratings in a guide, but a few Seafood Watch species have many (yellowfin
+    tuna 55, albacore 40, skipjack 39, Atlantic salmon 30). A table of more than 10 rows
+    (`SeafoodGuideSection.OpenRows`) starts closed under a line with the count of each rating.
 - The latest assessments come from the CSV export, which holds exactly one Red List release. Earlier
   assessments come from the list of assessments in each taxon's cached API response (the
   `assessments` array of the taxa JSON, read by `IucnTaxaHeaders`). Take the `latest` flag from that

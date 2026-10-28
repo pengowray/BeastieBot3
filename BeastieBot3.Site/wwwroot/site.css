@@ -42,6 +42,19 @@
     --problem-fg: #8a1c1c;
     --problem-bg: #fdecea;
     --problem-border: #c0392b;
+    /* Seafood guides' rating labels (_SeafoodGuides): each guide's own colour for the rating, as a
+       solid fill with its text at least 4.5:1 on it. Amber has dark text, because white text on an
+       amber light enough to read as amber is under 4.5:1. */
+    --rating-green-bg: #1e7b3a;
+    --rating-green-fg: #ffffff;
+    --rating-amber-bg: #f0b400;
+    --rating-amber-fg: #1b1b1b;
+    --rating-red-bg: #c0282d;
+    --rating-red-fg: #ffffff;
+    --rating-blue-bg: #1f5fa8;
+    --rating-blue-fg: #ffffff;
+    --rating-grey-bg: #5c5c5c;
+    --rating-grey-fg: #ffffff;
     color-scheme: light;
 }
 
@@ -80,6 +93,16 @@
         --problem-fg: #f6b9b4;
         --problem-bg: #3b1d1b;
         --problem-border: #e5766b;
+        --rating-green-bg: #1b6e34;
+        --rating-green-fg: #ffffff;
+        --rating-amber-bg: #d9a300;
+        --rating-amber-fg: #111418;
+        --rating-red-bg: #b3262b;
+        --rating-red-fg: #ffffff;
+        --rating-blue-bg: #1d5698;
+        --rating-blue-fg: #ffffff;
+        --rating-grey-bg: #5c5c5c;
+        --rating-grey-fg: #ffffff;
         color-scheme: dark;
     }
 }
@@ -118,6 +141,16 @@
     --problem-fg: #f6b9b4;
     --problem-bg: #3b1d1b;
     --problem-border: #e5766b;
+    --rating-green-bg: #1b6e34;
+    --rating-green-fg: #ffffff;
+    --rating-amber-bg: #d9a300;
+    --rating-amber-fg: #111418;
+    --rating-red-bg: #b3262b;
+    --rating-red-fg: #ffffff;
+    --rating-blue-bg: #1d5698;
+    --rating-blue-fg: #ffffff;
+    --rating-grey-bg: #5c5c5c;
+    --rating-grey-fg: #ffffff;
     color-scheme: dark;
 }
 
@@ -2025,4 +2058,100 @@ th.num {
 .notes-assessment {
     margin: 1rem 0 0.25rem;
     font-size: 1rem;
+}
+
+/* Seafood guide ratings (_SeafoodGuides). A rating is a solid label with the guide's own words in
+   it, unlike the IUCN category badges (a bold code beside its name), because a rating judges a
+   fishery or farm and is not a conservation status. The words are always shown, so the colour is
+   never the only cue. */
+.seafood-rating {
+    display: inline-block;
+    font-size: 0.85em;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 0 0.45em;
+    border-radius: 3px;
+    white-space: nowrap;
+    box-shadow: inset 0 0 0 1px var(--badge-ring);
+}
+
+.seafood-rating-green { background: var(--rating-green-bg); color: var(--rating-green-fg); }
+.seafood-rating-amber { background: var(--rating-amber-bg); color: var(--rating-amber-fg); }
+.seafood-rating-red { background: var(--rating-red-bg); color: var(--rating-red-fg); }
+.seafood-rating-blue { background: var(--rating-blue-bg); color: var(--rating-blue-fg); }
+.seafood-rating-grey { background: var(--rating-grey-bg); color: var(--rating-grey-fg); }
+
+/* A GoodFish page with two ratings shows both labels, separated by a space so they are read as two
+   words; its note says which to choose. */
+.seafood-ratings {
+    line-height: 1.8;
+}
+
+/* Under a Seafood Watch Certified label: the certification ("Marine Stewardship Council (MSC)
+   Certified"). */
+.seafood-certification {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+/* GoodFish's note: a line of its own under the row it belongs to (notes are up to about 400
+   characters, too long for a column), with no border between the two. */
+.seafood-table tr.seafood-has-note > td {
+    border-bottom: none;
+    padding-bottom: 0.1rem;
+}
+
+.seafood-table tr.seafood-note > td {
+    font-size: 0.9rem;
+    padding-top: 0;
+}
+
+.seafood-note-label {
+    font-weight: 600;
+}
+
+/* On a phone the table scrolls sideways; the note stays at the left of the visible part and wraps
+   at the screen's width, so it can be read without scrolling. */
+.seafood-note-text {
+    position: sticky;
+    left: 0;
+    max-width: calc(100vw - 2rem);
+}
+
+/* Columns of long text keep a readable width on a narrow screen (the table scrolls sideways
+   instead of wrapping them to a word or two per line). */
+.seafood-table .seafood-col-where {
+    min-width: 7rem;
+}
+
+.seafood-table .seafood-col-method {
+    min-width: 6.5rem;
+}
+
+.seafood-table .seafood-col-fishery {
+    min-width: 11rem;
+}
+
+
+.seafood-table .seafood-date {
+    white-space: nowrap;
+}
+
+/* The line that opens a long table: the count of each rating, each with its label, the comma
+   after a label kept off the label's fill. */
+.seafood-all > summary .seafood-count {
+    white-space: nowrap;
+}
+
+.seafood-count-comma {
+    margin-left: 0.15em;
+}
+
+/* A guide's note, under its table. */
+.seafood-guide-note {
+    margin-bottom: 1rem;
+}
+
+.seafood-all {
+    margin: 0.2rem 0 1rem;
 }

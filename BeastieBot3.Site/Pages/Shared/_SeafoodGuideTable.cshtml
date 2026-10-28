@@ -1,0 +1,38 @@
+@model SeafoodGuideTable
+@* One guide's table in "Seafood guide ratings" (_SeafoodGuides). *@
+@{
+    // A cell's lines, or "not given" in muted italic.
+    void Cell(SeafoodCell cell) {
+        if (cell.NoValue) {<span class="no-value">@cell.Lines[0]</span>} else {for (var i = 0; i < cell.Lines.Count; i++) {if (i > 0) {<br>}@cell.Lines[i]}}
+    }
+}
+<div class="table-scroll">
+    <table class="seafood-table">
+        <thead>
+            <tr>
+                <th scope="col">@SiteText.ColSeafoodRating</th>
+                <th scope="col" class="seafood-col-where">@SiteText.ColSeafoodWhere</th>
+                @if (Model.ShowMethod) {<th scope="col" class="seafood-col-method">@SiteText.ColSeafoodMethod</th>}
+                @if (Model.ShowFishery) {<th scope="col" class="seafood-col-fishery">@Model.FisheryHeading</th>}
+                <th scope="col" title="@SiteText.ColSeafoodNameTitle">@SiteText.ColSeafoodName</th>
+                @if (Model.ShowPageChanged) {<th scope="col" title="@SiteText.ColSeafoodPageChangedTitle">@SiteText.ColSeafoodPageChanged</th>}
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Model.Rows) {
+                <tr class="@(row.Note is null ? null : "seafood-has-note")">
+                    <td><span class="seafood-ratings">@for (var i = 0; i < row.Ratings.Count; i++) {if (i > 0) {<text> </text>}<span class="@row.Ratings[i].CssClass">@row.Ratings[i].Text</span>}</span>@if (row.Certification is { } certification) {<br><span class="seafood-certification">@certification</span>}</td>
+                    <td>@{Cell(row.Where);}</td>
+                    @if (Model.ShowMethod) {<td>@{Cell(row.Method);}</td>}
+                    @if (Model.ShowFishery) {<td>@{Cell(row.Fishery);}</td>}
+                    <td><a href="@row.Url">@row.Name</a>@if (row.ListedNameHtml is { } listedNameHtml) {<br><span class="sci-name" title="@SiteText.SeafoodListedNameTitle">@Html.Raw(listedNameHtml)</span>}</td>
+                    @if (Model.ShowPageChanged) {<td class="seafood-date">@row.PageChanged</td>}
+                </tr>
+                @* GoodFish's note (up to about 400 characters) is prose, so it goes on a line of its own under the row it belongs to, across the table. *@
+                if (row.Note is { } note) {
+                    <tr class="seafood-note"><td colspan="@Model.ColumnCount"><div class="seafood-note-text"><span class="seafood-note-label">@SiteText.SeafoodNoteLabel</span> @note</div></td></tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>

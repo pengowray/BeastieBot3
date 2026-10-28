@@ -152,6 +152,15 @@ public sealed record OtherStatusRow(string System, string Status, string? Status
 public sealed record OtherStatusListRow(string ListKey, string System, string? Country, string? Region, string Name, string? Title,
     int SortOrder, string? Publisher, string? Licence, string? LicenceUrl, string? Citation, string? Url, string? Version, string? Fetched);
 
+/// One seafood guide's rating of a taxon (seafood_rating), as the site database stores it. Guide: a
+/// SeafoodGuides key. Ratings: the guide's words, two of them joined by '|' on a GoodFish page with
+/// two. Color: Seafood Watch's colour ('Green', 'Yellow', 'Red', 'Blue'). Method and Fishery: lists
+/// joined by '|'. Production: 'wild', 'farmed' or 'wild|farmed'. ListedName: the guide's scientific
+/// name, only when it is not the taxon's own. Modified: yyyy-MM-dd, when GoodFish last changed its page
+/// (not the date of an assessment).
+public sealed record SeafoodRatingRow(string Guide, string RatingId, string Ratings, string? Color, string CommonName, string? ListedName,
+    string? Region, string? WaterBody, string? Method, string? Production, string? Fishery, string? Note, string Url, string? Modified);
+
 /// A taxon's IUCN Green Status of Species assessment (green_status). Scores are whole percentages.
 /// PublishedYear: the year of the Red List release it first appeared in, when known. RedListYear: the
 /// year the Red List assessment on the same page was published.
