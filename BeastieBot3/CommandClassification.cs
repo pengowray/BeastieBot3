@@ -16,6 +16,7 @@ using BeastieBot3;
 [assembly: CommandBranch("checklists",   "Country checklists from other sources (mammals, plants, reptiles, amphibians), to check IUCN's countries against")]
 [assembly: CommandBranch("classifications", "Classifications from other sources (birds, plants, marine species, ITIS), for the public site's comparison of classifications")]
 [assembly: CommandBranch("statuses",     "Conservation statuses from systems other than the IUCN Red List (NatureServe, US Endangered Species Act, CITES Appendices, national red lists), for the species site")]
+[assembly: CommandBranch("seafood",      "Ratings of seafood buying guides (GoodFish, Seafood Watch): advice about buying a species from one region and fishing or farming method, for the species site")]
 [assembly: CommandBranch("redlist",      "Unofficial IUCN Red List data-observation site generation")]
 [assembly: CommandBranch("site",         "Public species lookup site: build its database")]
 

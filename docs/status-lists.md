@@ -946,3 +946,35 @@ The Catalogue of Life and GBIF links are there for matching by those ids.
 ## Web UI
 
 The Data sources page has a card for the store, with the number of NatureServe records and ECOS listings. The "Update the public species site" workflow has a step for each command before the site build, each with a light: NatureServe is blue while a download is under way, and either step is amber when its last download is more than 30 days old. The site build's light counts the store as one of its inputs. `statuses france-import` has no step in the workflow yet, and `site build-db` does not read the French tables yet.
+
+## Seafood guides: `seafood goodfish-import` and `seafood seafoodwatch-import`
+
+Seafood buying guides rate a species (or a group of species) from one region, caught or farmed one way, to tell shoppers what to buy. A rating judges a fishery or farm, not the species: GoodFish rates gummy shark from Western Australia Say No because the gillnets that catch it drown endangered Australian sea lions, while the shark itself is not threatened. So the ratings are stored in their own tables (`seafood_rating`, `seafood_rating_name`), the site shows them in their own section, and they are never among the other conservation statuses (`other_status`, the status update page's lists, the list maker's "other list").
+
+Neither guide has given permission to republish its ratings, so `site build-db` leaves them out unless it is given `--seafood-guides`. Seafood Watch's terms of use allow personal use only. GoodFish publishes no terms. Ask both before a public site shows them.
+
+### GoodFish (Australian Marine Conservation Society)
+
+About 210 pages at goodfish.org.au, each a WordPress post of type "species". The REST API (`/wp-json/wp/v2/species`) lists them with their dates, but not their rating, region, method or Latin names (those taxonomies are not in the API), so the download also reads each page, one a second, and keeps the part from the title to the start of the "More information" text. The kept file is `goodfish-<date>.json`: `{"entries": [...], "pages": [{"id", "html"}]}`.
+
+- Ratings: Better Choice, Eat Less, Say No, Under Review. 13 pages have two ratings. 40 pages have a short note, which on a page with two ratings usually says which to choose (line-caught or trawled, say); the note is stored. One page (mackerel icefish) has no rating and is left out.
+- Region: as the page writes it ("WA, VIC, SA, TAS", "Commonwealth waters", "Imported").
+- Method: "Wild Caught", "Farmed" or "Australian Farmed".
+- Fisheries: the list that starts "More information", when there is one ("WA Northern Demersal Scalefish Fishery and Pilbara Demersal Scalefish Fishery (284t in 2021)"). The catch year in brackets is the only year on a page.
+- Dates: GoodFish gives no date for an assessment. `modified` is when the page last changed.
+- Names: the page's "Latin name(s)" line. Some are abbreviated ("H. laevigata" beside "Haliotis rubra") and some misspelt ("Sardinella lemurs"); `SeafoodNames.Read` expands the abbreviations and `rules/status-lists/seafood-name-fixes.yml` fixes the misspellings.
+
+### Seafood Watch (Monterey Bay Aquarium)
+
+The search page reads every recommendation from one JSON endpoint, `https://www.seafoodwatch.org/api/recs?query=&requestTime=<ISO time>` (it answers 404 without both parameters): about 1,950 recommendations in 94 groups. The kept file is the answer as given, `seafoodwatch-<date>.json`.
+
+- Ratings: Best Choice (green), Good Alternative (yellow), Avoid (red), and Certified (blue) for a product with an eco-certification Seafood Watch recognises (MSC, ASC and others; the certification is the first part of `fishery`).
+- Region: `formatedC` ("India (Goa, Gujarat, Karnataka, Kerala, Maharashtra)"); water body: `bow`.
+- Methods: "Bottom trawls#Wild|Longlines#Wild", stored as the methods and the production (wild, farmed or both).
+- Fishery: `detail`, split on "|" (fishery, stock, zone).
+- Names: `sName`, a few with several names ("Sebastes melanostictus/aleutianus", "Penaeus (Fenneropenaeus) indicus").
+- Dates: none in this answer; each recommendation's report has them. The groups' buying advice and each recommendation's summary are narrative and are not stored.
+
+### Not imported
+
+The UK's Good Fish Guide (Marine Conservation Society, mcsuk.org) has a date for each rating, but the site answers automated requests with a Cloudflare bot challenge and its terms forbid copying, so it needs the Society's permission and a copy of the data from them (info@mcsuk.org).

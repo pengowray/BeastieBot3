@@ -1,0 +1,27 @@
+# Scientific names that a seafood guide misspells, with the name it means. `seafood goodfish-import`
+# and `seafood seafoodwatch-import` read this file (SeafoodNames.LoadFixes): a name is matched after
+# an abbreviated genus is expanded and the epithets are put in lower case ("K. Peronei" is read as
+# "Katelysia peronei"). After editing, import the kept file again with --file.
+#
+#   guide:  goodfish | seafoodwatch
+#   name:   the name as read
+#   means:  the name the guide means
+#
+# Each fix agrees with the common name on the guide's page.
+
+fixes:
+  - guide: goodfish
+    name: Sardinella lemurs
+    means: Sardinella lemuru
+  - guide: goodfish
+    name: Centroberyx affnis
+    means: Centroberyx affinis
+  - guide: goodfish
+    name: Marsupenaeus japonicas
+    means: Marsupenaeus japonicus
+  - guide: goodfish
+    name: Katelysia peronei
+    means: Katelysia peronii
+  - guide: goodfish
+    name: Lutjanus adeti
+    means: Lutjanus adetii

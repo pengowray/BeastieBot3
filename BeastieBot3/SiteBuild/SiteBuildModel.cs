@@ -22,6 +22,9 @@ internal sealed record SiteBuildInputs {
     public string? SpratDatabase { get; init; }
     /// The status lists store (`statuses natureserve-fetch`, `statuses ecos-import`).
     public string? StatusListsDatabase { get; init; }
+    /// Whether to write the seafood guides' ratings from the status lists store (`--seafood-guides`).
+    /// Off by default: the guides have not given permission to republish them.
+    public bool SeafoodGuides { get; init; }
     /// The rows of IUCN's summary tables 7 and 9 (`iucn summary-tables`): reasons for category
     /// changes, and species listed as Possibly Extinct.
     public string? SummaryTables { get; init; }
@@ -426,6 +429,10 @@ internal sealed class SiteBuildStats {
     public int GreenStatusRecords;
     public int GreenStatusTaxa;
     public string? GreenStatusFetched;
+    /// Each seafood guide's counts, by guide key, when the build wrote the seafood guides.
+    public Dictionary<string, SeafoodGuideStats> SeafoodGuides { get; } = new(StringComparer.Ordinal);
+    public string? GoodFishFetched;
+    public string? SeafoodWatchFetched;
     /// Current SALVE assessments, and those matched to a taxon.
     public int SalveAssessments;
     public int SalveMatched;

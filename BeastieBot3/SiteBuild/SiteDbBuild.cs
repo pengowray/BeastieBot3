@@ -34,6 +34,7 @@ internal sealed class SiteDbBuild {
     private readonly SiteBuildStats _stats = new();
     // The lists of the status systems that have several (other_status_list), from the status list readers.
     private readonly List<OtherStatusList> _otherStatusLists = new();
+    private List<SiteSeafoodRating> _seafoodRatings = new();
 
     public SiteDbBuild(SiteBuildInputs inputs, IAnsiConsole console) {
         _inputs = inputs;
@@ -205,6 +206,13 @@ internal sealed class SiteDbBuild {
                 + $"{_stats.NztcsMatched:N0} of {_stats.NztcsAssessments:N0} NZTCS assessments matched, "
                 + $"{_stats.SalveMatched:N0} of {_stats.SalveAssessments:N0} SALVE assessments matched";
         });
+        if (_inputs.SeafoodGuides) {
+            Optional("status lists store: seafood guides (--seafood-guides)", _inputs.StatusListsDatabase, path => {
+                _seafoodRatings = SiteLinkReaders.ReadSeafoodGuides(path, taxa, _stats, ct);
+                return string.Join(", ", _stats.SeafoodGuides.OrderBy(g => g.Key, StringComparer.Ordinal)
+                    .Select(g => $"{g.Key}: {g.Value.MatchedRatings:N0} of {g.Value.Ratings:N0} ratings matched, {g.Value.Taxa:N0} taxa"));
+            });
+        }
 
         // IUCN's summary tables, before the names are written, which clears the synonym lists the name
         // index reads.
@@ -305,6 +313,7 @@ internal sealed class SiteDbBuild {
             writer.InsertRows("INSERT INTO notes_taxon (taxon_id, named_taxon_id, assessment_id, name_in_notes, position) VALUES (@t, @n, @a, @w, @p)",
                 ["@t", "@n", "@a", "@w", "@p"], notesTaxa.Select(r => new object?[] { r.TaxonId, r.NamedTaxonId, r.AssessmentId, r.NameInNotes, r.Position }));
             writer.AddGreenStatuses(greenStatuses);
+            SiteLinkReaders.WriteSeafoodRatings(writer, _seafoodRatings.Where(r => taxa.ContainsKey(r.TaxonId)));
             foreach (var list in _otherStatusLists) {
                 writer.AddOtherStatusList(list);
             }
@@ -686,6 +695,8 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.JnccFileDate, _stats.JnccFileDate);
         writer.SetMeta(SiteDbSchema.MetaKeys.JnccAttribution, _stats.JnccAttribution);
         writer.SetMeta(SiteDbSchema.MetaKeys.GreenStatusFetched, _stats.GreenStatusFetched);
+        writer.SetMeta(SiteDbSchema.MetaKeys.GoodFishFetched, _stats.GoodFishFetched);
+        writer.SetMeta(SiteDbSchema.MetaKeys.SeafoodWatchFetched, _stats.SeafoodWatchFetched);
         if (_stats.SummaryTables is { } summaryTables) {
             // Tables lists each table's files in release order.
             string? First(int table) => summaryTables.Tables.FirstOrDefault(t => t.Table == table)?.Release;

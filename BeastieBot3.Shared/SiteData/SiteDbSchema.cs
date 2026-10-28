@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 31;
+    public const int Version = 32;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -299,6 +299,30 @@ public static class SiteDbSchema {
             facilitators           TEXT,
             compilers              TEXT,
             citation_json          TEXT NOT NULL       -- IucnCitationParts: the assessors as authors, Year = the year assessed
+        ) WITHOUT ROWID;
+
+        -- Seafood buying guides' ratings of a taxon (GoodFish, Seafood Watch), from the status lists store
+        -- (`seafood goodfish-import`, `seafood seafoodwatch-import`). Written only by `site build-db
+        -- --seafood-guides`, because the guides have not given permission to republish them. A rating is a
+        -- guide's advice about buying the taxon from one region, caught or farmed one way: it judges the
+        -- fishery or farm, not the conservation status of the species. No key facts or summaries are stored.
+        CREATE TABLE seafood_rating (
+            taxon_id    INTEGER NOT NULL,
+            guide       TEXT NOT NULL,     -- 'goodfish' | 'seafoodwatch' (SeafoodGuides)
+            rating_id   TEXT NOT NULL,     -- the guide's id: GoodFish's page id, Seafood Watch's recommendation id
+            ratings     TEXT NOT NULL,     -- as the guide writes it; GoodFish's two ratings on one page joined by '|': 'Better Choice|Say No'
+            color       TEXT,              -- Seafood Watch's colour: 'Green' | 'Yellow' | 'Red' | 'Blue' (Certified)
+            common_name TEXT NOT NULL,     -- the guide's name for what it rates: 'Gummy Shark', 'Coho salmon'
+            listed_name TEXT,              -- the scientific name the guide gives, when it is not the taxon's own
+            region      TEXT,              -- where caught or farmed, as the guide writes it: 'WA, VIC, SA, TAS', 'Canada (British Columbia)'
+            water_body  TEXT,              -- Seafood Watch's body of water: 'Northeast Pacific Ocean'
+            method      TEXT,              -- GoodFish: 'Wild Caught', 'Farmed'; Seafood Watch: its methods joined by '|'
+            production  TEXT,              -- 'wild' | 'farmed' | 'wild|farmed'
+            fishery     TEXT,              -- GoodFish: the fisheries its page lists; Seafood Watch: the fishery, stock or certification; joined by '|'
+            note        TEXT,              -- GoodFish's note on a page with two ratings, which says which to choose
+            url         TEXT NOT NULL,     -- the rating's page in the guide
+            modified    TEXT,              -- GoodFish: yyyy-mm-dd, when the page last changed; not the date of an assessment
+            PRIMARY KEY (taxon_id, guide, rating_id)
         ) WITHOUT ROWID;
 
         -- IUCN's summary statistics tables that `iucn summary-tables` read: Table 7 (species changing Red
@@ -688,6 +712,10 @@ public static class SiteDbSchema {
         /// When `iucn api green-status` last downloaded the Green Status assessments ('yyyy-MM-dd'), for
         /// the access date of their citations.
         public const string GreenStatusFetched = "green_status_fetched";
+        /// When `seafood goodfish-import` and `seafood seafoodwatch-import` last downloaded each guide
+        /// ('yyyy-MM-dd'); absent when the build left the seafood guides out.
+        public const string GoodFishFetched = "goodfish_fetched";
+        public const string SeafoodWatchFetched = "seafoodwatch_fetched";
         /// The first and last Red List versions of the Table 7 and Table 9 files in summary_table
         /// ('2007', '2026-1'); absent when the build read no summary tables.
         public const string Table7FirstVersion = "table7_first_version";

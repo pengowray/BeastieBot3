@@ -73,6 +73,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [Description("Status lists store (statuses natureserve-fetch, statuses ecos-import). Default: Datastore:status_lists_sqlite in paths.ini, else status_lists.sqlite in the datastore folder.")]
         public string? StatusListsDatabase { get; init; }
 
+        [CommandOption("--seafood-guides")]
+        [Description("Also write the seafood guides' ratings (seafood goodfish-import, seafood seafoodwatch-import) from the status lists store. Off by default, because the guides have not given permission to republish their ratings.")]
+        public bool SeafoodGuides { get; init; }
+
         [CommandOption("--summary-tables-db <PATH>")]
         [Description("IUCN's summary tables 7 and 9 (iucn summary-tables). Default: Datastore:IUCN_summary_tables_sqlite in paths.ini, else iucn_summary_tables.sqlite in the datastore folder.")]
         public string? SummaryTablesDatabase { get; init; }
@@ -131,6 +135,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 ColDir = Full(settings.ColDir ?? paths.GetColDir()),
                 SpratDatabase = Full(settings.SpratDatabase ?? paths.GetSpratDatabasePath()),
                 StatusListsDatabase = Full(settings.StatusListsDatabase ?? paths.GetStatusListsPath()),
+                SeafoodGuides = settings.SeafoodGuides,
                 SummaryTables = Full(settings.SummaryTablesDatabase ?? paths.GetIucnSummaryTablesPath()),
                 GbifChecklist = Full(settings.GbifChecklist ?? GbifIucnChecklistReader.FindNewest(paths.GetGbifIucnDir())),
                 DoiCache = Full(settings.DoiCache ?? paths.GetIucnDoiCachePath()),
@@ -442,6 +447,11 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("SALVE assessments matched to a taxon", s.SalveMatched);
         Row("Taxa with an IUCN Green Status assessment in the API cache", s.GreenStatusRecords);
         Row("Of those, taxa on the site", s.GreenStatusTaxa);
+        foreach (var (guide, g) in s.SeafoodGuides.OrderBy(g => g.Key, StringComparer.Ordinal)) {
+            Row($"Seafood guide ratings ({guide})", g.Ratings);
+            Row($"Of those, ratings matched to a taxon ({guide})", g.MatchedRatings);
+            Row($"Taxa with a rating ({guide})", g.Taxa);
+        }
 
         Section("Groups (higher taxa)");
         Row("Groups", s.TreeNodes);

@@ -50,10 +50,15 @@ using Microsoft.Data.Sqlite;
 //                         included;
 //   france_taxref_link    those names' ids in the IUCN Red List, BirdLife, the Catalogue of Life and
 //                         GBIF, from TAXREF.
+//   seafood_rating        one row per rating of a seafood buying guide (GoodFish, Seafood Watch): advice
+//                         about buying a species from one region, caught or farmed one way, not a
+//                         conservation status (SeafoodGuides.cs);
+//   seafood_rating_name   the scientific names each rating gives, as written and as read.
 //
 // Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text,
 // none of JNCC's comments or descriptions, none of the habitat, region or threat columns of Japan's
-// Red List, and none of the BDC's remarks except the red lists' codes.
+// Red List, none of the BDC's remarks except the red lists' codes, and none of the seafood guides' key
+// facts or summaries (only GoodFish's note on a page with two ratings, which says which to choose).
 
 namespace BeastieBot3.StatusLists;
 
@@ -70,6 +75,8 @@ internal static class StatusSources {
     public const string Japan = "japan";
     public const string France = "france";
     public const string Taxref = "taxref";
+    public const string GoodFish = "seafood:" + SeafoodGuideKeys.GoodFish;
+    public const string SeafoodWatch = "seafood:" + SeafoodGuideKeys.SeafoodWatch;
 }
 
 internal sealed record StatusSourceInfo(
@@ -113,6 +120,7 @@ internal sealed partial class StatusListStore : SqliteStore {
     internal const string Ddl = """
         CREATE TABLE IF NOT EXISTS status_source (
             source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'jncc' | 'cites' | 'redlist:<key>' (one per red list) | 'japan' | 'france' | 'taxref'
+                                            -- | 'seafood:goodfish' | 'seafood:seafoodwatch'
             title       TEXT NOT NULL,
             url         TEXT NOT NULL,      -- the source's site; for JNCC, the URL of the file imported; for the BDC (france)
                                             -- and TAXREF, the dataset's page on data.gouv.fr
@@ -549,6 +557,36 @@ internal sealed partial class StatusListStore : SqliteStore {
             PRIMARY KEY (cd_ref, cd_nom, source, external_id)
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS france_taxref_link_id ON france_taxref_link(source, external_id);
+        CREATE TABLE IF NOT EXISTS seafood_rating (
+            guide       TEXT NOT NULL,     -- 'goodfish' | 'seafoodwatch' (SeafoodGuideKeys)
+            rating_id   TEXT NOT NULL,     -- GoodFish: the page's WordPress post id; Seafood Watch: the recommendation's id
+            common_name TEXT NOT NULL,     -- the guide's name for what it rates: "Gummy Shark", "Coho salmon"
+            group_name  TEXT,              -- Seafood Watch's group: "Salmon"
+            ratings     TEXT NOT NULL,     -- as the guide writes it; GoodFish's two ratings on one page joined by '|': "Better Choice|Say No"
+            color       TEXT,              -- Seafood Watch's colour: Green, Yellow, Red; Blue for Certified
+            score       TEXT,              -- Seafood Watch's score as given: "2.674" (".000" for Certified)
+            region      TEXT,              -- where caught or farmed, as the guide writes it: "WA, VIC, SA, TAS", "Canada (British Columbia)"
+            water_body  TEXT,              -- Seafood Watch's body of water: "Northeast Pacific Ocean"
+            method      TEXT,              -- GoodFish: "Wild Caught", "Farmed"; Seafood Watch: its methods joined by '|': "Bottom trawls|Longlines"
+            production  TEXT,              -- 'wild' | 'farmed' | 'wild|farmed'
+            fishery     TEXT,              -- GoodFish: the fisheries its page lists; Seafood Watch: the parts of its detail; joined by '|'
+            note        TEXT,              -- GoodFish's note on a page with two ratings
+            url         TEXT NOT NULL,
+            published   TEXT,              -- GoodFish: when the page was first published (UTC "O"); NULL for Seafood Watch
+            modified    TEXT,              -- GoodFish: when the page last changed (UTC "O"); not the date of an assessment
+            imported_at TEXT NOT NULL,     -- UTC "O"
+            PRIMARY KEY (guide, rating_id)
+        ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS seafood_rating_name (
+            guide           TEXT NOT NULL,
+            rating_id       TEXT NOT NULL,
+            position        INTEGER NOT NULL,
+            name            TEXT NOT NULL,   -- as the guide writes it: "H. laevigata", "Sardinella lemurs", "Sepia spp."
+            scientific_name TEXT,            -- SeafoodNames.Read: "Haliotis laevigata", "Sardinella lemuru"; NULL for a genus or group
+            PRIMARY KEY (guide, rating_id, position),
+            FOREIGN KEY (guide, rating_id) REFERENCES seafood_rating(guide, rating_id) ON DELETE CASCADE
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS seafood_rating_name_name ON seafood_rating_name(scientific_name);
         """;
 
     protected override void EnsureSchema() {
