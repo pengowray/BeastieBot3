@@ -1,4 +1,5 @@
-# Scientific names that a seafood guide misspells, with the name it means. `seafood goodfish-import`
+# Scientific names to read as another name: names a seafood guide misspells, and names the site
+# would match to the wrong taxon (an IUCN synonym of another species), with the name the guide means. `seafood goodfish-import`
 # and `seafood seafoodwatch-import` read this file (SeafoodNames.LoadFixes): a name is matched after
 # an abbreviated genus is expanded and the epithets are put in lower case ("K. Peronei" is read as
 # "Katelysia peronei"). After editing, import the kept file again with --file.
@@ -8,6 +9,9 @@
 #   means:  the name the guide means
 #
 # Each fix agrees with the common name on the guide's page.
+#
+# The site matches a name to the taxon with that scientific name, else to the one taxon whose IUCN
+# synonyms include it.
 
 fixes:
   - guide: goodfish
@@ -25,3 +29,8 @@ fixes:
   - guide: goodfish
     name: Lutjanus adeti
     means: Lutjanus adetii
+  # Australasian snapper. IUCN lists Chrysophrys auratus as a synonym of Sparus aurata (gilthead
+  # seabream; Linnaeus's Sparus auratus), and calls the snapper Pagrus auratus.
+  - guide: goodfish
+    name: Chrysophrys auratus
+    means: Pagrus auratus
