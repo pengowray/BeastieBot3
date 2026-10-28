@@ -104,6 +104,13 @@ public sealed class SeafoodGuideTests : IClassFixture<SiteFactory> {
     }
 
     [Fact]
+    public void Certified_alone_names_no_certifier() {
+        var row = Build(Watch("1", "Certified", "Blue", region: "Ireland", fishery: "Certified|Ireland Bottom Grown Mussel Fishery")).Tables[0].Rows[0];
+        Assert.Null(row.Certification);
+        Assert.Equal(["Ireland Bottom Grown Mussel Fishery"], row.Fishery.Lines);
+    }
+
+    [Fact]
     public void A_stock_line_is_not_a_certification() {
         var row = Build(Watch("1", "Avoid", "Red", waterBody: "Indian Ocean", fishery: "Small purse seine Fishery|Indian Ocean stock")).Tables[0].Rows[0];
         Assert.Null(row.Certification);

@@ -140,7 +140,9 @@ public sealed record SeafoodGuideSection(IReadOnlyList<SeafoodGuideTable> Tables
         string? certification = null;
         if (ratings.Any(r => r.Colour == SeafoodRatingColour.Blue) && fishery.Count > 0
             && fishery[0].EndsWith("Certified", StringComparison.OrdinalIgnoreCase)) {
-            certification = fishery[0][..^"Certified".Length].TrimEnd();
+            // The label already says "Certified"; a segment of that word alone names no certifier.
+            var certifier = fishery[0][..^"Certified".Length].TrimEnd();
+            certification = certifier.Length == 0 ? null : certifier;
             fishery = fishery.Skip(1).ToList();
         }
         return new SeafoodRatingLine(
