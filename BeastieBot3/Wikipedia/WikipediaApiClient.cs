@@ -53,6 +53,14 @@ internal sealed partial class WikipediaApiClient : IDisposable {
             throw new ArgumentException("Title must be provided", nameof(title));
         }
 
+        // The action API splits `titles` on "|", so "Template:Taxonomy/Icteridae|Agelaioides" is
+        // asked as two titles and the answer has no page for the one requested. No title can
+        // contain "|", so it is invalid without asking.
+        if (title.Contains('|')) {
+            return WikipediaQueryResult.Missing(title, new Dictionary<string, string>(), Array.Empty<WikipediaRedirectStep>(),
+                "invalid-title", "title contains |", HttpStatusCode.OK, 0);
+        }
+
         await _actionSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try {
             _nextActionAllowed = await EnforceRateLimitAsync(_nextActionAllowed, _configuration.ActionDelay, cancellationToken).ConfigureAwait(false);
