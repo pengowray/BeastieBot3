@@ -48,3 +48,7 @@ __DOMAIN__ {
 		}
 	}
 }
+
+# Other sites on this server install their own site files here, for example oversample-api
+# (batchi-backend/deploy/oversample-api.caddy). A pattern that matches no files is allowed.
+import /etc/caddy/sites/*.caddy
