@@ -18,6 +18,15 @@ using BeastieBot3.Shared.SiteData;
 // store (NameWordSets.IsEpithet). Without that word list, any lower-case word counts.
 // CommonNameQuality's junk test runs after these, in SiteNameSet.
 //
+// A name is also left out when its last word is the English name of a language and some other word
+// comes before it ("Rhinolophe du Cap I German"). The Catalogue of Life (July 2026) has about 110 of
+// these, nearly all French and German bat names from three 2019 source datasets (Burgin2019,
+// Bonaccorso2019, DonEWilson2019). The names were read from the text of a table with a column for
+// each language, and each one runs on into the next column's heading. Many are misspelt as well
+// ("Pei va Kenohr-Drezahnbartna e Spanish"), so the rule leaves them out rather than cutting the
+// heading off. A heading after "de", "von" and the like is a person's name, and the name is kept
+// ("Souris-musaraigne de German", after Pavel German).
+//
 // Names are tidied first: Wikidata's Asturian labels wrap the scientific name in left-to-right
 // marks (U+200E), which are removed from the ends, and a Wikipedia title loses a bracketed
 // disambiguation at its end ("Tigre (animal)" is "Tigre").
@@ -35,6 +44,8 @@ internal enum OtherNameDrop {
     Binomial,
     /// The genus's initial, a full stop and the species epithet.
     AbbreviatedBinomial,
+    /// Ends with the English name of a language, a table's column heading read into the name.
+    LanguageHeading,
 }
 
 /// One taxon's scientific names for the rule: folded keys of its names and synonyms, its genus and
@@ -96,6 +107,9 @@ internal static partial class OtherLanguageNameRules {
         if (taxon.Contains(key)) {
             return OtherNameDrop.ScientificName;
         }
+        if (EndsWithLanguageHeading(name)) {
+            return OtherNameDrop.LanguageHeading;
+        }
         if (taxon.Genus is not { } genus) {
             return OtherNameDrop.None;
         }
@@ -119,6 +133,24 @@ internal static partial class OtherLanguageNameRules {
         }
         return OtherNameDrop.None;
     }
+
+    /// Whether the name's last word is one of LanguageHeadings, another word comes before it, and
+    /// that word is not one of NameParticles.
+    public static bool EndsWithLanguageHeading(string name) {
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length >= 2 && LanguageHeadings.Contains(words[^1]) && !NameParticles.Contains(words[^2]);
+    }
+
+    // The column headings of the tables these names came from. Case matters: no name in those
+    // languages ends with one of these words written with a capital letter.
+    private static readonly HashSet<string> LanguageHeadings = new(StringComparer.Ordinal) {
+        "English", "French", "German", "Spanish",
+    };
+
+    // Words before a person's name, which can be French or German.
+    private static readonly HashSet<string> NameParticles = new(StringComparer.OrdinalIgnoreCase) {
+        "de", "d'", "d’", "du", "von", "van", "di", "da", "of",
+    };
 
     /// The name with direction marks (U+200E, U+200F and the embedding and isolate controls)
     /// removed from its ends and its spaces trimmed. Marks inside a name are kept; the zero-width

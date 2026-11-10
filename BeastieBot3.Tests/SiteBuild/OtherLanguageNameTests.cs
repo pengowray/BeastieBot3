@@ -96,6 +96,22 @@ public class OtherLanguageNameTests {
     public void ScientificNames_AreNotCommonNames(string name, string expected) =>
         Assert.Equal(expected, OtherLanguageNameRules.Check(name, Tiger).ToString());
 
+    [Theory]
+    // The Catalogue of Life's names that run on into the next column's heading.
+    [InlineData("Rhinolophe du Cap I German", "LanguageHeading")]
+    [InlineData("Kap-Hufeisennase I Spanish", "LanguageHeading")]
+    [InlineData("Grand drer-Dre zahnblannase Spanish", "LanguageHeading")]
+    [InlineData("Tr aen du Yémen German", "LanguageHeading")]
+    // A person's name, and a heading that is the whole name.
+    [InlineData("Souris-musaraigne de German", "None")]
+    [InlineData("Chauve-souris d’English", "None")]
+    [InlineData("German", "None")]
+    // Lower case, or inside the name.
+    [InlineData("Rhinolophe german", "None")]
+    [InlineData("German-Hufeisennase", "None")]
+    public void LanguageHeadingRule(string name, string expected) =>
+        Assert.Equal(expected, OtherLanguageNameRules.Check(name, Tiger).ToString());
+
     [Fact]
     public void BinomialRule_WithoutAWordListTakesOutAnyNameThatBeginsWithTheGenusAndALowerCaseWord() {
         var tragopan = new TaxonScientificKeys("Tragopan", "caboti", ["Tragopan caboti"]);
