@@ -9,7 +9,8 @@ using System.Text.RegularExpressions;
 //     is "Rhinolophe du Cap" (without the "I", OtherLanguageNameRules still leaves the name out);
 //   - French: "à" read as "a" ("Souris a queue fragile"), the apostrophe lost before a capital
 //     ("Pélomys dAngola"), "è" read as "é" at the end of a word ("Minioptére", sometimes with an
-//     extra "e": "Cynopteére") and "tête" read as "téte";
+//     extra "e": "Cynopteére"), "tête" read as "téte", and "l'" read as "I'" ("Mulot de I'Himalaya"),
+//     sometimes with the next "I" read as "l" ("Rhynchomys de I'lsarog");
 //   - German: "ß" read as "R", "RR" or "lR" after a vowel ("WeiRRbauch", "SchwarzfulR-Baumratte").
 // Of the 1,014 names these repairs change, 191 become a name that Wikipedia, Wikidata or IUCN gives
 // for the same species. Only 4 were such a name before, French names where IUCN or Wikidata has also
@@ -38,6 +39,8 @@ internal static class HandbookNameRepair {
         name = FrenchA.Replace(name, "à");
         name = FrenchE.Replace(name, "ère");
         name = name.Replace("téte", "tête", StringComparison.Ordinal);
+        name = FrenchElision.Replace(name, "l");
+        name = FrenchCapitalI.Replace(name, "I");
         return FrenchApostrophe.Replace(name, "d'");
     }
 
@@ -47,6 +50,9 @@ internal static class HandbookNameRepair {
     // "a" alone between spaces or hyphens ("Baleine-a-bec").
     private static readonly Regex FrenchA = new(@"(?<=[ -])a(?=[ -])", RegexOptions.CultureInvariant);
     private static readonly Regex FrenchE = new(@"e?ére\b", RegexOptions.CultureInvariant);
+    // "I'" after a space, and then a lower-case "l" after "l'" before a lower-case letter.
+    private static readonly Regex FrenchElision = new(@"(?<=\s)I(?=['’])", RegexOptions.CultureInvariant);
+    private static readonly Regex FrenchCapitalI = new(@"(?<=\bl['’])l(?=[a-z])", RegexOptions.CultureInvariant);
     private static readonly Regex FrenchApostrophe = new(@"\bd(?=[A-ZÀ-Ý])", RegexOptions.CultureInvariant);
     // After a vowel, before a lower-case letter, a hyphen, a space or the end.
     private static readonly Regex GermanSharpS = new(@"(?<=[aeiouäöü])l?RR?(?=[a-zäöüß]|[-\s]|$)", RegexOptions.CultureInvariant);

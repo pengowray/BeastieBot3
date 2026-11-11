@@ -20,6 +20,11 @@ public class HandbookNameRepairTests {
     [InlineData("Atéle a téte brune", "fra", "Atéle à tête brune")]
     [InlineData("Cynopteére de Blanford", "fra", "Cynoptère de Blanford")]
     [InlineData("Potamocheére roux", "fra", "Potamochère roux")]
+    [InlineData("Mulot de I'Himalaya", "fra", "Mulot de l'Himalaya")]
+    [InlineData("Rat de I’Apo", "fra", "Rat de l’Apo")]
+    [InlineData("Rhynchomys de I'lsarog", "fra", "Rhynchomys de l'Isarog")]
+    [InlineData("Phyllorhine de I'Himalaya I German", "fra", "Phyllorhine de l'Himalaya")]
+    [InlineData("Murin de l'Himalaya", "fra", "Murin de l'Himalaya")]
     // German.
     [InlineData("WeiRRbauch-Nacktsohlenrennmaus", "deu", "Weißbauch-Nacktsohlenrennmaus")]
     [InlineData("GroRe Philippinenwaldmaus", "deu", "Große Philippinenwaldmaus")]
