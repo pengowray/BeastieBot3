@@ -24,7 +24,8 @@ using BeastieBot3.Shared.SiteData;
 // Bonaccorso2019, DonEWilson2019). The names were read from the text of a table with a column for
 // each language, and each one runs on into the next column's heading. Many are misspelt as well
 // ("Pei va Kenohr-Drezahnbartna e Spanish"), so the rule leaves them out rather than cutting the
-// heading off. A heading after "de", "von" and the like is a person's name, and the name is kept
+// heading off. In the Handbook of the Mammals of the World chapters, HandbookNameRepair first cuts
+// off a heading that follows an "I" (read for the book's "|"), so only the rest reach this rule. A heading after "de", "von" and the like is a person's name, and the name is kept
 // ("Souris-musaraigne de German", after Pavel German).
 //
 // Names are tidied first: Wikidata's Asturian labels wrap the scientific name in left-to-right

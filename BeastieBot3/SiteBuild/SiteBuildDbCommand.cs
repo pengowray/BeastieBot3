@@ -334,6 +334,9 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
             Row($"{source}: starting with the genus and a lower-case word", counts.Dropped.GetValueOrDefault(OtherNameDrop.Binomial));
             Row($"{source}: the genus's initial and the species epithet", counts.Dropped.GetValueOrDefault(OtherNameDrop.AbbreviatedBinomial));
             Row($"{source}: ending with a column heading such as \"German\"", counts.Dropped.GetValueOrDefault(OtherNameDrop.LanguageHeading));
+            if (counts == s.ColOtherNames) {
+                Row($"{source}: Handbook of the Mammals of the World names repaired", counts.Repaired);
+            }
             Row($"{source}: kept, before junk and repeats are left out", counts.Kept);
             if (counts.LanguagesLeftOut.Count > 0) {
                 Text($"{source}: language codes left out (most names first)", string.Join(", ", counts.LanguagesLeftOut

@@ -5,7 +5,8 @@ using Microsoft.Data.Sqlite;
 // Common names in languages other than English for `site build-db`, beside IUCN's (which come from
 // the API's taxon records and are kept as they are):
 //   - the Catalogue of Life's vernacular names (vernacularname) of each taxon's CoL id (col_id),
-//     source 'col';
+//     source 'col', with the damaged names of the Handbook of the Mammals of the World chapters
+//     repaired (HandbookNameRepair);
 //   - from each taxon's Wikidata item in the Wikidata cache, its taxon common name (P1843)
 //     statements other than deprecated ones, and its labels and aliases, source 'wikidata';
 //   - the titles of the item's Wikipedia sitelinks, as names in that Wikipedia's language, source
@@ -30,6 +31,9 @@ internal sealed class OtherNameCounts {
     public int LanguageLeftOut;
     public readonly Dictionary<string, int> LanguagesLeftOut = new(StringComparer.Ordinal);
     public readonly Dictionary<OtherNameDrop, int> Dropped = new();
+    /// Names from a Handbook of the Mammals of the World chapter that HandbookNameRepair changed
+    /// (Catalogue of Life only), counted once per name row of the site's taxa.
+    public int Repaired;
     /// Kept for the taxon (before SiteNameSet removes junk and repeats).
     public int Kept;
 }
@@ -56,8 +60,11 @@ internal static class SiteOtherLanguageNames {
                 return false;
             }
         }
+        var handbook = HandbookDatasets(connection);
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT taxonID, name, language FROM vernacularname WHERE name IS NOT NULL AND name <> ''";
+        command.CommandText = handbook.Count > 0
+            ? "SELECT taxonID, name, language, sourceID FROM vernacularname WHERE name IS NOT NULL AND name <> ''"
+            : "SELECT taxonID, name, language FROM vernacularname WHERE name IS NOT NULL AND name <> ''";
         command.CommandTimeout = 0;
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
@@ -67,6 +74,13 @@ internal static class SiteOtherLanguageNames {
             }
             var name = OtherLanguageNameRules.TrimDirectionMarks(reader.GetString(1));
             var code = reader.IsDBNull(2) ? null : reader.GetString(2);
+            if (handbook.Count > 0 && !reader.IsDBNull(3) && handbook.Contains(reader.GetString(3))) {
+                var repaired = HandbookNameRepair.Repair(name, code);
+                if (repaired != name) {
+                    counts.Repaired++;
+                    name = repaired;
+                }
+            }
             foreach (var taxon in colTaxa) {
                 if (!keys.TryGetValue(taxon.TaxonId, out var taxonKeys)) {
                     keys[taxon.TaxonId] = taxonKeys = TaxonScientificKeys.For(taxon);
@@ -75,6 +89,30 @@ internal static class SiteOtherLanguageNames {
             }
         }
         return true;
+    }
+
+    // The source datasets (sourceID) of the Handbook of the Mammals of the World chapters, whose names
+    // HandbookNameRepair repairs. Empty when the database has no source_metadata table or
+    // vernacularname has no sourceID column.
+    private static HashSet<string> HandbookDatasets(SqliteConnection connection) {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        using (var check = connection.CreateCommand()) {
+            check.CommandText = "SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'source_metadata')"
+                + " * (SELECT COUNT(*) FROM pragma_table_info('vernacularname') WHERE name = 'sourceID')";
+            if (Convert.ToInt64(check.ExecuteScalar(), CultureInfo.InvariantCulture) == 0) {
+                return keys;
+            }
+        }
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT source_key FROM source_metadata WHERE instr(description, $text) > 0";
+        command.Parameters.AddWithValue("$text", HandbookNameRepair.DatasetDescription);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            if (!reader.IsDBNull(0)) {
+                keys.Add(reader.GetValue(0).ToString()!);
+            }
+        }
+        return keys;
     }
 
     /// The names on each taxon's Wikidata item: P1843 statements, labels and aliases (source
