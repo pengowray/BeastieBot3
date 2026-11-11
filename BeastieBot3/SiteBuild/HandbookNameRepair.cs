@@ -8,8 +8,8 @@ using System.Text.RegularExpressions;
 //   - a trailing column heading after the "I" read for the book's "|": "Rhinolophe du Cap I German"
 //     is "Rhinolophe du Cap" (without the "I", OtherLanguageNameRules still leaves the name out);
 //   - French: "à" read as "a" ("Souris a queue fragile"), the apostrophe lost before a capital
-//     ("Pélomys dAngola"), "è" read as "é" at the end of a word ("Minioptére") and "tête" read
-//     as "téte";
+//     ("Pélomys dAngola"), "è" read as "é" at the end of a word ("Minioptére", sometimes with an
+//     extra "e": "Cynopteére") and "tête" read as "téte";
 //   - German: "ß" read as "R", "RR" or "lR" after a vowel ("WeiRRbauch", "SchwarzfulR-Baumratte").
 // Of the 1,014 names these repairs change, 191 become a name that Wikipedia, Wikidata or IUCN gives
 // for the same species. Only 4 were such a name before, French names where IUCN or Wikidata has also
@@ -46,7 +46,7 @@ internal static class HandbookNameRepair {
     private static readonly Regex TrailingHeading = new(@"\s+[I|l]\s+(?:English|French|German|Spanish)$", RegexOptions.CultureInvariant);
     // "a" alone between spaces or hyphens ("Baleine-a-bec").
     private static readonly Regex FrenchA = new(@"(?<=[ -])a(?=[ -])", RegexOptions.CultureInvariant);
-    private static readonly Regex FrenchE = new(@"ére\b", RegexOptions.CultureInvariant);
+    private static readonly Regex FrenchE = new(@"e?ére\b", RegexOptions.CultureInvariant);
     private static readonly Regex FrenchApostrophe = new(@"\bd(?=[A-ZÀ-Ý])", RegexOptions.CultureInvariant);
     // After a vowel, before a lower-case letter, a hyphen, a space or the end.
     private static readonly Regex GermanSharpS = new(@"(?<=[aeiouäöü])l?RR?(?=[a-zäöüß]|[-\s]|$)", RegexOptions.CultureInvariant);

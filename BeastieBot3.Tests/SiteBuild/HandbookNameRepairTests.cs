@@ -18,6 +18,8 @@ public class HandbookNameRepairTests {
     [InlineData("Pélomys dAngola", "fra", "Pélomys d'Angola")]
     [InlineData("Minioptére a oreillons courts", "fra", "Minioptère à oreillons courts")]
     [InlineData("Atéle a téte brune", "fra", "Atéle à tête brune")]
+    [InlineData("Cynopteére de Blanford", "fra", "Cynoptère de Blanford")]
+    [InlineData("Potamocheére roux", "fra", "Potamochère roux")]
     // German.
     [InlineData("WeiRRbauch-Nacktsohlenrennmaus", "deu", "Weißbauch-Nacktsohlenrennmaus")]
     [InlineData("GroRe Philippinenwaldmaus", "deu", "Große Philippinenwaldmaus")]
