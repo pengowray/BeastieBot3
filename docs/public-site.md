@@ -677,6 +677,22 @@ column shows them in quotation marks after the source's name: GBIF Backbone Taxo
 “Checklist of Vermont Species” (`SiteText.GbifSourceLabel`; the quotation marks keep a comma in a
 title apart from the commas between sources). GBIF comes last among a name's sources.
 
+The build of 13 November 2026 (release 2026-1, backbone of 28 August 2023) considered 188,485
+taxa, 181,777 of them with a P846 id. It matched 176,876 by id and 6,284 by name, and skipped
+2,342 as conflicts: 2,330 taxa that GBIF lumps with another site taxon and 12 names that two
+accepted GBIF usages have in one kingdom; 2,983 found no GBIF taxon. Of the ids, 2,395 taxa had none
+in the backbone, 113 an id in another kingdom or at another rank and 63 ids leading to two GBIF
+taxa; their names were tried. It read 1,020,866 common names for the matched taxa and left out
+344,271 from GBIF's copy of the Catalogue of Life, 145,930 from its copy of the IUCN Red List,
+24,539 from book chapters, 344 English names with no dataset, 46,986 with no language, 1,173
+scientific names and 440 English names only other languages have, and kept 457,623. After
+`SiteNameSet`, 355,213 `gbif` common name rows were written in 89 languages, for 114,008 taxa;
+35,109 of them are names no other source gives the taxon in that language (English 9,738,
+Spanish 3,093, French 2,710, Norwegian 2,371, Portuguese 1,928, German 1,741, Swedish 1,720,
+Chinese 1,470, Danish 1,404, Khmer 875). 474,358 `gbif` synonym rows were written, 94,112 of them
+synonyms no other source gives. `common_name_en` was the same for every taxon as in the build
+before. The file grew from 1,474 MB to 1,611 MB, and the GBIF pass took 33 seconds.
+
 ## Groups and lists
 
 Schema 9 adds the groups the taxa are in (`higher_taxon`), so the site can link every rank on a
