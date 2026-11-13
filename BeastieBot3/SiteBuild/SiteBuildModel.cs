@@ -43,6 +43,9 @@ internal sealed record SiteBuildInputs {
     public string? RulesList { get; init; }
     /// GBIF's copy of the IUCN checklist (a Darwin Core Archive zip).
     public string? GbifChecklist { get; init; }
+    /// The GBIF Backbone Taxonomy (a Darwin Core Archive zip, `gbif backbone-download`), for common
+    /// names and synonyms.
+    public string? GbifBackbone { get; init; }
     /// The Wikidata assessment item model (rules/wikidata/iucn-status.yml, assessment_item) stored
     /// in meta for the site's QuickStatements batches, and the file it was read from (null: the
     /// defaults, when no file was found).
@@ -142,6 +145,9 @@ internal sealed class SiteTaxon {
     /// Common names in languages other than English from the Catalogue of Life, Wikidata and
     /// Wikipedia (SiteOtherLanguageNames).
     public List<SiteOtherName> OtherLanguageNames { get; } = new();
+    /// Synonyms and common names in any language from the GBIF Backbone Taxonomy (SiteGbifNames).
+    public List<SiteSynonym> GbifSynonyms { get; } = new();
+    public List<SiteGbifName> GbifNames { get; } = new();
 }
 
 /// A synonym and its authority as its source gives it; Authority is null when the source gives none.
@@ -310,6 +316,8 @@ internal sealed class SiteBuildStats {
     public readonly OtherNameCounts ColOtherNames = new();
     public readonly OtherNameCounts WikidataOtherNames = new();
     public readonly OtherNameCounts WikipediaOtherNames = new();
+    /// Names and synonyms from the GBIF Backbone Taxonomy (SiteGbifNames); null when the build had no backbone.
+    public GbifNameCounts? Gbif;
     /// The subspecies and varieties of the species in the release (infraspecific_name, SiteSubspecies).
     public readonly SubspeciesCounts Subspecies = new();
     /// name rows written for common names in languages other than English (or none), by source.

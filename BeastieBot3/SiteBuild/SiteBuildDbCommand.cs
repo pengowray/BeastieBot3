@@ -15,7 +15,7 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.SiteBuild;
 
 [CommandInfo("site build-db", CommandKind.Mutates,
-    "Build the public species site's database (Datastore:site_sqlite) from the IUCN CSV export, the IUCN API cache, GBIF's copy of the IUCN checklist, the common names store, the Wikidata and Wikipedia caches, the Catalogue of Life placement file and release metadata, the SPRAT database, the DOIs found by iucn resolve-dois, and IUCN's summary tables of category changes and Possibly Extinct species (iucn summary-tables). Taxa that are in the API cache but not in the CSV export get pages too, with their earlier assessments. The new database is written beside the old one and replaces it only when the build finishes. No assessment narrative text is stored.",
+    "Build the public species site's database (Datastore:site_sqlite) from the IUCN CSV export, the IUCN API cache, GBIF's copy of the IUCN checklist, the GBIF Backbone Taxonomy (common names and synonyms), the common names store, the Wikidata and Wikipedia caches, the Catalogue of Life placement file and release metadata, the SPRAT database, the DOIs found by iucn resolve-dois, and IUCN's summary tables of category changes and Possibly Extinct species (iucn summary-tables). Taxa that are in the API cache but not in the CSV export get pages too, with their earlier assessments. The new database is written beside the old one and replaces it only when the build finishes. No assessment narrative text is stored.",
     Rerun = RerunEffect.Rebuilds,
     RerunNote = "Builds the whole database again from the data stored locally and replaces the previous one. A running site switches to the new file within about 30 seconds, without a restart.",
     Examples = new[] {
@@ -93,6 +93,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [Description("GBIF's copy of the IUCN checklist. Default: the newest zip in Datasets:GBIF_IUCN_dir.")]
         public string? GbifChecklist { get; init; }
 
+        [CommandOption("--gbif-backbone <PATH>")]
+        [Description("The GBIF Backbone Taxonomy zip (gbif backbone-download), for common names and synonyms. Default: the newest zip in Datasets:GBIF_backbone_dir.")]
+        public string? GbifBackbone { get; init; }
+
         [CommandOption("--doi-cache <PATH>")]
         [Description("DOIs that iucn resolve-dois found in Crossref's list of IUCN DOIs or at doi.org. Default: Datastore:IUCN_doi_cache_sqlite in paths.ini.")]
         public string? DoiCache { get; init; }
@@ -138,6 +142,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 SeafoodGuides = settings.SeafoodGuides,
                 SummaryTables = Full(settings.SummaryTablesDatabase ?? paths.GetIucnSummaryTablesPath()),
                 GbifChecklist = Full(settings.GbifChecklist ?? GbifIucnChecklistReader.FindNewest(paths.GetGbifIucnDir())),
+                GbifBackbone = Full(settings.GbifBackbone ?? Gbif.GbifBackboneArchive.FindNewest(paths.GetGbifBackboneDir())),
                 DoiCache = Full(settings.DoiCache ?? paths.GetIucnDoiCachePath()),
                 RulesList = rulesList,
                 TaxonRules = Full(Path.Combine(Path.GetDirectoryName(rulesList)!, "taxon-rules.yml")),
@@ -348,6 +353,45 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         }
         Row("Names after merging the sources' rows (per taxon, language and name)", s.OtherLanguageNamesMerged);
         Row("Languages", s.OtherLanguages.Count);
+
+        if (s.Gbif is { } gbif) {
+            Section("GBIF Backbone Taxonomy: names and synonyms");
+            Text("Backbone version (publication date)", gbif.Version);
+            Row("Taxa considered (in the release, not subpopulations)", gbif.Taxa);
+            Row("Of those, with a GBIF id (P846) on their Wikidata item", gbif.TaxaWithId);
+            Row("Matched by GBIF id", gbif.Count(GbifMatchKind.ById));
+            Row("Matched by scientific name", gbif.Count(GbifMatchKind.ByName));
+            Row("Not matched: two or more GBIF taxa have the name in the kingdom", gbif.Count(GbifMatchKind.NameAmbiguous));
+            Row("Not matched: GBIF has one taxon for two or more site taxa", gbif.Count(GbifMatchKind.Lumped));
+            Row("Not matched: no GBIF taxon found", gbif.Count(GbifMatchKind.NotFound));
+            Row("GBIF ids not used: none in the backbone (name tried)", gbif.IdProblems.GetValueOrDefault(GbifIdProblem.NotInBackbone));
+            Row("GBIF ids not used: another kingdom or rank (name tried)", gbif.IdProblems.GetValueOrDefault(GbifIdProblem.OtherKingdomOrRank));
+            Row("GBIF ids not used: they lead to two or more GBIF taxa (name tried)", gbif.IdProblems.GetValueOrDefault(GbifIdProblem.Several));
+            Row("Synonyms read (before repeats are dropped)", gbif.Synonyms);
+            var n = gbif.Names;
+            Row("Common names read for the matched taxa", n.Read);
+            foreach (var (title, count) in gbif.CopiedSources.OrderByDescending(p => p.Value)) {
+                Row($"Left out: from \"{title}\" (the site reads it directly)", count);
+            }
+            Row("Left out: from the Handbook of the Mammals of the World chapters and other datasets titled with a family name (every name labelled English)", gbif.HandbookNames);
+            Row("Left out: labelled English, with no dataset title (the same chapters' names)", gbif.EnglishWithoutDataset);
+            Row("Left out: no language, or a language code the site cannot name", n.LanguageLeftOut);
+            Row("Left out: the taxon's scientific name or a synonym", n.Dropped.GetValueOrDefault(OtherNameDrop.ScientificName));
+            Row("Left out: the taxon's genus, or starting with the genus and an epithet", n.Dropped.GetValueOrDefault(OtherNameDrop.Genus)
+                + n.Dropped.GetValueOrDefault(OtherNameDrop.Binomial) + n.Dropped.GetValueOrDefault(OtherNameDrop.AbbreviatedBinomial));
+            Row("Left out: ending with a column heading such as \"German\"", n.Dropped.GetValueOrDefault(OtherNameDrop.LanguageHeading));
+            Row("Left out: labelled English, but only other languages have the name in another source", gbif.EnglishInAnotherLanguage);
+            Row("Kept, before junk and repeats are left out", n.Kept);
+            if (n.LanguagesLeftOut.Count > 0) {
+                Text("Language codes left out (most names first)", string.Join(", ", n.LanguagesLeftOut
+                    .OrderByDescending(p => p.Value).Take(12).Select(p => $"{p.Key} {p.Value:N0}")));
+            }
+            Row("Name rows written (source gbif)", gbif.ByLanguage.Values.Sum(v => v.Rows));
+            Row("Of those, names no other source gives the taxon in that language", gbif.ByLanguage.Values.Sum(v => v.New));
+            Text("Names no other source gives, by language (rows written in brackets)", string.Join(", ", gbif.ByLanguage
+                .OrderByDescending(p => p.Value.New).ThenBy(p => p.Key, StringComparer.Ordinal).Take(30)
+                .Select(p => $"{p.Key} {p.Value.New:N0} ({p.Value.Rows:N0})")));
+        }
 
         Section("Subspecies and varieties of the species (species page list)");
         var sub = s.Subspecies;

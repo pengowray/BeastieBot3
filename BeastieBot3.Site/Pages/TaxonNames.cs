@@ -78,8 +78,7 @@ public sealed record TaxonNames(
             .Select(g => {
                 var rows = g.ToList();
                 var shown = rows.FirstOrDefault(r => r.Source == "iucn" && r.IsPreferred) ?? rows[0];
-                var sources = rows.Select(r => r.Source).Distinct().OrderBy(SourceOrder).Select(SiteText.SourceLabel).ToList();
-                return new EnglishCommonName(shown.Name, sources, rows.Any(r => r.Source == "iucn" && r.IsPreferred));
+                return new EnglishCommonName(shown.Name, SourceLabels(rows), rows.Any(r => r.Source == "iucn" && r.IsPreferred));
             })
             .OrderByDescending(n => n.IsIucnMain)
             .ThenByDescending(n => commonNameEn is not null && SiteNameKey.Fold(n.Name) == SiteNameKey.Fold(commonNameEn))
@@ -107,12 +106,22 @@ public sealed record TaxonNames(
         .GroupBy(r => SiteNameKey.CaseFold(r.Name))
         .Select(g => {
             var group = g.OrderBy(r => OtherLanguageSourceOrder(r.Source)).ThenBy(r => r.NameId).ToList();
-            var sources = group.Select(r => r.Source).Distinct().ToList();
             var shown = ShownForm(group);
-            return new OtherLanguageName(shown, sources.Select(SiteText.SourceLabel).ToList(), NameTransliteration.For(shown, lang));
+            return new OtherLanguageName(shown, SourceLabels(group), NameTransliteration.For(shown, lang));
         })
         .OrderByDescending(n => n.Sources.Count)
         .ThenBy(n => n.Name, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    /// The labels of the sources of one name, in SourceOrder, each once. The GBIF Backbone Taxonomy's
+    /// label names the GBIF datasets GBIF took the name from (NameRow.SourceDetail).
+    public static IReadOnlyList<string> SourceLabels(IEnumerable<NameRow> rows) => rows
+        .GroupBy(r => r.Source)
+        .OrderBy(g => SourceOrder(g.Key))
+        .Select(g => g.Key == "gbif"
+            ? SiteText.GbifSourceLabel(g.SelectMany(r => (r.SourceDetail ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Distinct(StringComparer.Ordinal).ToList())
+            : SiteText.SourceLabel(g.Key))
         .ToList();
 
     // The spelling most of the sources give; on a tie IUCN's, else the first source's in
@@ -160,6 +169,7 @@ public sealed record TaxonNames(
         "wikipedia" => 3,
         "wikipedia-taxobox" => 4,
         "japan-moe" => 5,
+        "gbif" => 7,
         _ => 6,
     };
 }

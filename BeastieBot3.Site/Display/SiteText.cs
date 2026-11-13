@@ -163,7 +163,17 @@ public static partial class SiteText {
         "powo" => "Plants of the World Online",
         "worms" => "WoRMS",
         "japan-moe" => "Ministry of the Environment (Japan)",
+        "gbif" => "GBIF Backbone Taxonomy",
         _ => source,
+    };
+
+    /// The GBIF Backbone Taxonomy as the source of a common name, with the titles of the GBIF datasets
+    /// GBIF took it from: 'GBIF Backbone Taxonomy from “Checklist of Vermont Species”'. The quotation
+    /// marks keep a comma in a title apart from the commas between sources.
+    public static string GbifSourceLabel(IReadOnlyList<string> datasets) => datasets.Count switch {
+        0 => SourceLabel("gbif"),
+        1 => $"{SourceLabel("gbif")} from “{datasets[0]}”",
+        _ => $"{SourceLabel("gbif")} from {string.Join(", ", datasets.Take(datasets.Count - 1).Select(d => $"“{d}”"))} and “{datasets[^1]}”",
     };
 
     // Taxon page: links to other sites
@@ -263,6 +273,8 @@ public static partial class SiteText {
 
     /// DOI of GBIF's copy of the IUCN checklist, used when the database has none in its meta table.
     public const string GbifChecklistDoi = "10.15468/0qnb58";
+    /// The GBIF Backbone Taxonomy's DOI.
+    public const string GbifBackboneDoi = "10.15468/39omei";
 
     public const string SpratLicensor =
         "Department of Climate Change, Energy, the Environment and Water (DCCEEW), Australian Government";

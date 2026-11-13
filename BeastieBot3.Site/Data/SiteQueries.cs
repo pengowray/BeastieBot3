@@ -563,7 +563,7 @@ public sealed partial class SiteQueries {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT name_id, name, name_type, language, source, is_preferred, authority
+            SELECT name_id, name, name_type, language, source, is_preferred, authority, source_detail
             FROM name
             WHERE taxon_id = @id
             ORDER BY is_preferred DESC, name_id
@@ -579,7 +579,8 @@ public sealed partial class SiteQueries {
                 Text(reader, 3),
                 reader.GetString(4),
                 reader.GetInt64(5) != 0,
-                Text(reader, 6)));
+                Text(reader, 6),
+                Text(reader, 7)));
         }
         return rows;
     }

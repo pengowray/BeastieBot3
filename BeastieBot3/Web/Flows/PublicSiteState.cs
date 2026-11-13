@@ -46,6 +46,10 @@ public sealed record PublicSiteState {
     /// Why the zip's metadata could not be read, when it could not.
     public string? GbifReadError { get; init; }
 
+    // --- The GBIF Backbone Taxonomy: the newest zip in Datasets:GBIF_backbone_dir (`gbif backbone-download`) ---
+    public string? GbifBackboneDir { get; init; }
+    public string? GbifBackboneZipName { get; init; }
+
     // --- The DOI cache (`iucn resolve-dois`, Datastore:IUCN_doi_cache_sqlite) ---
     public string? DoiCachePath { get; init; }
     public bool DoiCacheExists { get; init; }
@@ -140,6 +144,7 @@ public sealed record PublicSitePaths {
     public string? IucnDatabase { get; init; }
     public string? ApiCache { get; init; }
     public string? GbifDir { get; init; }
+    public string? GbifBackboneDir { get; init; }
     public string? DoiCache { get; init; }
     public string? CommonNames { get; init; }
     public string? WikidataCache { get; init; }
@@ -157,6 +162,7 @@ public sealed record PublicSitePaths {
             IucnDatabase = Full(Try(paths.GetIucnDatabasePath)),
             ApiCache = Full(Try(paths.GetIucnApiCachePath)),
             GbifDir = Full(Try(paths.GetGbifIucnDir)),
+            GbifBackboneDir = Full(Try(paths.GetGbifBackboneDir)),
             DoiCache = Full(Try(paths.GetIucnDoiCachePath)),
             CommonNames = Full(Try(paths.GetCommonNameStorePath)),
             WikidataCache = Full(Try(paths.GetWikidataCachePath)),
@@ -184,6 +190,7 @@ public static class PublicSiteStateReader {
     public const string IucnInput = "IUCN Red List database";
     public const string ApiCacheInput = "IUCN API cache";
     public const string GbifInput = "GBIF checklist";
+    public const string GbifBackboneInput = "GBIF Backbone Taxonomy";
     public const string DoiCacheInput = "DOI cache";
     public const string CommonNamesInput = "Common names store";
     public const string WikidataInput = "Wikidata cache";
@@ -216,6 +223,8 @@ public static class PublicSiteStateReader {
         var gbifZip = Try(() => GbifIucnChecklistFiles.FindNewest(p.GbifDir));
         var gbif = gbifZip is null ? null : ReadGbif(gbifZip);
         Add(GbifInput, gbifZip is null ? null : FileTime(gbifZip));
+        var backboneZip = Try(() => Gbif.GbifBackboneArchive.FindNewest(p.GbifBackboneDir));
+        Add(GbifBackboneInput, backboneZip is null ? null : FileTime(backboneZip));
 
         Add(DoiCacheInput, SqliteChangedAt(p.DoiCache));
         Add(CommonNamesInput, SqliteChangedAt(p.CommonNames));
@@ -235,6 +244,8 @@ public static class PublicSiteStateReader {
             GbifRelease = gbif?.Release,
             GbifPublished = gbif?.Published,
             GbifReadError = gbif?.Error,
+            GbifBackboneDir = p.GbifBackboneDir,
+            GbifBackboneZipName = backboneZip is null ? null : Path.GetFileName(backboneZip),
             DoiCachePath = p.DoiCache,
             DoiCacheExists = Exists(p.DoiCache),
             WikipediaCachePath = p.WikipediaCache,

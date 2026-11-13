@@ -1,8 +1,9 @@
 using System.Text.RegularExpressions;
 using BeastieBot3.Shared.SiteData;
 
-// Which names from the Catalogue of Life, Wikidata and Wikipedia site build-db keeps as a taxon's
-// common names in languages other than English. Many of them are the scientific name: in most
+// Which names from the Catalogue of Life, Wikidata, Wikipedia and the GBIF Backbone Taxonomy site
+// build-db keeps as a taxon's common names (in languages other than English, and GBIF's English
+// names too). Many of them are the scientific name: in most
 // languages Wikidata's label of a taxon item is its scientific name, set by bots, and bots made
 // hundreds of thousands of Cebuano, Waray, Swedish, Dutch and Vietnamese Wikipedia articles titled
 // with it. A name is not a common name when, with case, accents and spacing ignored
@@ -95,6 +96,7 @@ internal sealed class TaxonScientificKeys {
         names.AddRange(taxon.ColSynonyms.Select(s => s.Name));
         names.AddRange(taxon.WikidataSynonyms.Select(s => s.Name));
         names.AddRange(taxon.WikipediaSynonyms.Select(s => s.Name));
+        names.AddRange(taxon.GbifSynonyms.Select(s => s.Name));
         names.AddRange(taxon.ChecklistNames.Where(n => n.Type != "common").Select(n => n.Name));
         return new TaxonScientificKeys(taxon.Genus, taxon.SpeciesEpithet, names);
     }

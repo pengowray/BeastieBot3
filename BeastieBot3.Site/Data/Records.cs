@@ -77,6 +77,7 @@ public sealed record CategoryChangeRow(long AssessmentId, string Reason, string?
 /// "7 9") (possibly_extinct_listing).
 public sealed record PossiblyExtinctListingRow(long AssessmentId, string Tag, string FirstRelease, string LastRelease, string Tables);
 
+/// SourceDetail: for a 'gbif' common name, the titles of the GBIF datasets GBIF took it from, one per line.
 public sealed record NameRow(
     long NameId,
     string Name,
@@ -84,7 +85,8 @@ public sealed record NameRow(
     string? Language,
     string Source,
     bool IsPreferred,
-    string? Authority = null);
+    string? Authority = null,
+    string? SourceDetail = null);
 
 /// A taxon with its category, as listed in search results, name lookups and the children of a taxon.
 /// InRelease: false for a taxon that is not in the release (no current assessment).

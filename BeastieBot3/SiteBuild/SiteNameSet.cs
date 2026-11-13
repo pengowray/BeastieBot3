@@ -16,7 +16,8 @@ using BeastieBot3.Shared.SiteData;
 //     or Unicode normalisation alone (SiteNameKey.CaseFold): accents and other marks are part of the
 //     name ("Ñandú" is not "Nandu", and Fold would make the Japanese "ガエル" and "カエル" one).
 //   - codes: one row per code, whatever the source.
-// The first spelling added is kept; a later copy can only turn is_preferred on.
+// The first spelling added is kept; a later copy can only turn is_preferred on, or add its detail
+// (for 'gbif' names, the title of the GBIF dataset that gives the name) to the row's details.
 // Common names in every language go through CommonNameQuality first: a species code ("Species code:
 // Po") or a code in capitals labelled English (the Catalogue of Life's bird codes, "CROW") is added
 // as a code ("Po", "CROW"), so search finds it while the page leaves it out of the names; other
@@ -27,7 +28,10 @@ using BeastieBot3.Shared.SiteData;
 
 namespace BeastieBot3.SiteBuild;
 
-internal sealed record SiteName(string Name, string NameType, string? Language, string Source, bool IsPreferred, string? Authority = null);
+/// Detail: what the source says it took the name from (name.source_detail): for 'gbif' common names,
+/// the titles of GBIF's source datasets, one per line in the order added; null for other sources.
+internal sealed record SiteName(string Name, string NameType, string? Language, string Source, bool IsPreferred, string? Authority = null,
+    string? Detail = null);
 
 internal sealed class SiteNameSet {
     private readonly List<SiteName> _names = new();
@@ -52,7 +56,8 @@ internal sealed class SiteNameSet {
     /// Adds the name unless it repeats one already added; true when it was added. Empty names
     /// (after cleaning) are never added. A common name that CommonNameQuality finds is junk is not
     /// added, and one it can repair is added repaired.
-    public bool Add(string? name, string nameType, string? language, string source, bool isPreferred = false, string? authority = null) {
+    public bool Add(string? name, string nameType, string? language, string source, bool isPreferred = false, string? authority = null,
+        string? detail = null) {
         var cleaned = SiteBuildRules.CleanName(name);
         if (cleaned.Length == 0) {
             return false;
@@ -94,6 +99,9 @@ internal sealed class SiteNameSet {
             if (cleanedAuthority is not null && _names[at].Authority is null) {
                 _names[at] = _names[at] with { Authority = cleanedAuthority };
             }
+            if (WithDetail(_names[at].Detail, detail) is { } details && details != _names[at].Detail) {
+                _names[at] = _names[at] with { Detail = details };
+            }
             return false;
         }
         if (nameType == SiteNameType.Scientific) {
@@ -104,11 +112,23 @@ internal sealed class SiteNameSet {
             }
         }
         _index[lookup] = _names.Count;
-        _names.Add(new SiteName(cleaned, nameType, language, source, isPreferred, cleanedAuthority));
+        _names.Add(new SiteName(cleaned, nameType, language, source, isPreferred, cleanedAuthority, WithDetail(null, detail)));
         if (repaired) {
             RepairedCommonNames++;
         }
         return true;
+    }
+
+    /// The details with one more, unless it is blank or already there.
+    private static string? WithDetail(string? details, string? detail) {
+        var cleaned = SiteBuildRules.NullIfBlank(detail?.Trim());
+        if (cleaned is null) {
+            return details;
+        }
+        if (details is null) {
+            return cleaned;
+        }
+        return details.Split('\n').Contains(cleaned, StringComparer.Ordinal) ? details : details + "\n" + cleaned;
     }
 
     private static (string Key, string Type, string? Language, string? Source) LookupKey(string name, string folded, string nameType,

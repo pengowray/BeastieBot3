@@ -136,11 +136,12 @@ public class FlowCatalogueTests {
     public void Public_site_steps_show_the_files_they_write_and_upload() {
         var steps = FlowCatalogue.Find("public-site")!.Steps.ToDictionary(s => s.Id);
         Assert.Equal(new[] { "gbif-checklist" }, steps["site-gbif-download"].OutputSourceIds);
+        Assert.Equal(new[] { "gbif-backbone" }, steps["site-gbif-backbone"].OutputSourceIds);
         Assert.Equal(new[] { "iucn-doi-cache" }, steps["site-resolve-dois"].OutputSourceIds);
         Assert.Equal(new[] { "site-sqlite" }, steps["site-build-db"].OutputSourceIds);
         Assert.Equal(new[] { "site-sqlite" }, steps["site-deploy-db"].InputSourceIds);
 
-        var optional = new[] { "gbif-checklist", "iucn-doi-cache", "status-lists" };
+        var optional = new[] { "gbif-checklist", "gbif-backbone", "iucn-doi-cache", "status-lists" };
         var asInput = FlowCatalogue.All.SelectMany(f => f.Steps)
             .Where(s => s.InputSourceIds.Any(optional.Contains))
             .Select(s => s.Id)
@@ -154,6 +155,7 @@ public class FlowCatalogueTests {
     [InlineData(PublicSiteStateReader.IucnInput, "iucn-main")]
     [InlineData(PublicSiteStateReader.ApiCacheInput, "iucn-api-cache")]
     [InlineData(PublicSiteStateReader.GbifInput, "gbif-checklist")]
+    [InlineData(PublicSiteStateReader.GbifBackboneInput, "gbif-backbone")]
     [InlineData(PublicSiteStateReader.DoiCacheInput, "iucn-doi-cache")]
     [InlineData(PublicSiteStateReader.CommonNamesInput, "common-names")]
     [InlineData(PublicSiteStateReader.WikidataInput, "wikidata-cache")]

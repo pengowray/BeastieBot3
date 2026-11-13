@@ -17,6 +17,7 @@ on the taxon's Wikidata item up to date. Instructions for deploying it to an Ora
 | --- | --- | --- |
 | Shared library | `BeastieBot3.Shared/` | Code both the CLI and the site use. Keep it on the same target framework as both (net10.0) and with no NuGet packages, so both can reference it. `Wikitext/`: `IucnCitationParts` (one assessment's citation, parsed by `site build-db` and stored as JSON in `citation_json`; each author is a `CitationAuthor`, with `GivenNames` when they are known), the renderers `CiteIucnRenderer` (with `CiteIucnOptions.FullGivenNames`), `IucnStatusTemplate`, `SpeciesboxStatus`, `ScientificNameMarkup`, `WikidataCitation` (`{{cite Q}}`, and QuickStatements commands and links for an assessment's Wikidata item, following `WikidataItemModel`; see [Wikidata items of assessments](#wikidata-items-of-assessments)), `WikidataStatusEdit` (QuickStatements commands for a taxon item's IUCN conservation status; see [IUCN conservation status on Wikidata](#iucn-conservation-status-on-wikidata)) and `WikidataStatusValues` (the P141 value for each IUCN category, also used by the Wikidata status dry run). `SiteData/`: `SiteDbSchema` (the site database's DDL, `Version` and meta keys) and `SiteNameKey.Fold` (the folded form of a name used for exact lookups). |
 | GBIF checklist | `BeastieBot3/Iucn/Gbif/` | `iucn gbif-download` downloads, and `GbifIucnChecklistReader` reads, GBIF's CC BY 4.0 copy of the IUCN checklist. |
+| GBIF Backbone Taxonomy | `BeastieBot3/Gbif/` | `gbif backbone-download` downloads the GBIF Backbone Taxonomy (CC BY 4.0) and `GbifBackboneArchive` reads it; `SiteBuild/SiteGbifNames.cs` takes its common names and synonyms for the site. See [Names from the GBIF Backbone Taxonomy](#names-from-the-gbif-backbone-taxonomy). |
 | IUCN citations | `BeastieBot3/Iucn/Citations/` | Code the site build and the Wikidata dry run share: `CreditNameSplitter` (splits a credit's `full` string into names), `IucnAuthorNameParser` (reads one name as a person, an organisation, or a name kept as IUCN wrote it), `AssessorNamePool` (repairs names with a letter lost to an encoding error), `AssessorGivenNames` (finds a person's full given names in the assessor credit's `value[]` list; see [Full given names](#full-given-names)) and `IucnCitationText` (removes IUCN's "Accessed on" sentence and reads the DOI in IUCN's citation text). |
 | DOI lookup | `BeastieBot3/Iucn/Doi/` | `iucn resolve-dois` looks for DOIs that IUCN's citation text, GBIF and Wikidata do not give, in Crossref's list of IUCN DOIs and at doi.org, and saves them in the DOI cache (`Datastore:IUCN_doi_cache_sqlite`). See [Missing DOIs](#missing-dois-iucn-resolve-dois). |
 | Site build | `BeastieBot3/SiteBuild/` | `site build-db` builds the site database; `site check-citations` writes a read-only report. Citation code: `IucnCitationPartsParser` (title annotations, and putting the parts together), `IucnDoiSelector` (choosing a DOI), `IucnTaxaHeaders` (each taxon's list of assessments). `SiteApiTaxaReader` reads the taxa that are only in the API cache. `SiteBuildRules.ClassifySpratName` matches SPRAT profiles to taxa, both whole-taxon profiles and population profiles. `SiteWikidataItems` chooses each assessment's Wikidata item. `SiteBuildRules.DescribesAnotherKingdom` decides whether a Wikidata item matched to a taxon by name is left out of `taxon.wikidata_qid`: it is left out when the item's English description names a group in another kingdom. `SiteLinkReaders` reads the taxon items' IUCN conservation status (P141) statements, and `P141JsonReferences` reads the parts of their references that the Wikidata cache's index does not record: later stated in items and reference URLs (see [IUCN conservation status on Wikidata](#iucn-conservation-status-on-wikidata)). |
@@ -59,6 +60,9 @@ must never be reachable from outside the machine.
    [Species from the Catalogue of Life and Wikidata](#species-from-the-catalogue-of-life-and-wikidata)).
 3. Run `iucn gbif-download`. It keeps the new checklist zip only when it differs from the newest
    zip (by the date in the file name) in `Datasets:GBIF_IUCN_dir`; `site build-db` reads the newest.
+   Run `gbif backbone-download` once (about 930 MB). Later runs ask GBIF for the file's date and
+   size and download nothing while the newest zip in `Datasets:GBIF_backbone_dir` has both; GBIF has
+   not changed the backbone since 28 August 2023.
 4. Run `iucn resolve-dois --refresh-crossref`, then `iucn resolve-dois --scope latest-regional`.
    The first run downloads Crossref's list of IUCN DOIs again, so that it includes the new
    release's DOIs, and checks the latest global assessments. With `--refresh-crossref`, the
@@ -604,6 +608,74 @@ Start new build tests from `BeastieBot3.Tests/SiteBuild/SiteBuildSourceFixture`,
 `using static`. The fixture has the temporary folder, writers for the IUCN CSV database and the API
 cache, the `Header` and `Payload` JSON builders (an assessment in a taxon record, and an
 assessment's own payload), and SQL helpers.
+
+
+### Names from the GBIF Backbone Taxonomy
+
+`gbif backbone-download` saves the GBIF Backbone Taxonomy (`backbone.zip`, about 930 MB, CC BY 4.0,
+DOI 10.15468/39omei) as `backbone-<date>.zip` in `Datasets:GBIF_backbone_dir` (default
+`gbif-backbone` in the datasets folder). The date is the server's Last-Modified date; GBIF has not
+changed the file since 28 August 2023. The command asks the server for the date and size first and
+downloads nothing while the newest zip has both (`--force` downloads anyway). A download replaces an
+older copy only after its `meta.xml`, `Taxon.tsv`, `VernacularName.tsv` and `eml.xml` have been
+checked (`GbifBackboneDownloadCommand.Check`).
+
+`site build-db` (`--gbif-backbone`, default the newest zip) reads the zip directly, without
+unpacking it (`Gbif/GbifBackboneArchive.cs`, columns found through `meta.xml`), in three passes:
+`Taxon.tsv` twice and `VernacularName.tsv` once, about 30 seconds in all. It runs after every other
+synonym list is read and before the other sources' names in other languages, so the rules for those
+names also compare them with GBIF's synonyms. Rows have source `gbif`; meta `gbif_backbone_version`
+(the date of `eml.xml`'s `dateStamp`, since it has no `pubDate`), `gbif_backbone_citation` and
+`gbif_backbone_doi` are the About page's credit.
+
+Which GBIF taxon a site taxon takes (`SiteBuild/SiteGbifNames.cs`; taxa in the release, not
+subpopulations, which have their species' name):
+
+1. By id: the GBIF ids on the taxon's Wikidata item (P846, the keys of this backbone; the ids are
+   read from the Wikidata cache before the names, and written to `taxon_external_id` after them as
+   before). An id that is a synonym leads to its accepted taxon. Ids in another kingdom or at a rank
+   that does not fit the taxon (a species' id that is a genus), and ids that lead to two or more GBIF
+   taxa, are not used, and the name is tried. P14607 holds GBIF's 2026 ids, which this backbone does
+   not have, and is not read.
+2. By name: the one accepted (else doubtful) usage with the taxon's scientific name in its kingdom,
+   rank markers ignored (GBIF's canonical name of a variety is "Cerinthe glabra pirinica"). A name
+   that two accepted usages have in one kingdom is not matched.
+3. A GBIF taxon that two or more site taxa lead to goes only to the taxon with GBIF's name for it;
+   when none or several have that name, none takes it.
+
+Synonyms are the usages whose accepted taxon is the matched one, with status synonym, homotypic or
+heterotypic synonym (pro parte synonyms are left out, as the Catalogue of Life's ambiguous synonyms
+are), written as GBIF's scientific name without its authorship ("Cerinthe glabra var. pirinica"),
+with the authorship in `name.authority`.
+
+Common names are the `VernacularName.tsv` rows of the matched taxon, in every language, English
+included. They do not change `common_name_en`. Left out:
+
+- names GBIF took from the Catalogue of Life ("Catalogue of Life Checklist") or the IUCN Red List
+  ("The IUCN Red List of Threatened Species"): the site reads both directly, at newer releases, and
+  a name either source has dropped since would come back credited to GBIF;
+- names from the Handbook of the Mammals of the World chapters that Plazi published as datasets:
+  GBIF labels every one of their names English, the French, German and Spanish names included
+  ("Roussette a barbe noire", with the book's damage), while the Catalogue of Life has the same
+  chapters with each name's language. A chapter is a dataset whose description in the archive's
+  `dataset/` folder names the book (63), or whose title is one family name ("Calomyscidae"; 147
+  titles, most with no description in the archive);
+- names labelled English with no dataset title (465 rows, the same chapters' names in four
+  languages);
+- names with no language (190,276 of the 1,500,815 rows) or a code that `SiteLanguageCodes` cannot
+  name; GBIF's codes are ISO 639-1;
+- names `OtherLanguageNameRules` finds to be a scientific name, a synonym (from any source,
+  GBIF's included), the genus, a binomial or a name ending in a column heading;
+- an English name that no other source gives the taxon in English and that some source gives in
+  another language (`SiteDbBuild.AddGbifNames`): "Tijger" labelled English beside the Dutch
+  "Tijger".
+
+`SiteNameSet` then leaves out junk and keeps one row per name, language and source, as for the
+other sources. `name.source_detail` (schema 33) holds the titles of the GBIF datasets that give
+the name, one per line, from `VernacularName.tsv`'s `source` column. The species page's Source
+column shows them in quotation marks after the source's name: GBIF Backbone Taxonomy from
+“Checklist of Vermont Species” (`SiteText.GbifSourceLabel`; the quotation marks keep a comma in a
+title apart from the commas between sources). GBIF comes last among a name's sources.
 
 ## Groups and lists
 

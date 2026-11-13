@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 32;
+    public const int Version = 33;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -588,10 +588,13 @@ public static class SiteDbSchema {
                                                               -- can also have IUCN's ISO 639-2 or 639-5 code ('phi'). NULL when not given (IUCN only)
             source       TEXT NOT NULL,                       -- 'iucn' | 'col' | 'wikidata' | 'wikipedia' (an article title: English Wikipedia's for 'en',
                                                               -- else the title of the Wikidata item's sitelink to the Wikipedia in that language) |
-                                                              -- 'wikipedia-taxobox' (the English name in an article's taxobox) | 'mdd' | 'amphibiaweb'
+                                                              -- 'wikipedia-taxobox' (the English name in an article's taxobox) | 'mdd' | 'amphibiaweb' |
+                                                              -- 'japan-moe' | 'gbif' (the GBIF Backbone Taxonomy)
             is_preferred INTEGER NOT NULL DEFAULT 0,
-            authority    TEXT                                 -- synonyms only: the author and year as the source gives them ('(Phipps, 1774)');
+            authority    TEXT,                                -- synonyms only: the author and year as the source gives them ('(Phipps, 1774)');
                                                               -- NULL when the source gives none. Not part of name_key or name_fts
+            source_detail TEXT                                -- 'gbif' common names: the titles of the GBIF datasets GBIF took the name from, one per
+                                                              -- line ('Multilingual IOC World Bird List, v11.2'); NULL for other rows
         );
         CREATE INDEX name_taxon ON name(taxon_id);
 
@@ -672,6 +675,11 @@ public static class SiteDbSchema {
         /// without a resolver prefix ("10.15468/0qnb58").
         public const string GbifChecklistCitation = "gbif_checklist_citation";
         public const string GbifChecklistDoi = "gbif_checklist_doi";
+        /// The GBIF Backbone Taxonomy the 'gbif' names come from: its publication date ("2023-08-28"),
+        /// GBIF's recommended citation (from its eml.xml) and its DOI ("10.15468/39omei").
+        public const string GbifBackboneVersion = "gbif_backbone_version";
+        public const string GbifBackboneCitation = "gbif_backbone_citation";
+        public const string GbifBackboneDoi = "gbif_backbone_doi";
         /// Catalogue of Life release used for CoL ids ("COL26.7 XR").
         public const string ColRelease = "col_release";
         /// The Mammal Diversity Database and AmphibiaWeb versions the names come from.

@@ -17,6 +17,7 @@ namespace BeastieBot3.Web.Flows;
 
 public static class PublicSiteProbes {
     public const string Gbif = "site-gbif";
+    public const string GbifBackbone = "site-gbif-backbone";
     public const string Dois = "site-dois";
     public const string Build = "site-build";
     public const string WikidataSweep = "site-wikidata-sweep";
@@ -44,10 +45,11 @@ public static class PublicSiteProbes {
     /// The age after which the workflow asks for the IUCN Green Status assessments again.
     public const int GreenStatusRefreshDays = 30;
 
-    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs or Salve or Jncc or Cites or RedLists or Japan or France or GreenStatus or SummaryTables;
+    public static bool IsProbe(string probe) => probe is Gbif or GbifBackbone or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs or Salve or Jncc or Cites or RedLists or Japan or France or GreenStatus or SummaryTables;
 
     public static FlowProbeResult? Evaluate(string probe, PublicSiteState s) => probe switch {
         Gbif => GbifStep(s),
+        GbifBackbone => GbifBackboneStep(s),
         Dois => DoiStep(s),
         Build => BuildStep(s),
         WikidataSweep => SweepStep(s),
@@ -65,6 +67,20 @@ public static class PublicSiteProbes {
         SummaryTables => SummaryTablesStep(s),
         _ => null,
     };
+
+    // ---- The GBIF Backbone Taxonomy ----
+
+    // `site build-db` takes common names and synonyms from the newest backbone zip, and builds
+    // without them when there is none. GBIF has not changed the backbone since 2023-08-28, so a
+    // downloaded zip is never reported as old.
+    internal static FlowProbeResult GbifBackboneStep(PublicSiteState s) {
+        if (s.GbifBackboneDir is null) {
+            return new FlowProbeResult("todo", "No folder set for the GBIF Backbone Taxonomy: add [Datasets] GBIF_backbone_dir or datasets_dir to paths.ini.");
+        }
+        return s.GbifBackboneZipName is { } zip
+            ? new FlowProbeResult("ok", $"Downloaded: {zip}.")
+            : new FlowProbeResult("todo", $"Not downloaded yet: no backbone zip in {s.GbifBackboneDir}. The site has no names from GBIF until it is downloaded.");
+    }
 
     // ---- GBIF's checklist ----
 

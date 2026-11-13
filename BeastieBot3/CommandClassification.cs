@@ -18,6 +18,7 @@ using BeastieBot3;
 [assembly: CommandBranch("statuses",     "Conservation statuses from systems other than the IUCN Red List (NatureServe, US Endangered Species Act, CITES Appendices, national red lists), for the species site")]
 [assembly: CommandBranch("seafood",      "Ratings of seafood buying guides (GoodFish, Seafood Watch): advice about buying a species from one region and fishing or farming method, for the species site")]
 [assembly: CommandBranch("redlist",      "Unofficial IUCN Red List data-observation site generation")]
+[assembly: CommandBranch("gbif",         "GBIF Backbone Taxonomy downloads, for the public site's common names and synonyms")]
 [assembly: CommandBranch("site",         "Public species lookup site: build its database")]
 
 namespace BeastieBot3;

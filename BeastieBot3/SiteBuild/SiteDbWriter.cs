@@ -78,10 +78,10 @@ internal sealed class SiteDbWriter : IDisposable {
             "@has_taxonomic_notes", "@wikidata_item_qid", "@wikidata_item_properties", "@wikidata_item_titles", "@wikidata_item_label_en", "@wikidata_item_assessment_id",
             "@api_not_found", "@credits", "@generation_length");
         _name = Prepare("""
-            INSERT INTO name (name_id, taxon_id, name, name_type, language, source, is_preferred, authority)
-            VALUES (@name_id, @taxon_id, @name, @name_type, @language, @source, @is_preferred, @authority)
+            INSERT INTO name (name_id, taxon_id, name, name_type, language, source, is_preferred, authority, source_detail)
+            VALUES (@name_id, @taxon_id, @name, @name_type, @language, @source, @is_preferred, @authority, @source_detail)
             """,
-            "@name_id", "@taxon_id", "@name", "@name_type", "@language", "@source", "@is_preferred", "@authority");
+            "@name_id", "@taxon_id", "@name", "@name_type", "@language", "@source", "@is_preferred", "@authority", "@source_detail");
         _replacedBy = Prepare("UPDATE assessment SET replaced_by_assessment_id = @replaced_by WHERE assessment_id = @assessment_id",
             "@replaced_by", "@assessment_id");
         _epbcListing = Prepare("""
@@ -265,7 +265,7 @@ internal sealed class SiteDbWriter : IDisposable {
     /// Writes one name and remembers its folded key for name_key.
     public void AddName(long taxonId, SiteName name) {
         var nameId = _nextNameId++;
-        Bind(_name, nameId, taxonId, name.Name, name.NameType, name.Language, name.Source, name.IsPreferred ? 1 : 0, name.Authority);
+        Bind(_name, nameId, taxonId, name.Name, name.NameType, name.Language, name.Source, name.IsPreferred ? 1 : 0, name.Authority, name.Detail);
         _name.ExecuteNonQuery();
         var key = SiteNameKey.Fold(name.Name);
         if (key.Length > 0) {

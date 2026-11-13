@@ -15,7 +15,10 @@ using Spectre.Console;
 //   4. DOI sources: GBIF's checklist, Wikidata, and the DOIs `iucn resolve-dois` found in Crossref's
 //      list of IUCN DOIs or at doi.org. Also the Wikidata items for assessments.
 //   5. IUCN API assessment payloads: citation parts; the assessment rows are written here.
-//   6. Common names store: English names, the best English name, CoL synonyms.
+//   6. Common names store: English names, the best English name, CoL synonyms. Later, after every
+//      other synonym list: the ids in other databases on the taxa's Wikidata items, names and
+//      synonyms from the GBIF Backbone Taxonomy (matched by those GBIF ids first), then the names in
+//      other languages from the Catalogue of Life, Wikidata and Wikipedia.
 //   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT
 //      (with the EPBC Act and state and territory statuses of its profiles).
 //   8. Parents, then the taxon, name and taxon link rows, the classification in other sources, the
@@ -235,6 +238,25 @@ internal sealed class SiteDbBuild {
             var words = store.LoadNameWordSets();
             isEpithet = word => words.IsEpithet(word.ToLowerInvariant());
         }
+        // The ids in other databases on the taxa's Wikidata items, read here because the GBIF ids
+        // (P846) match taxa to the GBIF backbone; written with the other tables after the names.
+        List<SiteExternalId> externalIds = [];
+        Optional("Wikidata cache: ids in other databases", _inputs.WikidataCache, path => {
+            externalIds = SiteExternalIds.Read(path,
+                taxonList.Where(t => t.InRelease && t.WikidataQid is not null).Select(t => (t.TaxonId, t.WikidataQid!)), ct);
+            return $"{externalIds.Select(r => r.TaxonId).Distinct().Count():N0} taxa, {externalIds.Count:N0} ids";
+        });
+        // GBIF's synonyms are read before the other sources' names in other languages, whose rules
+        // compare the names with every synonym.
+        Optional("GBIF Backbone Taxonomy: names and synonyms", _inputs.GbifBackbone, path => {
+            var gbifIds = externalIds.Where(r => r.Property == Shared.SiteData.ExternalDatabases.GbifSpeciesIdBefore2026)
+                .GroupBy(r => r.TaxonId).ToDictionary(g => g.Key, g => g.Select(r => r.Value).ToList());
+            var counts = _stats.Gbif = new GbifNameCounts();
+            SiteGbifNames.Read(path, taxonList, gbifIds, counts, isEpithet, ct);
+            return $"backbone {counts.Version}: {counts.Count(GbifMatchKind.ById):N0} taxa matched by GBIF id, "
+                + $"{counts.Count(GbifMatchKind.ByName):N0} by name, {counts.Count(GbifMatchKind.NameAmbiguous) + counts.Count(GbifMatchKind.Lumped):N0} "
+                + $"skipped as conflicts; {counts.Synonyms:N0} synonyms; {counts.Names.Kept:N0} of {counts.Names.Read:N0} common names kept";
+        });
         Optional("Catalogue of Life database: common names in other languages", _inputs.ColDatabase, path => {
             if (!SiteOtherLanguageNames.ReadCol(path, taxa, _stats.ColOtherNames, isEpithet, ct)) {
                 _stats.Warnings.Add("The Catalogue of Life database has no vernacularname table, so the site has no Catalogue of Life names in languages other than English.");
@@ -323,14 +345,13 @@ internal sealed class SiteDbBuild {
             return $"{taxonList.Count:N0} taxa, {writer.NameCount:N0} names, {taxonLinks.Count:N0} links from old ids";
         });
 
-        List<SiteExternalId> externalIds = [];
-        Optional("Wikidata cache: ids in other databases", _inputs.WikidataCache, path => {
-            var rows = externalIds = SiteExternalIds.Read(path,
-                taxonList.Where(t => t.InRelease && t.WikidataQid is not null).Select(t => (t.TaxonId, t.WikidataQid!)), ct);
-            writer.InsertRows("INSERT OR IGNORE INTO taxon_external_id (taxon_id, property, value) VALUES (@t, @p, @v)", ["@t", "@p", "@v"],
-                rows.Select(r => new object?[] { r.TaxonId, r.Property, r.Value }));
-            return $"{rows.Select(r => r.TaxonId).Distinct().Count():N0} taxa, {rows.Count:N0} ids";
-        });
+        if (externalIds.Count > 0) {
+            Phase("Writing the ids in other databases", () => {
+                writer.InsertRows("INSERT OR IGNORE INTO taxon_external_id (taxon_id, property, value) VALUES (@t, @p, @v)", ["@t", "@p", "@v"],
+                    externalIds.Select(r => new object?[] { r.TaxonId, r.Property, r.Value }));
+                return $"{externalIds.Count:N0} ids";
+            });
+        }
         Optional("Wikipedia cache: taxobox statuses", _inputs.WikipediaCache, path => {
             var rows = SiteTaxoboxStatusReader.Read(path, taxonList.Where(t => t.InRelease && t.SubpopulationName is null), ct);
             writer.InsertRows(
@@ -563,7 +584,7 @@ internal sealed class SiteDbBuild {
 
     // Order: the scientific name, IUCN's common names (main first), the other English names, the
     // other sources' names in other languages (CoL, Wikidata, Wikipedia), IUCN's synonyms, then
-    // CoL's. The order sets name_id, which the site uses to order names within a list.
+    // CoL's, Wikidata's, the taxobox's, the checklists' names, and GBIF's names and synonyms. The order sets name_id, which the site uses to order names within a list.
     private void WriteNames(SiteDbWriter writer, SiteTaxon taxon) {
         var names = new SiteNameSet();
         names.Add(taxon.ScientificName, SiteNameType.Scientific, null, SiteNameSource.Iucn, isPreferred: true);
@@ -592,6 +613,7 @@ internal sealed class SiteDbBuild {
         foreach (var (name, type, authority, source) in taxon.ChecklistNames) {
             names.Add(name, type == "common" ? SiteNameType.Common : SiteNameType.Synonym, type == "common" ? "en" : null, source, authority: authority);
         }
+        AddGbifNames(names, taxon);
         var merged = new HashSet<(string?, string)>();
         foreach (var name in names.Names) {
             writer.AddName(taxon.TaxonId, name);
@@ -608,6 +630,9 @@ internal sealed class SiteDbBuild {
                 }
             }
         }
+        if (_stats.Gbif is { } gbif) {
+            CountGbifRows(gbif, names.Names);
+        }
         _stats.CommonNamesJunk += names.JunkCommonNames;
         _stats.SpeciesCodes += names.Codes;
         _stats.CommonNamesRepaired += names.RepairedCommonNames;
@@ -620,6 +645,51 @@ internal sealed class SiteDbBuild {
         taxon.WikipediaSynonyms.Clear();
         taxon.OtherLanguageNames.Clear();
         taxon.OtherLanguageNames.TrimExcess();
+        taxon.GbifSynonyms.Clear();
+        taxon.GbifNames.Clear();
+        taxon.GbifNames.TrimExcess();
+    }
+
+    // GBIF's names after every other source's, then its synonyms. An English name that no other
+    // source gives in English, and that the taxon has in another language from any source, is left
+    // out: GBIF's English label is wrong for names such as "Roussette a barbe noire". One that another
+    // source gives in English ("Lion", also French) is kept.
+    private void AddGbifNames(SiteNameSet names, SiteTaxon taxon) {
+        if (taxon.GbifNames.Count == 0 && taxon.GbifSynonyms.Count == 0) {
+            return;
+        }
+        var english = new HashSet<string>(StringComparer.Ordinal);
+        var otherLanguages = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in names.Names.Where(n => n.NameType == SiteNameType.Common && n.Language is not null)) {
+            (name.Language == "en" ? english : otherLanguages).Add(SiteNameKey.Fold(name.Name));
+        }
+        foreach (var name in taxon.GbifNames.Where(n => n.Language != "en")) {
+            otherLanguages.Add(SiteNameKey.Fold(name.Name));
+        }
+        foreach (var name in taxon.GbifNames) {
+            var key = SiteNameKey.Fold(name.Name);
+            if (name.Language == "en" && !english.Contains(key) && otherLanguages.Contains(key)) {
+                _stats.Gbif!.EnglishInAnotherLanguage++;
+                continue;
+            }
+            names.Add(name.Name, SiteNameType.Common, name.Language, SiteNameSource.Gbif, detail: name.Dataset);
+        }
+        foreach (var synonym in taxon.GbifSynonyms) {
+            names.Add(synonym.Name, SiteNameType.Synonym, null, SiteNameSource.Gbif, authority: synonym.Authority);
+        }
+    }
+
+    // For each language, the 'gbif' common name rows written, and how many of them no other source
+    // gives the taxon in that language (compared as SiteNameSet compares them).
+    private static void CountGbifRows(GbifNameCounts gbif, IReadOnlyList<SiteName> names) {
+        static string Key(SiteName n) => n.Language == "en" ? SiteNameKey.Fold(n.Name) : SiteNameKey.CaseFold(n.Name);
+        var others = names.Where(n => n.NameType == SiteNameType.Common && n.Source != SiteNameSource.Gbif)
+            .Select(n => (n.Language, Key(n))).ToHashSet();
+        foreach (var name in names.Where(n => n.NameType == SiteNameType.Common && n.Source == SiteNameSource.Gbif)) {
+            var language = name.Language ?? string.Empty;
+            var (rows, added) = gbif.ByLanguage.GetValueOrDefault(language);
+            gbif.ByLanguage[language] = (rows + 1, added + (others.Contains((name.Language, Key(name))) ? 0 : 1));
+        }
     }
 
     private static int OtherLanguageSourceOrder(string source) => source switch {
@@ -673,6 +743,9 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.GbifChecklistPublished, _stats.GbifPublished);
         writer.SetMeta(SiteDbSchema.MetaKeys.GbifChecklistCitation, _stats.GbifCitation);
         writer.SetMeta(SiteDbSchema.MetaKeys.GbifChecklistDoi, _stats.GbifDoi);
+        writer.SetMeta(SiteDbSchema.MetaKeys.GbifBackboneVersion, _stats.Gbif?.Version);
+        writer.SetMeta(SiteDbSchema.MetaKeys.GbifBackboneCitation, _stats.Gbif?.Citation);
+        writer.SetMeta(SiteDbSchema.MetaKeys.GbifBackboneDoi, _stats.Gbif?.Doi);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColRelease, _stats.ColRelease);
         writer.SetMeta(SiteDbSchema.MetaKeys.MddVersion, _stats.MddVersion);
         writer.SetMeta(SiteDbSchema.MetaKeys.AmphibiaWebVersion, _stats.AmphibiaWebVersion);

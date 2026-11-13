@@ -26,6 +26,11 @@ public sealed class AboutModel : PageModel {
     public string? ApiDateRange { get; private set; }
     public string? GbifVersion { get; private set; }
     public string? ColRelease { get; private set; }
+    /// The GBIF Backbone Taxonomy's date ("28 August 2023"), its recommended citation and its DOI
+    /// link, when the site has its names.
+    public string? GbifBackboneDate { get; private set; }
+    public string? GbifBackboneCitation { get; private set; }
+    public string GbifBackboneUrl { get; private set; } = DoiUrl(SiteText.GbifBackboneDoi);
     /// The Mammal Diversity Database's version ("v2.5") and the date of AmphibiaWeb's names file, when the site has their names.
     public string? MddVersion { get; private set; }
     public string? AmphibiaWebDate { get; private set; }
@@ -108,6 +113,12 @@ public sealed class AboutModel : PageModel {
             ? SiteFormat.Date(gbif)
             : snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistVersion);
         ColRelease = snapshot.Get(SiteDbSchema.MetaKeys.ColRelease);
+        var backbone = snapshot.Get(SiteDbSchema.MetaKeys.GbifBackboneVersion);
+        GbifBackboneDate = SiteFormat.TryParseDate(backbone, out var backboneDate) ? SiteFormat.Date(backboneDate) : backbone;
+        GbifBackboneCitation = snapshot.Get(SiteDbSchema.MetaKeys.GbifBackboneCitation);
+        if (snapshot.Get(SiteDbSchema.MetaKeys.GbifBackboneDoi) is { } backboneDoi) {
+            GbifBackboneUrl = DoiUrl(backboneDoi);
+        }
         MddVersion = snapshot.Get(SiteDbSchema.MetaKeys.MddVersion);
         ReptileDbVersion = snapshot.Get(SiteDbSchema.MetaKeys.ReptileDbVersion);
         IocVersion = snapshot.Get(SiteDbSchema.MetaKeys.ClassificationVersion("ioc"));

@@ -165,6 +165,26 @@ public sealed class DisplayTests {
         Assert.Equal(["Catalogue of Life"], names[3].Sources);
     }
 
+    // The GBIF Backbone Taxonomy comes last among a name's sources, and names the GBIF datasets
+    // GBIF took the name from, each title in quotation marks so a comma in a title is not read as
+    // a separator between sources.
+    [Fact]
+    public void GbifSourceNamesItsDatasets() {
+        NameRow Row(long id, string name, string source, string? detail = null) => new(id, name, NameTypes.Common, "nl", source, false, SourceDetail: detail);
+        var names = TaxonNames.OtherLanguageNames([
+            Row(1, "Tijger", "gbif", "Belgian Species List\nMultilingual IOC World Bird List, v11.2"),
+            Row(2, "Tijger", "wikidata"),
+            Row(3, "Bengaalse tijger", "gbif", "Checklist Dutch Species Register - Nederlands Soortenregister"),
+            Row(4, "Tijgerkat", "gbif"),
+        ]);
+        Assert.Equal(["Wikidata", "GBIF Backbone Taxonomy from “Belgian Species List” and “Multilingual IOC World Bird List, v11.2”"],
+            names.Single(n => n.Name == "Tijger").Sources);
+        Assert.Equal(["GBIF Backbone Taxonomy from “Checklist Dutch Species Register - Nederlands Soortenregister”"],
+            names.Single(n => n.Name == "Bengaalse tijger").Sources);
+        Assert.Equal(["GBIF Backbone Taxonomy"], names.Single(n => n.Name == "Tijgerkat").Sources);
+        Assert.Equal("GBIF Backbone Taxonomy from “A”, “B” and “C”", SiteText.GbifSourceLabel(["A", "B", "C"]));
+    }
+
     [Fact]
     public void LanguageNamesNeverShowTheInvariantCulture() {
         foreach (var code in new[] { "und", "mul", "qaa", "xx", "zz-zz" }) {

@@ -38,6 +38,9 @@ internal static class SiteNameSource {
     public const string AmphibiaWeb = "amphibiaweb";
     /// The Japanese name in the Red List of Japan's Ministry of the Environment (`statuses japan-import`).
     public const string JapanMoe = "japan-moe";
+    /// The GBIF Backbone Taxonomy (`gbif backbone-download`): common names from GBIF's source
+    /// datasets, and GBIF's synonyms.
+    public const string Gbif = "gbif";
 }
 
 internal static class SiteBuildRules {

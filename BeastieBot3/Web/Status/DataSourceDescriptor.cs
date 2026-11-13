@@ -62,6 +62,13 @@ public static class DataSourceCatalogue {
             ResolvePath = p => p.GetGbifIucnDir(),
         },
         new DataSourceDescriptor {
+            Id = "gbif-backbone",
+            Name = "GBIF Backbone Taxonomy",
+            Kind = "directory",
+            Description = "Folder containing the GBIF Backbone Taxonomy zip (about 930 MB, CC BY 4.0), downloaded by `gbif backbone-download`. `site build-db` reads the newest zip for common names in English and other languages, and synonyms.",
+            ResolvePath = p => p.GetGbifBackboneDir(),
+        },
+        new DataSourceDescriptor {
             Id = "iucn-main",
             Name = "IUCN Red List database",
             Kind = "sqlite",

@@ -1034,6 +1034,16 @@ public static class FlowCatalogue {
                     Note = "The download is about 21 MB. The command keeps the new zip only when it differs from the newest checklist zip already in the folder, and `site build-db` reads the newest zip. The status line under the step title shows which Red List release the newest zip is from, and whether the IUCN Red List database holds the same release.",
                 },
                 new FlowStep {
+                    Id = "site-gbif-backbone",
+                    Title = "Download the GBIF Backbone Taxonomy",
+                    Description = "`gbif backbone-download` downloads the GBIF Backbone Taxonomy (CC BY 4.0) into the folder set in Datasets:GBIF_backbone_dir. `site build-db` adds its common names, in English and other languages, and its synonyms to the site, credited to GBIF and to the GBIF dataset each name comes from.",
+                    Commands = new[] { "gbif backbone-download" },
+                    OutputSourceIds = new[] { "gbif-backbone" },
+                    Probe = PublicSiteProbes.GbifBackbone,
+                    Group = "2 · Build the site database",
+                    Note = "The download is about 930 MB. GBIF has not changed the file since 28 August 2023: the command first asks the server for the file's date and size, and downloads nothing when the newest zip in the folder has both. `--force` under Options downloads it again anyway.",
+                },
+                new FlowStep {
                     Id = "site-resolve-dois",
                     Title = "Find missing DOIs",
                     Description = "`iucn resolve-dois` finds DOIs for assessments that have no DOI from IUCN's citation text, the GBIF checklist or Wikidata. It looks each assessment up in Crossref's list of IUCN DOIs, and for recent assessments that are not in that list, it checks likely DOIs at doi.org. It saves the results in the DOI cache (Datastore:IUCN_doi_cache_sqlite), which `site build-db` reads.",
@@ -1192,7 +1202,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "site-build-db",
                     Title = "Build the site database",
-                    Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement, the SPRAT (EPBC) database, the status lists store (NatureServe, ECOS, NZTCS and SALVE), the Green Status assessments in the IUCN API cache and the IUCN summary tables. It writes the new database to a separate file and replaces the old one only when the build finishes.",
+                    Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the GBIF Backbone Taxonomy, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement, the SPRAT (EPBC) database, the status lists store (NatureServe, ECOS, NZTCS and SALVE), the Green Status assessments in the IUCN API cache and the IUCN summary tables. It writes the new database to a separate file and replaces the old one only when the build finishes.",
                     Commands = new[] { "site build-db" },
                     // Only the required inputs: a missing input blocks the step, and the build
                     // leaves out the others (GBIF checklist, DOI cache, ...) when they are missing.

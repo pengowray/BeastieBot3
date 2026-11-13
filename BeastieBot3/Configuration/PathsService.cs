@@ -88,6 +88,15 @@ namespace BeastieBot3.Configuration;
             return string.IsNullOrWhiteSpace(datasets) ? null : Path.Combine(datasets, "gbif-iucn");
         }
 
+        // The GBIF Backbone Taxonomy (Darwin Core Archive zips, downloaded by `gbif backbone-download`).
+        // Defaults to a gbif-backbone folder in the datasets folder.
+        public string? GetGbifBackboneDir() {
+            var configured = _reader.Get("Datasets:GBIF_backbone_dir");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datasets = GetDatasetsDir();
+            return string.IsNullOrWhiteSpace(datasets) ? null : Path.Combine(datasets, "gbif-backbone");
+        }
+
         // IUCN's summary statistics tables 7 and 9 as PDFs (`iucn summary-tables`). Defaults to an
         // iucn-summary-tables folder in the datasets folder.
         public string? GetIucnSummaryTablesDir() {
